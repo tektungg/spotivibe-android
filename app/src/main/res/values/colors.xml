@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Glassmorphism Tokyo base colors (mirror Color.kt) -->
+    <color name="background_deep">#0A0E1A</color>
+    <color name="background_lift">#141A2A</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>

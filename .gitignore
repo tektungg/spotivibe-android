@@ -1,0 +1,50 @@
+# Built application files
+*.apk
+*.aab
+# *.aar — JANGAN exclude, Spotify SDK di-vendor di app/libs/
+# Build artifacts ada di build/ yang sudah di-exclude di bawah
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+release/
+
+# Gradle build caches
+.gradle/
+build/
+/captures
+.externalNativeBuild
+.cxx
+*.hprof
+*.log
+
+# Kotlin compiler cache
+.kotlin/
+
+# IntelliJ / Android Studio
+*.iml
+.idea/
+*.ipr
+*.iws
+local.properties
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Keystore + signing — JANGAN COMMIT
+release.jks
+*.jks
+*.keystore
+keystore.properties
+
+# Sensitive build outputs
+*.unsigned.apk

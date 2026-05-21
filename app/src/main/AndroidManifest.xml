@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Network access for LRCLIB + Spotify Web API -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Foreground service untuk lyrics notification (specialUse — bukan media
+         player karena Spotify yang main musik, kita cuma companion display) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- Runtime notification permission (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Floating overlay di atas app lain (Phase 7) — user grant via system Settings -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <application
+        android:name=".SpotivibeApp"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Spotivibe">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Spotivibe">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Spotify OAuth redirect: spotivibe://callback -->
+            <!-- Used in Phase 2 saat tambah AuthorizationClient -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="${redirectSchemeName}"
+                    android:host="${redirectHostName}" />
+            </intent-filter>
+        </activity>
+
+        <!-- Foreground lyrics notification service. Type "specialUse" supaya
+             system tidak claim sebagai media player + tidak hijack Spotify's
+             Dynamic Island / lock screen media indicator. -->
+        <service
+            android:name=".service.SpotivibeNotificationService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Display synced lyrics of currently playing media from Spotify" />
+        </service>
+
+    </application>
+
+</manifest>
