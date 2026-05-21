@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
@@ -39,6 +40,10 @@ import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.TextDecrease
 import androidx.compose.material.icons.filled.TextIncrease
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -132,6 +137,7 @@ fun NowPlayingScreen(
                     romajiEnabled = state.romanizationEnabled,
                     overlayEnabled = state.overlayEnabled,
                     darkMode = state.darkMode,
+                    fontSize = state.lyricsFontSize,
                     onToggleRomanization = onToggleRomanization,
                     onToggleOverlay = onToggleOverlay,
                     onToggleDarkMode = onToggleDarkMode,
@@ -161,6 +167,7 @@ fun NowPlayingScreen(
                 romajiEnabled = state.romanizationEnabled,
                 overlayEnabled = state.overlayEnabled,
                 darkMode = state.darkMode,
+                fontSize = state.lyricsFontSize,
                 onToggleRomanization = onToggleRomanization,
                 onToggleOverlay = onToggleOverlay,
                 onToggleDarkMode = onToggleDarkMode,
@@ -213,6 +220,7 @@ private fun LandscapeSidebar(
     romajiEnabled: Boolean,
     overlayEnabled: Boolean,
     darkMode: Boolean,
+    fontSize: Int,
     onToggleRomanization: () -> Unit,
     onToggleOverlay: () -> Unit,
     onToggleDarkMode: () -> Unit,
@@ -287,23 +295,8 @@ private fun LandscapeSidebar(
             )
         }
 
-        // Icons row — A−/A+/Theme + translate(opsional) + overlay
+        // Icons row — Translate (opsional) / Overlay / Overflow (theme + font)
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            CompactIconButton(
-                onClick = { onBumpFontSize(-2) },
-                icon = Icons.Filled.TextDecrease,
-                description = "Decrease lyrics font",
-            )
-            CompactIconButton(
-                onClick = { onBumpFontSize(2) },
-                icon = Icons.Filled.TextIncrease,
-                description = "Increase lyrics font",
-            )
-            CompactIconButton(
-                onClick = onToggleDarkMode,
-                icon = if (darkMode) Icons.Filled.LightMode else Icons.Filled.DarkMode,
-                description = "Toggle theme",
-            )
             if (showRomajiToggle) {
                 IconToggleButton(
                     enabled = romajiEnabled,
@@ -320,6 +313,12 @@ private fun LandscapeSidebar(
                 icon = Icons.Filled.PictureInPictureAlt,
                 description = "Toggle floating overlay",
             )
+            SettingsOverflowMenu(
+                darkMode = darkMode,
+                fontSize = fontSize,
+                onToggleDarkMode = onToggleDarkMode,
+                onBumpFontSize = onBumpFontSize,
+            )
         }
     }
 }
@@ -334,6 +333,7 @@ private fun HeaderArea(
     romajiEnabled: Boolean,
     overlayEnabled: Boolean,
     darkMode: Boolean,
+    fontSize: Int,
     onToggleRomanization: () -> Unit,
     onToggleOverlay: () -> Unit,
     onToggleDarkMode: () -> Unit,
@@ -408,23 +408,8 @@ private fun HeaderArea(
             }
         }
 
-        // 5 icons row — A− / A+ / Theme / Translate(opsional) / Overlay
+        // 3 icons row — Translate (opsional) / Overlay / Overflow (theme + font)
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            CompactIconButton(
-                onClick = { onBumpFontSize(-2) },
-                icon = Icons.Filled.TextDecrease,
-                description = "Decrease lyrics font",
-            )
-            CompactIconButton(
-                onClick = { onBumpFontSize(2) },
-                icon = Icons.Filled.TextIncrease,
-                description = "Increase lyrics font",
-            )
-            CompactIconButton(
-                onClick = onToggleDarkMode,
-                icon = if (darkMode) Icons.Filled.LightMode else Icons.Filled.DarkMode,
-                description = "Toggle theme",
-            )
             if (showRomajiToggle) {
                 IconToggleButton(
                     enabled = romajiEnabled,
@@ -441,6 +426,106 @@ private fun HeaderArea(
                 icon = Icons.Filled.PictureInPictureAlt,
                 description = "Toggle floating overlay",
             )
+            SettingsOverflowMenu(
+                darkMode = darkMode,
+                fontSize = fontSize,
+                onToggleDarkMode = onToggleDarkMode,
+                onBumpFontSize = onBumpFontSize,
+            )
+        }
+    }
+}
+
+/**
+ * Compact "More" menu — anchor button + dropdown dengan theme toggle dan
+ * font size +/− inline. Mengurangi clutter header dari 5 icons jadi 3.
+ */
+@Composable
+private fun SettingsOverflowMenu(
+    darkMode: Boolean,
+    fontSize: Int,
+    onToggleDarkMode: () -> Unit,
+    onBumpFontSize: (Int) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        CompactIconButton(
+            onClick = { expanded = true },
+            icon = Icons.Filled.MoreVert,
+            description = "More settings",
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(MaterialTheme.colorScheme.surface),
+        ) {
+            // Theme toggle item
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = if (darkMode) "Light mode" else "Dark mode",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = if (darkMode) Icons.Filled.LightMode else Icons.Filled.DarkMode,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(20.dp),
+                    )
+                },
+                onClick = {
+                    onToggleDarkMode()
+                    expanded = false
+                },
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            // Font size — custom row, JANGAN tutup menu saat tap A−/A+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "Lyrics size",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { onBumpFontSize(-2) },
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.TextDecrease,
+                            contentDescription = "Decrease",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    Text(
+                        text = "$fontSize",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.width(28.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                    IconButton(
+                        onClick = { onBumpFontSize(2) },
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.TextIncrease,
+                            contentDescription = "Increase",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+            }
         }
     }
 }
