@@ -182,6 +182,7 @@ fun NowPlayingScreen(
                     progressMs = effectiveProgressMs,
                     accent = accent,
                     romaji = state.romaji,
+                    fontSize = state.lyricsFontSize,
                 )
             }
         }
