@@ -50,7 +50,7 @@ fun LyricsList(
             lyrics == null -> StatusText("Mencari lirik…")
             lyrics.synced != null && lyrics.synced.isNotEmpty() ->
                 SyncedLyricsView(lyrics.synced, progressMs, accent, romaji, fontSize)
-            !lyrics.plain.isNullOrBlank() -> PlainLyricsView(lyrics.plain)
+            !lyrics.plain.isNullOrBlank() -> PlainLyricsView(lyrics.plain, fontSize)
             else -> StatusText("Lirik tidak ditemukan untuk track ini")
         }
     }
@@ -170,7 +170,7 @@ private fun LyricLineItem(
 }
 
 @Composable
-private fun PlainLyricsView(plain: String) {
+private fun PlainLyricsView(plain: String, fontSize: Int) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
@@ -178,7 +178,10 @@ private fun PlainLyricsView(plain: String) {
         item {
             Text(
                 text = plain,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontSize = fontSize.sp,
+                    lineHeight = (fontSize + 7).sp,
+                ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),

@@ -126,8 +126,7 @@ class SpotivibeViewModel(
 
     fun bumpFontSize(delta: Int) {
         viewModelScope.launch {
-            val current = (uiState.value as? UiState.Playing)?.lyricsFontSize ?: 17
-            preferencesRepository.setLyricsFontSize(current + delta)
+            preferencesRepository.bumpLyricsFontSize(delta)
         }
     }
 

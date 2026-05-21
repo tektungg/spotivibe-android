@@ -76,4 +76,17 @@ class PreferencesRepository(private val context: Context) {
     suspend fun setLyricsFontSize(size: Int) {
         context.dataStore.edit { it[lyricsFontSizeKey] = size.coerceIn(12, 24) }
     }
+
+    /**
+     * Atomic increment/decrement — baca current dan write di transaction yang sama
+     * supaya tidak ada race condition kalau user tap A+/A− cepat-cepat.
+     * Tanpa ini: read uiState.value (mungkin stale) → write → user tap lagi sebelum
+     * state propagate → read stale lagi → effective increment 1× saja walau tap 2×.
+     */
+    suspend fun bumpLyricsFontSize(delta: Int) {
+        context.dataStore.edit { prefs ->
+            val current = (prefs[lyricsFontSizeKey] ?: 17).coerceIn(12, 24)
+            prefs[lyricsFontSizeKey] = (current + delta).coerceIn(12, 24)
+        }
+    }
 }
