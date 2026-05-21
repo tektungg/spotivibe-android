@@ -46,9 +46,9 @@ class PreferencesRepository(private val context: Context) {
     val darkMode: Flow<Boolean> = context.dataStore.data
         .map { prefs -> prefs[darkModeKey] ?: true }
 
-    /** Lyrics font size in sp. Range 12-24, default 17. */
+    /** Lyrics font size in sp. Range 12-56, default 17. */
     val lyricsFontSize: Flow<Int> = context.dataStore.data
-        .map { prefs -> (prefs[lyricsFontSizeKey] ?: 17).coerceIn(12, 24) }
+        .map { prefs -> (prefs[lyricsFontSizeKey] ?: 17).coerceIn(12, 56) }
 
     suspend fun setRomanizationEnabled(enabled: Boolean) {
         context.dataStore.edit { it[romanizationKey] = enabled }
@@ -74,7 +74,7 @@ class PreferencesRepository(private val context: Context) {
     }
 
     suspend fun setLyricsFontSize(size: Int) {
-        context.dataStore.edit { it[lyricsFontSizeKey] = size.coerceIn(12, 24) }
+        context.dataStore.edit { it[lyricsFontSizeKey] = size.coerceIn(12, 56) }
     }
 
     /**
@@ -85,8 +85,8 @@ class PreferencesRepository(private val context: Context) {
      */
     suspend fun bumpLyricsFontSize(delta: Int) {
         context.dataStore.edit { prefs ->
-            val current = (prefs[lyricsFontSizeKey] ?: 17).coerceIn(12, 24)
-            prefs[lyricsFontSizeKey] = (current + delta).coerceIn(12, 24)
+            val current = (prefs[lyricsFontSizeKey] ?: 17).coerceIn(12, 56)
+            prefs[lyricsFontSizeKey] = (current + delta).coerceIn(12, 56)
         }
     }
 }
