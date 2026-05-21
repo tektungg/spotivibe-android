@@ -17,11 +17,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import android.content.res.Configuration
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -97,38 +101,76 @@ fun NowPlayingScreen(
     var draggingValue by remember(track.id) { mutableLongStateOf(-1L) }
     val effectiveProgressMs = if (draggingValue >= 0L) draggingValue else displayProgressMs
 
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 20.dp)
-            .padding(top = 32.dp, bottom = 16.dp),
+            .padding(top = if (isLandscape) 16.dp else 32.dp, bottom = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        HeaderArea(
-            bitmap = state.albumBitmap,
-            title = track.title,
-            artist = track.artist,
-            accent = accent,
-            showRomajiToggle = state.canRomanize,
-            romajiEnabled = state.romanizationEnabled,
-            overlayEnabled = state.overlayEnabled,
-            onToggleRomanization = onToggleRomanization,
-            onToggleOverlay = onToggleOverlay,
-        )
+        if (isLandscape) {
+            // ── Landscape: cover/meta kolom kiri + lyrics kolom kanan ──
+            Row(
+                modifier = Modifier
+                    .weight(1f, fill = true)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+            ) {
+                // Left: vertical cover + meta + icons (fixed ~240dp wide)
+                LandscapeSidebar(
+                    bitmap = state.albumBitmap,
+                    title = track.title,
+                    artist = track.artist,
+                    accent = accent,
+                    showRomajiToggle = state.canRomanize,
+                    romajiEnabled = state.romanizationEnabled,
+                    overlayEnabled = state.overlayEnabled,
+                    onToggleRomanization = onToggleRomanization,
+                    onToggleOverlay = onToggleOverlay,
+                    modifier = Modifier.width(240.dp).fillMaxHeight(),
+                )
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Box(modifier = Modifier.weight(1f, fill = true).fillMaxWidth()) {
-            LyricsList(
-                lyrics = state.lyrics,
-                progressMs = effectiveProgressMs,
+                // Right: lyrics fills remaining
+                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    LyricsList(
+                        lyrics = state.lyrics,
+                        progressMs = effectiveProgressMs,
+                        accent = accent,
+                        romaji = state.romaji,
+                    )
+                }
+            }
+        } else {
+            // ── Portrait: header row di atas, lyrics di tengah ──
+            HeaderArea(
+                bitmap = state.albumBitmap,
+                title = track.title,
+                artist = track.artist,
                 accent = accent,
-                romaji = state.romaji,
+                showRomajiToggle = state.canRomanize,
+                romajiEnabled = state.romanizationEnabled,
+                overlayEnabled = state.overlayEnabled,
+                onToggleRomanization = onToggleRomanization,
+                onToggleOverlay = onToggleOverlay,
             )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Box(modifier = Modifier.weight(1f, fill = true).fillMaxWidth()) {
+                LyricsList(
+                    lyrics = state.lyrics,
+                    progressMs = effectiveProgressMs,
+                    accent = accent,
+                    romaji = state.romaji,
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        // ── Controls full-width di bawah (both orientations) ──
         ControlsBar(
             progressMs = effectiveProgressMs,
             durationMs = track.durationMs,
@@ -143,6 +185,111 @@ fun NowPlayingScreen(
             onNext = onNext,
             onPrevious = onPrevious,
         )
+    }
+}
+
+/**
+ * Landscape sidebar: cover gede di atas, title + artist, toolbar icons.
+ * Layout vertikal — content stack ke bawah. Width fixed 240dp dari parent.
+ */
+@Composable
+private fun LandscapeSidebar(
+    bitmap: android.graphics.Bitmap?,
+    title: String,
+    artist: String,
+    accent: Color,
+    showRomajiToggle: Boolean,
+    romajiEnabled: Boolean,
+    overlayEnabled: Boolean,
+    onToggleRomanization: () -> Unit,
+    onToggleOverlay: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // Cover gede ~200dp square
+        Box(
+            modifier = Modifier
+                .size(200.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(SurfaceFrost),
+            contentAlignment = Alignment.Center,
+        ) {
+            Crossfade(targetState = bitmap, animationSpec = tween(400), label = "cover_landscape") { bmp ->
+                if (bmp != null) {
+                    Image(
+                        bitmap = bmp.asImageBitmap(),
+                        contentDescription = "Album cover",
+                        contentScale = ContentScale.Crop,
+                        filterQuality = FilterQuality.High,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(text = "♪", style = MaterialTheme.typography.displayLarge, color = accent)
+                    }
+                }
+            }
+        }
+
+        // Title + artist (centered)
+        AnimatedContent(
+            targetState = title.ifBlank { "Untitled" },
+            transitionSpec = {
+                (slideInVertically(tween(300)) { it / 3 } + fadeIn(tween(300)))
+                    .togetherWith(slideOutVertically(tween(200)) { -it / 3 } + fadeOut(tween(200)))
+            },
+            label = "title_landscape",
+        ) { t ->
+            Text(
+                text = t,
+                style = MaterialTheme.typography.titleLarge,
+                color = accent,
+                fontWeight = FontWeight.Bold,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        AnimatedContent(
+            targetState = artist.ifBlank { "Unknown artist" },
+            transitionSpec = { fadeIn(tween(400, delayMillis = 100)).togetherWith(fadeOut(tween(200))) },
+            label = "artist_landscape",
+        ) { a ->
+            Text(
+                text = a,
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        // Icons row — translate + overlay
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (showRomajiToggle) {
+                IconToggleButton(
+                    enabled = romajiEnabled,
+                    accent = accent,
+                    onClick = onToggleRomanization,
+                    icon = Icons.Filled.Translate,
+                    description = "Toggle romanization",
+                )
+            }
+            IconToggleButton(
+                enabled = overlayEnabled,
+                accent = accent,
+                onClick = onToggleOverlay,
+                icon = Icons.Filled.PictureInPictureAlt,
+                description = "Toggle floating overlay",
+            )
+        }
     }
 }
 
