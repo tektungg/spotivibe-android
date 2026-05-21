@@ -49,6 +49,7 @@ class OverlayManager(
     private val context: Context,
     private val controller: PlaybackController,
     private val onPositionChange: (x: Int, y: Int) -> Unit,
+    private val onCloseRequested: () -> Unit,
     initialX: Int,
     initialY: Int,
 ) {
@@ -108,6 +109,7 @@ class OverlayManager(
                         onPlayPause = { handlePlayPause() },
                         onNext = { handleNext() },
                         onPrevious = { handlePrevious() },
+                        onClose = onCloseRequested,
                     )
                 }
             }

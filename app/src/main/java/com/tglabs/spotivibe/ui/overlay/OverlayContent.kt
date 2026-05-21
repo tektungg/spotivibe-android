@@ -80,6 +80,7 @@ fun OverlayContent(
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
+    onClose: () -> Unit,
 ) {
     val track by trackFlow.collectAsState()
     val bitmap by bitmapFlow.collectAsState()
@@ -99,6 +100,7 @@ fun OverlayContent(
             onDrag = onDrag,
             onDragEnd = onDragEnd,
             onCollapse = { expanded = false },
+            onClose = onClose,
             onPlayPause = onPlayPause,
             onNext = onNext,
             onPrevious = onPrevious,
@@ -113,6 +115,7 @@ fun OverlayContent(
             onDrag = onDrag,
             onDragEnd = onDragEnd,
             onExpand = { expanded = true },
+            onClose = onClose,
             onPlayPause = onPlayPause,
         )
     }
@@ -175,6 +178,7 @@ private fun MiniBar(
     onDrag: (Int, Int) -> Unit,
     onDragEnd: () -> Unit,
     onExpand: () -> Unit,
+    onClose: () -> Unit,
     onPlayPause: () -> Unit,
 ) {
     val activeLine = lyrics?.synced?.getOrNull(idx)
@@ -258,6 +262,22 @@ private fun MiniBar(
                 modifier = Modifier.size(20.dp),
             )
         }
+
+        // Close (X) — disable overlay sepenuhnya
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .consumeTap(onTap = onClose),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = "Close overlay",
+                tint = TextSecondary,
+                modifier = Modifier.size(18.dp),
+            )
+        }
         } // close Row
     } // close outer Box (fillMaxWidth + padding)
 }
@@ -273,6 +293,7 @@ private fun ExpandedCard(
     onDrag: (Int, Int) -> Unit,
     onDragEnd: () -> Unit,
     onCollapse: () -> Unit,
+    onClose: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -304,7 +325,7 @@ private fun ExpandedCard(
                 .background(OverlayBackground)
                 .border(1.dp, BorderHairline, RoundedCornerShape(20.dp))
                 // Drag area: seluruh card draggable; tombol di dalam consume event sendiri
-                .dragOrTap(onDrag = onDrag, onTap = { /* tap di area kosong tidak collapse */ }, onDragEnd = onDragEnd)
+                .dragOrTap(onDrag = onDrag, onTap = onCollapse, onDragEnd = onDragEnd)
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -333,12 +354,12 @@ private fun ExpandedCard(
                 )
             }
             ControlButton(
-                onClick = onCollapse,
+                onClick = onClose,
                 size = 32,
             ) {
                 Icon(
                     imageVector = Icons.Filled.Close,
-                    contentDescription = "Collapse",
+                    contentDescription = "Close overlay",
                     tint = TextSecondary,
                     modifier = Modifier.size(18.dp),
                 )

@@ -185,6 +185,14 @@ class SpotivibeNotificationService : Service() {
                     context = this@SpotivibeNotificationService,
                     controller = app.playbackController,
                     onPositionChange = { x, y -> schedulePersistOverlayPosition(x, y) },
+                    onCloseRequested = {
+                        // User tap X di overlay → set preference OFF. Observer
+                        // di service ini akan re-fire dengan enabled=false dan
+                        // call overlayManager.hide() + clear ref.
+                        serviceScope.launch {
+                            app.preferencesRepository.setOverlayEnabled(false)
+                        }
+                    },
                     initialX = pos.first,
                     initialY = pos.second,
                 )
