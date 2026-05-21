@@ -107,7 +107,7 @@ fun NowPlayingScreen(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 20.dp)
-            .padding(top = if (isLandscape) 16.dp else 32.dp, bottom = 16.dp),
+            .padding(top = if (isLandscape) 16.dp else 32.dp, bottom = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (isLandscape) {
@@ -168,7 +168,7 @@ fun NowPlayingScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         // ── Controls full-width di bawah (both orientations) ──
         ControlsBar(
@@ -444,77 +444,83 @@ private fun ControlsBar(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
         val safeDuration = durationMs.coerceAtLeast(1L)
         val ratio = (progressMs.toFloat() / safeDuration).coerceIn(0f, 1f)
-        Slider(
-            value = ratio,
-            onValueChange = { newRatio ->
-                onDrag((newRatio * safeDuration).toLong())
-            },
-            onValueChangeFinished = {
-                onSeek((ratio * safeDuration).toLong())
-            },
-            colors = SliderDefaults.colors(
-                thumbColor = accent,
-                activeTrackColor = accent,
-                inactiveTrackColor = Color.White.copy(alpha = 0.15f),
-            ),
-            modifier = Modifier.fillMaxWidth(),
-        )
+
+        // ── Row 1: time-left | slider flex | time-right (compact inline) ──
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
                 text = formatMs(progressMs),
                 style = MaterialTheme.typography.labelMedium,
                 color = TextSecondary,
+                modifier = Modifier.width(38.dp),
+            )
+            Slider(
+                value = ratio,
+                onValueChange = { newRatio -> onDrag((newRatio * safeDuration).toLong()) },
+                onValueChangeFinished = { onSeek((ratio * safeDuration).toLong()) },
+                colors = SliderDefaults.colors(
+                    thumbColor = accent,
+                    activeTrackColor = accent,
+                    inactiveTrackColor = Color.White.copy(alpha = 0.15f),
+                ),
+                modifier = Modifier.weight(1f),
             )
             Text(
                 text = formatMs(durationMs),
                 style = MaterialTheme.typography.labelMedium,
                 color = TextSecondary,
+                modifier = Modifier.width(38.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.End,
             )
         }
-        Spacer(modifier = Modifier.height(8.dp))
+
+        // ── Row 2: buttons (smaller: 24dp skip, 44dp play) ──
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onPrevious) {
+            IconButton(onClick = onPrevious, modifier = Modifier.size(40.dp)) {
                 Icon(
                     imageVector = Icons.Filled.SkipPrevious,
                     contentDescription = "Previous",
                     tint = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(26.dp),
                 )
             }
-            Spacer(modifier = Modifier.size(8.dp))
+            Spacer(modifier = Modifier.size(12.dp))
             Box(
                 modifier = Modifier
-                    .size(64.dp)
+                    .size(44.dp)
                     .clip(CircleShape)
                     .background(accent),
                 contentAlignment = Alignment.Center,
             ) {
-                IconButton(onClick = onTogglePlayPause, modifier = Modifier.size(64.dp)) {
+                IconButton(onClick = onTogglePlayPause, modifier = Modifier.size(44.dp)) {
                     Icon(
                         imageVector = if (isPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
                         contentDescription = if (isPaused) "Play" else "Pause",
                         tint = Color.Black,
-                        modifier = Modifier.size(36.dp),
+                        modifier = Modifier.size(26.dp),
                     )
                 }
             }
-            Spacer(modifier = Modifier.size(8.dp))
-            IconButton(onClick = onNext) {
+            Spacer(modifier = Modifier.size(12.dp))
+            IconButton(onClick = onNext, modifier = Modifier.size(40.dp)) {
                 Icon(
                     imageVector = Icons.Filled.SkipNext,
                     contentDescription = "Next",
                     tint = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.size(32.dp),
+                    modifier = Modifier.size(26.dp),
                 )
             }
         }
