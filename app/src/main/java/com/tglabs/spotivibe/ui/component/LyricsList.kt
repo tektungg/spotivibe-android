@@ -41,13 +41,15 @@ fun LyricsList(
     accent: Color,
     /** Map keyed by SyncedLine.timeMs → romaji string (atau null kalau no need) */
     romaji: Map<Long, String?> = emptyMap(),
+    /** Font size lyrics dalam sp. Default 17, range 12-24. */
+    fontSize: Int = 17,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when {
             lyrics == null -> StatusText("Mencari lirik…")
             lyrics.synced != null && lyrics.synced.isNotEmpty() ->
-                SyncedLyricsView(lyrics.synced, progressMs, accent, romaji)
+                SyncedLyricsView(lyrics.synced, progressMs, accent, romaji, fontSize)
             !lyrics.plain.isNullOrBlank() -> PlainLyricsView(lyrics.plain)
             else -> StatusText("Lirik tidak ditemukan untuk track ini")
         }
@@ -59,7 +61,7 @@ private fun StatusText(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium,
-        color = TextSecondary,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
         modifier = Modifier.padding(horizontal = 24.dp),
     )
@@ -71,6 +73,7 @@ private fun SyncedLyricsView(
     progressMs: Long,
     accent: Color,
     romaji: Map<Long, String?>,
+    fontSize: Int,
 ) {
     val listState = rememberLazyListState()
     val activeIndex = findActiveIndex(lines, progressMs)
@@ -95,6 +98,7 @@ private fun SyncedLyricsView(
                 romaji = romaji[line.timeMs],
                 isActive = idx == activeIndex,
                 accent = accent,
+                fontSize = fontSize,
             )
         }
 
@@ -108,9 +112,13 @@ private fun LyricLineItem(
     romaji: String?,
     isActive: Boolean,
     accent: Color,
+    fontSize: Int,
 ) {
+    // Theme-aware dim color — pakai onBackground dengan alpha rendah,
+    // works untuk dark (light text dim) dan light (dark text dim).
+    val dimColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
     val color by animateColorAsState(
-        targetValue = if (isActive) accent else TextDim,
+        targetValue = if (isActive) accent else dimColor,
         animationSpec = tween(durationMillis = 300),
         label = "lineColor",
     )
@@ -120,7 +128,7 @@ private fun LyricLineItem(
         label = "lineScale",
     )
     val romajiColor by animateColorAsState(
-        targetValue = if (isActive) accent.copy(alpha = 0.85f) else TextDim.copy(alpha = 0.7f),
+        targetValue = if (isActive) accent.copy(alpha = 0.85f) else dimColor.copy(alpha = 0.7f),
         animationSpec = tween(durationMillis = 300),
         label = "romajiColor",
     )
@@ -138,19 +146,20 @@ private fun LyricLineItem(
         Text(
             text = text.ifBlank { "♪" },
             style = MaterialTheme.typography.bodyLarge.copy(
-                fontSize = 17.sp,
-                lineHeight = 24.sp,
+                fontSize = fontSize.sp,
+                lineHeight = (fontSize + 7).sp,
             ),
             fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
             color = color,
             textAlign = TextAlign.Center,
         )
         if (!romaji.isNullOrBlank()) {
+            val romajiSize = (fontSize - 4).coerceAtLeast(10)
             Text(
                 text = romaji,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
+                    fontSize = romajiSize.sp,
+                    lineHeight = (romajiSize + 5).sp,
                 ),
                 fontStyle = FontStyle.Italic,
                 color = romajiColor,
@@ -170,7 +179,7 @@ private fun PlainLyricsView(plain: String) {
             Text(
                 text = plain,
                 style = MaterialTheme.typography.bodyLarge,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
             )

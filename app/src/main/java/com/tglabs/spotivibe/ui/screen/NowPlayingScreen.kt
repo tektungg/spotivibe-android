@@ -29,11 +29,15 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.TextDecrease
+import androidx.compose.material.icons.filled.TextIncrease
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -61,9 +65,6 @@ import androidx.compose.ui.unit.sp
 import com.tglabs.spotivibe.domain.UiState
 import com.tglabs.spotivibe.ui.component.LyricsList
 import com.tglabs.spotivibe.ui.theme.AccentDefault
-import com.tglabs.spotivibe.ui.theme.BorderHairline
-import com.tglabs.spotivibe.ui.theme.SurfaceFrost
-import com.tglabs.spotivibe.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -76,6 +77,8 @@ fun NowPlayingScreen(
     onSeek: (Long) -> Unit,
     onToggleRomanization: () -> Unit,
     onToggleOverlay: () -> Unit,
+    onToggleDarkMode: () -> Unit,
+    onBumpFontSize: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val track = state.track
@@ -128,8 +131,11 @@ fun NowPlayingScreen(
                     showRomajiToggle = state.canRomanize,
                     romajiEnabled = state.romanizationEnabled,
                     overlayEnabled = state.overlayEnabled,
+                    darkMode = state.darkMode,
                     onToggleRomanization = onToggleRomanization,
                     onToggleOverlay = onToggleOverlay,
+                    onToggleDarkMode = onToggleDarkMode,
+                    onBumpFontSize = onBumpFontSize,
                     modifier = Modifier.width(180.dp).fillMaxHeight(),
                 )
 
@@ -140,6 +146,7 @@ fun NowPlayingScreen(
                         progressMs = effectiveProgressMs,
                         accent = accent,
                         romaji = state.romaji,
+                        fontSize = state.lyricsFontSize,
                     )
                 }
             }
@@ -153,8 +160,11 @@ fun NowPlayingScreen(
                 showRomajiToggle = state.canRomanize,
                 romajiEnabled = state.romanizationEnabled,
                 overlayEnabled = state.overlayEnabled,
+                darkMode = state.darkMode,
                 onToggleRomanization = onToggleRomanization,
                 onToggleOverlay = onToggleOverlay,
+                onToggleDarkMode = onToggleDarkMode,
+                onBumpFontSize = onBumpFontSize,
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -202,8 +212,11 @@ private fun LandscapeSidebar(
     showRomajiToggle: Boolean,
     romajiEnabled: Boolean,
     overlayEnabled: Boolean,
+    darkMode: Boolean,
     onToggleRomanization: () -> Unit,
     onToggleOverlay: () -> Unit,
+    onToggleDarkMode: () -> Unit,
+    onBumpFontSize: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -216,7 +229,7 @@ private fun LandscapeSidebar(
             modifier = Modifier
                 .size(140.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(SurfaceFrost),
+                .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center,
         ) {
             Crossfade(targetState = bitmap, animationSpec = tween(400), label = "cover_landscape") { bmp ->
@@ -266,7 +279,7 @@ private fun LandscapeSidebar(
                 text = a,
                 style = MaterialTheme.typography.bodySmall,
                 fontSize = 12.sp,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -274,8 +287,23 @@ private fun LandscapeSidebar(
             )
         }
 
-        // Icons row — translate + overlay
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Icons row — A−/A+/Theme + translate(opsional) + overlay
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            CompactIconButton(
+                onClick = { onBumpFontSize(-2) },
+                icon = Icons.Filled.TextDecrease,
+                description = "Decrease lyrics font",
+            )
+            CompactIconButton(
+                onClick = { onBumpFontSize(2) },
+                icon = Icons.Filled.TextIncrease,
+                description = "Increase lyrics font",
+            )
+            CompactIconButton(
+                onClick = onToggleDarkMode,
+                icon = if (darkMode) Icons.Filled.LightMode else Icons.Filled.DarkMode,
+                description = "Toggle theme",
+            )
             if (showRomajiToggle) {
                 IconToggleButton(
                     enabled = romajiEnabled,
@@ -305,8 +333,11 @@ private fun HeaderArea(
     showRomajiToggle: Boolean,
     romajiEnabled: Boolean,
     overlayEnabled: Boolean,
+    darkMode: Boolean,
     onToggleRomanization: () -> Unit,
     onToggleOverlay: () -> Unit,
+    onToggleDarkMode: () -> Unit,
+    onBumpFontSize: (Int) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -318,7 +349,7 @@ private fun HeaderArea(
             modifier = Modifier
                 .size(56.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .background(SurfaceFrost),
+                .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center,
         ) {
             Crossfade(targetState = bitmap, animationSpec = tween(400), label = "cover") { bmp ->
@@ -370,32 +401,75 @@ private fun HeaderArea(
                     text = a,
                     style = MaterialTheme.typography.bodySmall,
                     fontSize = 12.sp,
-                    color = TextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
 
-        // Translate icon — cuma muncul kalau lirik mengandung non-Latin script
-        if (showRomajiToggle) {
+        // 5 icons row — A− / A+ / Theme / Translate(opsional) / Overlay
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            CompactIconButton(
+                onClick = { onBumpFontSize(-2) },
+                icon = Icons.Filled.TextDecrease,
+                description = "Decrease lyrics font",
+            )
+            CompactIconButton(
+                onClick = { onBumpFontSize(2) },
+                icon = Icons.Filled.TextIncrease,
+                description = "Increase lyrics font",
+            )
+            CompactIconButton(
+                onClick = onToggleDarkMode,
+                icon = if (darkMode) Icons.Filled.LightMode else Icons.Filled.DarkMode,
+                description = "Toggle theme",
+            )
+            if (showRomajiToggle) {
+                IconToggleButton(
+                    enabled = romajiEnabled,
+                    accent = accent,
+                    onClick = onToggleRomanization,
+                    icon = Icons.Filled.Translate,
+                    description = "Toggle romanization",
+                )
+            }
             IconToggleButton(
-                enabled = romajiEnabled,
+                enabled = overlayEnabled,
                 accent = accent,
-                onClick = onToggleRomanization,
-                icon = Icons.Filled.Translate,
-                description = "Toggle romanization",
+                onClick = onToggleOverlay,
+                icon = Icons.Filled.PictureInPictureAlt,
+                description = "Toggle floating overlay",
             )
         }
+    }
+}
 
-        // Overlay icon — selalu muncul. State ON = lirik melayang di atas app lain
-        IconToggleButton(
-            enabled = overlayEnabled,
-            accent = accent,
-            onClick = onToggleOverlay,
-            icon = Icons.Filled.PictureInPictureAlt,
-            description = "Toggle floating overlay",
-        )
+/**
+ * Stateless action icon (vs IconToggleButton yang punya ON/OFF state).
+ * Pakai untuk font size +/− dan theme toggle.
+ */
+@Composable
+private fun CompactIconButton(
+    onClick: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+) {
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        IconButton(onClick = onClick, modifier = Modifier.size(32.dp)) {
+            Icon(
+                imageVector = icon,
+                contentDescription = description,
+                tint = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.size(16.dp),
+            )
+        }
     }
 }
 
@@ -419,18 +493,18 @@ private fun IconToggleButton(
     )
     Box(
         modifier = Modifier
-            .size(40.dp)
+            .size(32.dp)
             .clip(CircleShape)
             .background(bgColor)
-            .border(1.dp, if (enabled) accent else BorderHairline, CircleShape),
+            .border(1.dp, if (enabled) accent else MaterialTheme.colorScheme.outline, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
+        IconButton(onClick = onClick, modifier = Modifier.size(32.dp)) {
             Icon(
                 imageVector = icon,
                 contentDescription = description,
                 tint = iconColor,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(16.dp),
             )
         }
     }
@@ -464,7 +538,7 @@ private fun ControlsBar(
             Text(
                 text = formatMs(progressMs),
                 style = MaterialTheme.typography.labelMedium,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.width(38.dp),
             )
             Slider(
@@ -481,7 +555,7 @@ private fun ControlsBar(
             Text(
                 text = formatMs(durationMs),
                 style = MaterialTheme.typography.labelMedium,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.width(38.dp),
                 textAlign = androidx.compose.ui.text.style.TextAlign.End,
             )

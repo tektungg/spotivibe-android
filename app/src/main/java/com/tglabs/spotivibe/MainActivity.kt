@@ -14,6 +14,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.tglabs.spotivibe.data.SpotifyConnection
@@ -95,7 +97,12 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            SpotivibeTheme {
+            // Observe darkMode preference langsung — perlu di luar SpotivibeTheme
+            // karena dipakai untuk theme selection. Default true sambil DataStore load.
+            val darkMode by app.preferencesRepository.darkMode
+                .collectAsState(initial = true)
+
+            SpotivibeTheme(darkTheme = darkMode) {
                 val state = viewModel.uiState.collectAsStateWithLifecycle().value
                 MainScreen(
                     state = state,
@@ -106,6 +113,8 @@ class MainActivity : ComponentActivity() {
                     onSeek = { positionMs -> viewModel.seekTo(positionMs) },
                     onToggleRomanization = { viewModel.toggleRomanization() },
                     onToggleOverlay = { handleOverlayToggle() },
+                    onToggleDarkMode = { viewModel.toggleDarkMode() },
+                    onBumpFontSize = { delta -> viewModel.bumpFontSize(delta) },
                 )
             }
         }

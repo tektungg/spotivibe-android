@@ -25,6 +25,8 @@ sealed interface UiState {
         val romanizationEnabled: Boolean = false,
         val romaji: Map<Long, String?> = emptyMap(),
         val overlayEnabled: Boolean = false,
+        val darkMode: Boolean = true,
+        val lyricsFontSize: Int = 17,
     ) : UiState
 
     data class Error(val message: String) : UiState

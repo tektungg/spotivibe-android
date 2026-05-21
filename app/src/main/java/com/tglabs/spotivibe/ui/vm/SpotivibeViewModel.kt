@@ -42,6 +42,8 @@ class SpotivibeViewModel(
             controller.accent,
             preferencesRepository.romanizationEnabled,
             preferencesRepository.overlayEnabled,
+            preferencesRepository.darkMode,
+            preferencesRepository.lyricsFontSize,
         )
     ) { values ->
         @Suppress("UNCHECKED_CAST")
@@ -53,6 +55,8 @@ class SpotivibeViewModel(
         val accent = values[5] as Color?
         val romaEnabled = values[6] as Boolean
         val overlayEnabled = values[7] as Boolean
+        val darkMode = values[8] as Boolean
+        val fontSize = values[9] as Int
 
         when (connState) {
             ConnectionState.Disconnected -> UiState.Disconnected
@@ -68,6 +72,8 @@ class SpotivibeViewModel(
                     romanizationEnabled = romaEnabled,
                     romaji = romaji,
                     overlayEnabled = overlayEnabled,
+                    darkMode = darkMode,
+                    lyricsFontSize = fontSize,
                 )
             } ?: UiState.Idle
             is ConnectionState.Error -> UiState.Error(connState.message)
@@ -108,6 +114,20 @@ class SpotivibeViewModel(
     fun setOverlayEnabled(enabled: Boolean) {
         viewModelScope.launch {
             preferencesRepository.setOverlayEnabled(enabled)
+        }
+    }
+
+    fun toggleDarkMode() {
+        viewModelScope.launch {
+            val current = (uiState.value as? UiState.Playing)?.darkMode ?: true
+            preferencesRepository.setDarkMode(!current)
+        }
+    }
+
+    fun bumpFontSize(delta: Int) {
+        viewModelScope.launch {
+            val current = (uiState.value as? UiState.Playing)?.lyricsFontSize ?: 17
+            preferencesRepository.setLyricsFontSize(current + delta)
         }
     }
 

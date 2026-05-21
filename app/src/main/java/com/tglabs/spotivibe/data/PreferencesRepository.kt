@@ -20,6 +20,8 @@ class PreferencesRepository(private val context: Context) {
     private val overlayXKey = intPreferencesKey("overlay_x")
     private val overlayYKey = intPreferencesKey("overlay_y")
     private val spotifyAuthorizedKey = booleanPreferencesKey("spotify_authorized")
+    private val darkModeKey = booleanPreferencesKey("dark_mode")
+    private val lyricsFontSizeKey = intPreferencesKey("lyrics_font_size")
 
     val romanizationEnabled: Flow<Boolean> = context.dataStore.data
         .map { prefs -> prefs[romanizationKey] ?: false }
@@ -40,6 +42,14 @@ class PreferencesRepository(private val context: Context) {
     val spotifyAuthorized: Flow<Boolean> = context.dataStore.data
         .map { prefs -> prefs[spotifyAuthorizedKey] ?: false }
 
+    /** Dark theme default true. User toggle via icon di header. */
+    val darkMode: Flow<Boolean> = context.dataStore.data
+        .map { prefs -> prefs[darkModeKey] ?: true }
+
+    /** Lyrics font size in sp. Range 12-24, default 17. */
+    val lyricsFontSize: Flow<Int> = context.dataStore.data
+        .map { prefs -> (prefs[lyricsFontSizeKey] ?: 17).coerceIn(12, 24) }
+
     suspend fun setRomanizationEnabled(enabled: Boolean) {
         context.dataStore.edit { it[romanizationKey] = enabled }
     }
@@ -57,5 +67,13 @@ class PreferencesRepository(private val context: Context) {
 
     suspend fun setSpotifyAuthorized(authorized: Boolean) {
         context.dataStore.edit { it[spotifyAuthorizedKey] = authorized }
+    }
+
+    suspend fun setDarkMode(dark: Boolean) {
+        context.dataStore.edit { it[darkModeKey] = dark }
+    }
+
+    suspend fun setLyricsFontSize(size: Int) {
+        context.dataStore.edit { it[lyricsFontSizeKey] = size.coerceIn(12, 24) }
     }
 }

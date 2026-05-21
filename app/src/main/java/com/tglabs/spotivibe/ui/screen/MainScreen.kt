@@ -15,9 +15,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import com.tglabs.spotivibe.domain.UiState
-import com.tglabs.spotivibe.ui.theme.BackgroundDeep
-import com.tglabs.spotivibe.ui.theme.BackgroundLift
-import com.tglabs.spotivibe.ui.theme.TextSecondary
+import com.tglabs.spotivibe.ui.theme.BackgroundDeepLight
 
 @Composable
 fun MainScreen(
@@ -29,12 +27,19 @@ fun MainScreen(
     onSeek: (Long) -> Unit,
     onToggleRomanization: () -> Unit,
     onToggleOverlay: () -> Unit,
+    onToggleDarkMode: () -> Unit,
+    onBumpFontSize: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Accent-aware gradient — saat Playing, sedikit campur accent album cover
-    // di middle-bottom. Smooth 800ms transition saat track ganti.
+    // Gradient endpoints dari Material colorScheme — auto switch dark/light
+    val bgDeep = MaterialTheme.colorScheme.background
+    val bgLift = MaterialTheme.colorScheme.surface
+    val isLight = bgDeep == BackgroundDeepLight
+
     val playingAccent = (state as? UiState.Playing)?.accentColor
-    val targetTint = playingAccent?.copy(alpha = 0.18f) ?: Color.Transparent
+    // Light mode: lower alpha biar tidak terlalu wash-out warna
+    val tintAlpha = if (isLight) 0.10f else 0.18f
+    val targetTint = playingAccent?.copy(alpha = tintAlpha) ?: Color.Transparent
     val animatedTint by animateColorAsState(
         targetValue = targetTint,
         animationSpec = tween(durationMillis = 800),
@@ -47,9 +52,9 @@ fun MainScreen(
             .background(
                 Brush.verticalGradient(
                     colorStops = arrayOf(
-                        0.0f to BackgroundDeep,
-                        0.55f to BackgroundLift,
-                        1.0f to animatedTint.compositeOver(BackgroundLift),
+                        0.0f to bgDeep,
+                        0.55f to bgLift,
+                        1.0f to animatedTint.compositeOver(bgLift),
                     ),
                 )
             ),
@@ -73,7 +78,7 @@ fun MainScreen(
             is UiState.Idle -> Text(
                 text = "Connected. Putar lagu di Spotify…",
                 style = MaterialTheme.typography.bodyLarge,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             is UiState.Playing -> NowPlayingScreen(
                 state = state,
@@ -83,6 +88,8 @@ fun MainScreen(
                 onSeek = onSeek,
                 onToggleRomanization = onToggleRomanization,
                 onToggleOverlay = onToggleOverlay,
+                onToggleDarkMode = onToggleDarkMode,
+                onBumpFontSize = onBumpFontSize,
             )
         }
     }

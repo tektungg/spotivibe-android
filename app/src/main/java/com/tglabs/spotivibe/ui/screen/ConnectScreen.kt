@@ -18,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tglabs.spotivibe.ui.theme.AccentDefault
-import com.tglabs.spotivibe.ui.theme.TextSecondary
 
 @Composable
 fun ConnectScreen(
@@ -43,7 +42,7 @@ fun ConnectScreen(
         Text(
             text = "Code. Vibe. Sing along.",
             style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         Spacer(modifier = Modifier.height(48.dp))
@@ -54,7 +53,7 @@ fun ConnectScreen(
             Text(
                 text = "Connecting to Spotify…",
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
             Button(
@@ -87,7 +86,7 @@ fun ConnectScreen(
         Text(
             text = "Pastikan Spotify app sudah ter-install\ndan login dengan akun Premium",
             style = MaterialTheme.typography.bodySmall,
-            color = TextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
     }
