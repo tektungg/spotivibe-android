@@ -37,3 +37,21 @@ fun detectScript(text: String): Script {
 /** Cek apakah ada minimal 1 baris yang non-Latin → bisa di-romanize */
 fun hasRomanizableText(lines: List<String>): Boolean =
     lines.any { detectScript(it) != Script.LATIN }
+
+/**
+ * Parse LRC format `[mm:ss.xx]text` → list of SyncedLine.
+ * Returns sorted by timeMs ascending. Lines tanpa timestamp di-skip.
+ */
+fun parseLrc(raw: String): List<SyncedLine> {
+    val pattern = Regex("""\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?]\s*(.*)""")
+    val lines = mutableListOf<SyncedLine>()
+    raw.lineSequence().forEach { line ->
+        val m = pattern.find(line) ?: return@forEach
+        val min = m.groupValues[1].toInt()
+        val sec = m.groupValues[2].toInt()
+        val frac = m.groupValues[3].ifBlank { "0" }.padEnd(3, '0').take(3).toInt()
+        val text = m.groupValues[4].trim()
+        lines.add(SyncedLine(timeMs = (min * 60L + sec) * 1000L + frac, text = text))
+    }
+    return lines.sortedBy { it.timeMs }
+}
