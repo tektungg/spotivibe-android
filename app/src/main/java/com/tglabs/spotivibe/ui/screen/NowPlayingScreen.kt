@@ -57,6 +57,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.tglabs.spotivibe.domain.UiState
 import com.tglabs.spotivibe.ui.component.LyricsList
 import com.tglabs.spotivibe.ui.theme.AccentDefault
@@ -129,7 +130,7 @@ fun NowPlayingScreen(
                     overlayEnabled = state.overlayEnabled,
                     onToggleRomanization = onToggleRomanization,
                     onToggleOverlay = onToggleOverlay,
-                    modifier = Modifier.width(240.dp).fillMaxHeight(),
+                    modifier = Modifier.width(180.dp).fillMaxHeight(),
                 )
 
                 // Right: lyrics fills remaining
@@ -210,11 +211,11 @@ private fun LandscapeSidebar(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // Cover gede ~200dp square
+        // Cover compact 140dp
         Box(
             modifier = Modifier
-                .size(200.dp)
-                .clip(RoundedCornerShape(14.dp))
+                .size(140.dp)
+                .clip(RoundedCornerShape(12.dp))
                 .background(SurfaceFrost),
             contentAlignment = Alignment.Center,
         ) {
@@ -229,13 +230,13 @@ private fun LandscapeSidebar(
                     )
                 } else {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(text = "♪", style = MaterialTheme.typography.displayLarge, color = accent)
+                        Text(text = "♪", style = MaterialTheme.typography.headlineSmall, color = accent)
                     }
                 }
             }
         }
 
-        // Title + artist (centered)
+        // Title + artist compact (centered)
         AnimatedContent(
             targetState = title.ifBlank { "Untitled" },
             transitionSpec = {
@@ -246,9 +247,10 @@ private fun LandscapeSidebar(
         ) { t ->
             Text(
                 text = t,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
+                fontSize = 15.sp,
                 color = accent,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -262,7 +264,8 @@ private fun LandscapeSidebar(
         ) { a ->
             Text(
                 text = a,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
+                fontSize = 12.sp,
                 color = TextSecondary,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 maxLines = 1,
@@ -310,11 +313,11 @@ private fun HeaderArea(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // Cover crossfade — bitmap berubah → 400ms cross-fade smooth
+        // Cover crossfade — compact 56dp
         Box(
             modifier = Modifier
-                .size(80.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .size(56.dp)
+                .clip(RoundedCornerShape(10.dp))
                 .background(SurfaceFrost),
             contentAlignment = Alignment.Center,
         ) {
@@ -329,13 +332,13 @@ private fun HeaderArea(
                     )
                 } else {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(text = "♪", style = MaterialTheme.typography.headlineMedium, color = accent)
+                        Text(text = "♪", style = MaterialTheme.typography.titleMedium, color = accent)
                     }
                 }
             }
         }
 
-        // Title slide-in + fade saat track ganti
+        // Title slide-in + fade saat track ganti — compact titleMedium 15sp
         Column(modifier = Modifier.weight(1f)) {
             AnimatedContent(
                 targetState = title.ifBlank { "Untitled" },
@@ -347,14 +350,14 @@ private fun HeaderArea(
             ) { t ->
                 Text(
                     text = t,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontSize = 15.sp,
                     color = accent,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Spacer(modifier = Modifier.height(2.dp))
             AnimatedContent(
                 targetState = artist.ifBlank { "Unknown artist" },
                 transitionSpec = {
@@ -365,7 +368,8 @@ private fun HeaderArea(
             ) { a ->
                 Text(
                     text = a,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 12.sp,
                     color = TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
