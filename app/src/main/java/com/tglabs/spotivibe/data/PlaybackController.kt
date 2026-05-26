@@ -141,12 +141,16 @@ class PlaybackController(
                 }
         }
 
-        // 2. Update baseline tiap kali Spotify push event
+        // 2. Update baseline tiap kali Spotify push event.
+        //    Pakai t.capturedAtMs (wall clock saat snapshot di-take di
+        //    SpotifyConnection callback), bukan currentTimeMillis() di sini —
+        //    biar konsisten dengan UI extrapolation dan akurat walau collect
+        //    fires sedikit terlambat dari callback Spotify.
         scope.launch {
             connection.nowPlaying.collect { t ->
                 if (t == null) return@collect
                 baselineProgressMs = t.progressMs
-                baselineTimestampMs = System.currentTimeMillis()
+                baselineTimestampMs = t.capturedAtMs
                 baselinePaused = t.isPaused
             }
         }

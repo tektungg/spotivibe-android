@@ -314,6 +314,9 @@ class SpotifyConnection(
             durationMs = t.duration,
             progressMs = playbackPosition,
             isPaused = isPaused,
+            // Wall clock saat callback fired. Dipakai UI buat extrapolation
+            // yang benar walau Composable dispose+recompose.
+            capturedAtMs = System.currentTimeMillis(),
         )
     }
 

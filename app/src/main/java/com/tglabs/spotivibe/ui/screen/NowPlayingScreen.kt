@@ -107,15 +107,20 @@ fun NowPlayingScreen(
         label = "accent",
     )
 
-    val displayProgressMs by produceState(initialValue = track.progressMs, track) {
-        value = track.progressMs
+    // Ticker pakai track.capturedAtMs (wall clock saat Spotify push event),
+    // BUKAN System.currentTimeMillis() pas Composable mount. Tanpa ini,
+    // tiap recomposition (mis. balik dari Settings) baseline time di-reset
+    // ke "now" tapi baseline value adalah snapshot lama Spotify → progress
+    // tampak mundur ke nilai stale (sering 0 kalau push terjadi pas track ganti).
+    val displayProgressMs by produceState(
+        initialValue = track.extrapolatedProgressMs(),
+        track,
+    ) {
+        value = track.extrapolatedProgressMs()
         if (!track.isPaused) {
-            val baseline = track.progressMs
-            val baselineTime = System.currentTimeMillis()
             while (isActive) {
                 delay(200)
-                val elapsed = System.currentTimeMillis() - baselineTime
-                value = (baseline + elapsed).coerceAtMost(track.durationMs)
+                value = track.extrapolatedProgressMs()
             }
         }
     }
