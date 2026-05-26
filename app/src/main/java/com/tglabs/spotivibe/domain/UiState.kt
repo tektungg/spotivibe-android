@@ -28,6 +28,12 @@ sealed interface UiState {
         val darkMode: Boolean = true,
         val lyricsFontSize: Int = 17,
         val isPremium: Boolean = false,
+        // Improvement set: lyrics tuning + UX prefs
+        val lyricsOffsetMs: Int = 0,
+        val lineSpacing: Int = 7,
+        val highContrast: Boolean = false,
+        val smoothScroll: Boolean = true,
+        val hapticEnabled: Boolean = true,
     ) : UiState
 
     data class Error(val message: String) : UiState

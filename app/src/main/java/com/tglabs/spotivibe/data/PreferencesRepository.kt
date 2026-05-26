@@ -27,6 +27,12 @@ class PreferencesRepository(private val context: Context) {
     private val spotifyTokenExpiresAtKey = longPreferencesKey("spotify_token_expires_at_ms")
     private val darkModeKey = booleanPreferencesKey("dark_mode")
     private val lyricsFontSizeKey = intPreferencesKey("lyrics_font_size")
+    // Improvement set: per-user fine-tuning lyrics behavior
+    private val lyricsOffsetMsKey = intPreferencesKey("lyrics_offset_ms")
+    private val lineSpacingKey = intPreferencesKey("line_spacing_dp")
+    private val highContrastKey = booleanPreferencesKey("high_contrast")
+    private val smoothScrollKey = booleanPreferencesKey("smooth_scroll")
+    private val hapticEnabledKey = booleanPreferencesKey("haptic_enabled")
 
     val romanizationEnabled: Flow<Boolean> = context.dataStore.data
         .map { prefs -> prefs[romanizationKey] ?: false }
@@ -85,6 +91,32 @@ class PreferencesRepository(private val context: Context) {
     val lyricsFontSize: Flow<Int> = context.dataStore.data
         .map { prefs -> (prefs[lyricsFontSizeKey] ?: 17).coerceIn(12, 56) }
 
+    /**
+     * Manual sync correction. Positive = lyrics dipercepat (kompensasi LRC lambat).
+     * Negative = lyrics dilambatkan. Range ±2000 ms.
+     */
+    val lyricsOffsetMs: Flow<Int> = context.dataStore.data
+        .map { prefs -> (prefs[lyricsOffsetMsKey] ?: 0).coerceIn(-2000, 2000) }
+
+    /** Extra vertical spacing antar baris lyric (sp). Range 0-20, default 7 = paritas lama. */
+    val lineSpacing: Flow<Int> = context.dataStore.data
+        .map { prefs -> (prefs[lineSpacingKey] ?: 7).coerceIn(0, 20) }
+
+    /** High contrast mode — heavier weights, no dim fade. Default false. */
+    val highContrast: Flow<Boolean> = context.dataStore.data
+        .map { prefs -> prefs[highContrastKey] ?: false }
+
+    /**
+     * Auto-scroll behavior. true (default) = animateScrollToItem dengan tween halus.
+     * false = scrollToItem snap instan, lebih responsif tapi visually jumpy.
+     */
+    val smoothScroll: Flow<Boolean> = context.dataStore.data
+        .map { prefs -> prefs[smoothScrollKey] ?: true }
+
+    /** Haptic feedback saat baris lyric berganti. Default true. */
+    val hapticEnabled: Flow<Boolean> = context.dataStore.data
+        .map { prefs -> prefs[hapticEnabledKey] ?: true }
+
     suspend fun setRomanizationEnabled(enabled: Boolean) {
         context.dataStore.edit { it[romanizationKey] = enabled }
     }
@@ -123,5 +155,25 @@ class PreferencesRepository(private val context: Context) {
             val current = (prefs[lyricsFontSizeKey] ?: 17).coerceIn(12, 56)
             prefs[lyricsFontSizeKey] = (current + delta).coerceIn(12, 56)
         }
+    }
+
+    suspend fun setLyricsOffsetMs(ms: Int) {
+        context.dataStore.edit { it[lyricsOffsetMsKey] = ms.coerceIn(-2000, 2000) }
+    }
+
+    suspend fun setLineSpacing(dp: Int) {
+        context.dataStore.edit { it[lineSpacingKey] = dp.coerceIn(0, 20) }
+    }
+
+    suspend fun setHighContrast(enabled: Boolean) {
+        context.dataStore.edit { it[highContrastKey] = enabled }
+    }
+
+    suspend fun setSmoothScroll(enabled: Boolean) {
+        context.dataStore.edit { it[smoothScrollKey] = enabled }
+    }
+
+    suspend fun setHapticEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[hapticEnabledKey] = enabled }
     }
 }

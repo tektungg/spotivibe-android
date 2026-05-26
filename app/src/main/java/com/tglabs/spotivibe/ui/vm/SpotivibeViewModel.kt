@@ -45,6 +45,11 @@ class SpotivibeViewModel(
             preferencesRepository.overlayEnabled,
             preferencesRepository.darkMode,
             preferencesRepository.lyricsFontSize,
+            preferencesRepository.lyricsOffsetMs,
+            preferencesRepository.lineSpacing,
+            preferencesRepository.highContrast,
+            preferencesRepository.smoothScroll,
+            preferencesRepository.hapticEnabled,
         )
     ) { values ->
         @Suppress("UNCHECKED_CAST")
@@ -59,6 +64,11 @@ class SpotivibeViewModel(
         val overlayEnabled = values[8] as Boolean
         val darkMode = values[9] as Boolean
         val fontSize = values[10] as Int
+        val offsetMs = values[11] as Int
+        val lineSpacing = values[12] as Int
+        val highContrast = values[13] as Boolean
+        val smoothScroll = values[14] as Boolean
+        val haptic = values[15] as Boolean
 
         when (connState) {
             ConnectionState.Disconnected -> UiState.Disconnected
@@ -77,6 +87,11 @@ class SpotivibeViewModel(
                     darkMode = darkMode,
                     lyricsFontSize = fontSize,
                     isPremium = isPremium,
+                    lyricsOffsetMs = offsetMs,
+                    lineSpacing = lineSpacing,
+                    highContrast = highContrast,
+                    smoothScroll = smoothScroll,
+                    hapticEnabled = haptic,
                 )
             } ?: UiState.Idle
             is ConnectionState.Error -> UiState.Error(connState.message)
@@ -152,6 +167,36 @@ class SpotivibeViewModel(
     fun setFontSize(size: Int) {
         viewModelScope.launch {
             preferencesRepository.setLyricsFontSize(size)
+        }
+    }
+
+    // ── Lyrics tuning + UX preferences (Improvement set) ──
+    fun setLyricsOffsetMs(ms: Int) {
+        viewModelScope.launch { preferencesRepository.setLyricsOffsetMs(ms) }
+    }
+
+    fun setLineSpacing(dp: Int) {
+        viewModelScope.launch { preferencesRepository.setLineSpacing(dp) }
+    }
+
+    fun toggleHighContrast() {
+        viewModelScope.launch {
+            val current = (uiState.value as? UiState.Playing)?.highContrast ?: false
+            preferencesRepository.setHighContrast(!current)
+        }
+    }
+
+    fun toggleSmoothScroll() {
+        viewModelScope.launch {
+            val current = (uiState.value as? UiState.Playing)?.smoothScroll ?: true
+            preferencesRepository.setSmoothScroll(!current)
+        }
+    }
+
+    fun toggleHaptic() {
+        viewModelScope.launch {
+            val current = (uiState.value as? UiState.Playing)?.hapticEnabled ?: true
+            preferencesRepository.setHapticEnabled(!current)
         }
     }
 

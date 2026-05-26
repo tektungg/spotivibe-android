@@ -3,6 +3,7 @@ package com.tglabs.spotivibe.ui.component
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,10 +21,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -35,9 +39,9 @@ import androidx.compose.ui.text.withStyle
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.SyncedLine
 import com.tglabs.spotivibe.domain.SyncedWord
-import com.tglabs.spotivibe.ui.theme.TextDim
-import com.tglabs.spotivibe.ui.theme.TextSecondary
+import com.tglabs.spotivibe.util.Haptics
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun LyricsList(
     lyrics: LyricsResult?,
@@ -45,15 +49,39 @@ fun LyricsList(
     accent: Color,
     /** Map keyed by SyncedLine.timeMs → romaji string (atau null kalau no need) */
     romaji: Map<Long, String?> = emptyMap(),
-    /** Font size lyrics dalam sp. Default 17, range 12-24. */
+    /** Font size lyrics dalam sp. Default 17, range 12-56. */
     fontSize: Int = 17,
+    /** Extra vertical spacing antar baris (dp). Default 7. */
+    lineSpacing: Int = 7,
+    /** Bold weights + no dim fade — outdoor / accessibility. */
+    highContrast: Boolean = false,
+    /** Auto-scroll animation: true = animateScrollToItem, false = scrollToItem snap. */
+    smoothScroll: Boolean = true,
+    /** Trigger Vibrator tick saat active line berubah. */
+    hapticEnabled: Boolean = true,
+    /** Tap-to-seek: short tap baris → jump ke timestamp. */
+    onSeekToLine: ((Long) -> Unit)? = null,
+    /** Long-press baris → bagikan sebagai image card. */
+    onLongPressShare: ((SyncedLine) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when {
             lyrics == null -> StatusText("Mencari lirik…")
             lyrics.synced != null && lyrics.synced.isNotEmpty() ->
-                SyncedLyricsView(lyrics.synced, progressMs, accent, romaji, fontSize)
+                SyncedLyricsView(
+                    lines = lyrics.synced,
+                    progressMs = progressMs,
+                    accent = accent,
+                    romaji = romaji,
+                    fontSize = fontSize,
+                    lineSpacing = lineSpacing,
+                    highContrast = highContrast,
+                    smoothScroll = smoothScroll,
+                    hapticEnabled = hapticEnabled,
+                    onSeekToLine = onSeekToLine,
+                    onLongPressShare = onLongPressShare,
+                )
             !lyrics.plain.isNullOrBlank() -> PlainLyricsView(lyrics.plain, fontSize)
             else -> StatusText("Lirik tidak ditemukan untuk track ini")
         }
@@ -78,13 +106,31 @@ private fun SyncedLyricsView(
     accent: Color,
     romaji: Map<Long, String?>,
     fontSize: Int,
+    lineSpacing: Int,
+    highContrast: Boolean,
+    smoothScroll: Boolean,
+    hapticEnabled: Boolean,
+    onSeekToLine: ((Long) -> Unit)?,
+    onLongPressShare: ((SyncedLine) -> Unit)?,
 ) {
     val listState = rememberLazyListState()
     val activeIndex = findActiveIndex(lines, progressMs)
+    val context = LocalContext.current
 
     LaunchedEffect(activeIndex) {
         if (activeIndex >= 0) {
-            listState.animateScrollToItem(index = activeIndex, scrollOffset = -200)
+            if (smoothScroll) {
+                listState.animateScrollToItem(index = activeIndex, scrollOffset = -200)
+            } else {
+                listState.scrollToItem(index = activeIndex, scrollOffset = -200)
+            }
+        }
+    }
+
+    // Haptic on line change — skip initial composition (activeIndex starts at -1 or first)
+    if (hapticEnabled) {
+        LaunchedEffect(activeIndex) {
+            if (activeIndex >= 0) Haptics.tick(context)
         }
     }
 
@@ -92,7 +138,7 @@ private fun SyncedLyricsView(
         state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.spacedBy(lineSpacing.coerceIn(0, 20).dp),
     ) {
         item { Spacer(modifier = Modifier.height(80.dp)) }
 
@@ -104,6 +150,9 @@ private fun SyncedLyricsView(
                 progressMs = progressMs,
                 accent = accent,
                 fontSize = fontSize,
+                highContrast = highContrast,
+                onTap = onSeekToLine?.let { { it(line.timeMs) } },
+                onLongPress = onLongPressShare?.let { { it(line) } },
             )
         }
 
@@ -111,6 +160,7 @@ private fun SyncedLyricsView(
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun LyricLineItem(
     line: SyncedLine,
@@ -119,8 +169,13 @@ private fun LyricLineItem(
     progressMs: Long,
     accent: Color,
     fontSize: Int,
+    highContrast: Boolean,
+    onTap: (() -> Unit)?,
+    onLongPress: (() -> Unit)?,
 ) {
-    val dimColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
+    // High contrast: kurang dim, lebih opaque pada inactive lines (75% vs 40%)
+    val inactiveAlpha = if (highContrast) 0.75f else 0.4f
+    val dimColor = MaterialTheme.colorScheme.onBackground.copy(alpha = inactiveAlpha)
     val color by animateColorAsState(
         targetValue = if (isActive) accent else dimColor,
         animationSpec = tween(durationMillis = 300),
@@ -138,27 +193,39 @@ private fun LyricLineItem(
     )
 
     val hasWordTiming = line.words.isNotEmpty()
+    // High contrast: semua line pakai SemiBold; active jadi Bold
+    val inactiveWeight = if (highContrast) FontWeight.Medium else FontWeight.Normal
+    val activeWeight = if (highContrast) FontWeight.Bold else FontWeight.SemiBold
+
+    val baseModifier = Modifier
+        .fillMaxWidth()
+        .padding(vertical = 6.dp)
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+
+    val interactiveModifier = if (onTap != null || onLongPress != null) {
+        baseModifier.combinedClickable(
+            onClick = { onTap?.invoke() },
+            onLongClick = onLongPress,
+        )
+    } else baseModifier
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            },
+        modifier = interactiveModifier,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (isActive && hasWordTiming) {
-            // Per-word karaoke: render AnnotatedString dengan highlight per-kata
-            // berdasarkan progressMs. Kata yang sudah di-sing pakai accent full,
-            // kata yang belum sing pakai dim (kayak teleprompter karaoke).
+            // Per-word karaoke: render AnnotatedString dengan highlight per-kata.
             WordHighlightText(
                 words = line.words,
                 progressMs = progressMs,
                 activeColor = accent,
                 pendingColor = dimColor,
                 fontSize = fontSize,
+                activeWeight = activeWeight,
+                pendingWeight = inactiveWeight,
             )
         } else {
             Text(
@@ -167,7 +234,7 @@ private fun LyricLineItem(
                     fontSize = fontSize.sp,
                     lineHeight = (fontSize + 7).sp,
                 ),
-                fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
+                fontWeight = if (isActive) activeWeight else inactiveWeight,
                 color = color,
                 textAlign = TextAlign.Center,
             )
@@ -191,7 +258,6 @@ private fun LyricLineItem(
 /**
  * Render baris lirik dengan highlight per-kata. Kata yang `timeMs <= progressMs`
  * di-render dengan activeColor (sudah dinyanyikan), kata sisanya pendingColor.
- * Pakai AnnotatedString untuk single Text dengan span color berbeda.
  */
 @Composable
 private fun WordHighlightText(
@@ -200,6 +266,8 @@ private fun WordHighlightText(
     activeColor: Color,
     pendingColor: Color,
     fontSize: Int,
+    activeWeight: FontWeight,
+    pendingWeight: FontWeight,
 ) {
     val annotated = buildAnnotatedString {
         words.forEach { word ->
@@ -207,7 +275,7 @@ private fun WordHighlightText(
             withStyle(
                 SpanStyle(
                     color = if (sung) activeColor else pendingColor,
-                    fontWeight = if (sung) FontWeight.SemiBold else FontWeight.Normal,
+                    fontWeight = if (sung) activeWeight else pendingWeight,
                 )
             ) {
                 append(word.text)

@@ -50,6 +50,18 @@
             </intent-filter>
         </activity>
 
+        <!-- FileProvider untuk share lyric-card sebagai PNG ke other apps.
+             Authority pakai BuildConfig.APPLICATION_ID supaya unik per build. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Foreground lyrics notification service. Type "specialUse" supaya
              system tidak claim sebagai media player + tidak hijack Spotify's
              Dynamic Island / lock screen media indicator. -->

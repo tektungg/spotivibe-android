@@ -53,11 +53,21 @@ fun SettingsScreen(
     onToggleDarkMode: () -> Unit,
     onSetFontSize: (Int) -> Unit,
     onLogout: () -> Unit,
+    onSetLyricsOffsetMs: (Int) -> Unit = {},
+    onSetLineSpacing: (Int) -> Unit = {},
+    onToggleHighContrast: () -> Unit = {},
+    onToggleSmoothScroll: () -> Unit = {},
+    onToggleHaptic: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val playing = state as? UiState.Playing
     val darkMode = playing?.darkMode ?: true
     val fontSize = playing?.lyricsFontSize ?: 17
+    val lyricsOffsetMs = playing?.lyricsOffsetMs ?: 0
+    val lineSpacing = playing?.lineSpacing ?: 7
+    val highContrast = playing?.highContrast ?: false
+    val smoothScroll = playing?.smoothScroll ?: true
+    val hapticEnabled = playing?.hapticEnabled ?: true
 
     BackHandler(onBack = onBack)
 
@@ -157,6 +167,154 @@ fun SettingsScreen(
                     ),
                 )
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            SectionHeader(title = "Lyrics", icon = Icons.Filled.MusicNote)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Lyrics sync offset — kompensasi LRC yang slightly off
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.padding(end = 16.dp)) {
+                        Text(
+                            text = "Sync offset",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onBackground,
+                        )
+                        Text(
+                            text = "Geser lirik kalau LRC slow/cepat — ${if (lyricsOffsetMs >= 0) "+" else ""}${lyricsOffsetMs}ms",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        text = "${lyricsOffsetMs}",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                Slider(
+                    value = lyricsOffsetMs.toFloat(),
+                    onValueChange = { onSetLyricsOffsetMs(it.toInt()) },
+                    valueRange = -2000f..2000f,
+                    steps = 39, // 100ms increments across 4000ms range
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                    ),
+                )
+            }
+
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+
+            // Line spacing — gap antar baris lyric
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.padding(end = 16.dp)) {
+                        Text(
+                            text = "Line spacing",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onBackground,
+                        )
+                        Text(
+                            text = "Jarak antar baris — ${lineSpacing}dp",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        text = "$lineSpacing",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                Slider(
+                    value = lineSpacing.toFloat(),
+                    onValueChange = { onSetLineSpacing(it.toInt()) },
+                    valueRange = 0f..20f,
+                    steps = 19,
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                    ),
+                )
+            }
+
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+
+            // High contrast
+            SettingRow(
+                title = "High contrast",
+                subtitle = if (highContrast) "Bold, no dim — outdoor mode" else "Default styling",
+                trailing = {
+                    Switch(
+                        checked = highContrast,
+                        onCheckedChange = { onToggleHighContrast() },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                        ),
+                    )
+                },
+            )
+
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+
+            // Smooth scroll
+            SettingRow(
+                title = "Smooth scroll",
+                subtitle = if (smoothScroll) "Animasi halus saat ganti baris" else "Snap instan, lebih responsif",
+                trailing = {
+                    Switch(
+                        checked = smoothScroll,
+                        onCheckedChange = { onToggleSmoothScroll() },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                        ),
+                    )
+                },
+            )
+
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+
+            // Haptic feedback
+            SettingRow(
+                title = "Haptic feedback",
+                subtitle = "Getaran kecil saat baris berganti",
+                trailing = {
+                    Switch(
+                        checked = hapticEnabled,
+                        onCheckedChange = { onToggleHaptic() },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                        ),
+                    )
+                },
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
             SectionHeader(title = "Spotify", icon = Icons.Filled.MusicNote)

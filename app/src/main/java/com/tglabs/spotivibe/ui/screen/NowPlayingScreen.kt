@@ -70,9 +70,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.graphics.RenderEffect
+import android.graphics.Shader
+import android.os.Build
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import com.tglabs.spotivibe.domain.UiState
 import com.tglabs.spotivibe.ui.component.LyricsList
+import com.tglabs.spotivibe.ui.component.LyricsScrubberBar
 import com.tglabs.spotivibe.ui.theme.AccentDefault
+import com.tglabs.spotivibe.util.LyricShareCard
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -113,7 +122,25 @@ fun NowPlayingScreen(
     }
 
     var draggingValue by remember(track.id) { mutableLongStateOf(-1L) }
-    val effectiveProgressMs = if (draggingValue >= 0L) draggingValue else displayProgressMs
+    val rawProgressMs = if (draggingValue >= 0L) draggingValue else displayProgressMs
+    // Apply user lyrics offset — positive = lyrics dipercepat (kompensasi LRC lambat).
+    // Diteruskan ke LyricsList + scrubber, JANGAN ke seekbar/controls (itu posisi real audio).
+    val effectiveProgressMs = (rawProgressMs + state.lyricsOffsetMs).coerceAtLeast(0L)
+
+    val context = LocalContext.current
+
+    // Long-press share — JANGAN remember karena state/track berubah tiap recomposition,
+    // dan lambda closure kalau di-remember bisa pegang reference lama. Lambda creation cheap.
+    val handleShare: (com.tglabs.spotivibe.domain.SyncedLine) -> Unit = { line ->
+        LyricShareCard.shareLine(
+            context = context,
+            line = line.text,
+            romaji = state.romaji[line.timeMs],
+            title = track.title,
+            artist = track.artist,
+            accentArgb = (state.accentColor ?: AccentDefault).toArgb(),
+        )
+    }
 
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
@@ -131,13 +158,32 @@ fun NowPlayingScreen(
         return
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp)
-            .padding(top = if (isLandscape) 16.dp else 32.dp, bottom = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
+        // Album art blurred background (API 31+) — subtle, very dim layer di belakang
+        // semua content. Tampak hanya pada area lyrics, parent gradient masih dominan.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && state.albumBitmap != null) {
+            Image(
+                bitmap = state.albumBitmap.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        renderEffect = RenderEffect
+                            .createBlurEffect(80f, 80f, Shader.TileMode.CLAMP)
+                            .asComposeRenderEffect()
+                        alpha = 0.18f
+                    },
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp)
+                .padding(top = if (isLandscape) 16.dp else 32.dp, bottom = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
         if (isLandscape) {
             // ── Landscape: cover/meta kolom kiri + lyrics kolom kanan ──
             Row(
@@ -167,15 +213,29 @@ fun NowPlayingScreen(
                     modifier = Modifier.width(180.dp).fillMaxHeight(),
                 )
 
-                // Right: lyrics fills remaining
-                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                    LyricsList(
-                        lyrics = state.lyrics,
+                // Right: lyrics fills remaining + scrubber bar on top
+                Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    LyricsScrubberBar(
+                        lines = state.lyrics?.synced,
                         progressMs = effectiveProgressMs,
                         accent = accent,
-                        romaji = state.romaji,
-                        fontSize = state.lyricsFontSize,
+                        modifier = Modifier.padding(vertical = 4.dp),
                     )
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        LyricsList(
+                            lyrics = state.lyrics,
+                            progressMs = effectiveProgressMs,
+                            accent = accent,
+                            romaji = state.romaji,
+                            fontSize = state.lyricsFontSize,
+                            lineSpacing = state.lineSpacing,
+                            highContrast = state.highContrast,
+                            smoothScroll = state.smoothScroll,
+                            hapticEnabled = state.hapticEnabled,
+                            onSeekToLine = { ms -> onSeek(ms) },
+                            onLongPressShare = handleShare,
+                        )
+                    }
                 }
             }
         } else {
@@ -199,7 +259,16 @@ fun NowPlayingScreen(
                 onOpenSettings = onOpenSettings,
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Scrubber: progress dalam current line — slim 3dp bar
+            LyricsScrubberBar(
+                lines = state.lyrics?.synced,
+                progressMs = effectiveProgressMs,
+                accent = accent,
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             Box(modifier = Modifier.weight(1f, fill = true).fillMaxWidth()) {
                 LyricsList(
@@ -208,6 +277,12 @@ fun NowPlayingScreen(
                     accent = accent,
                     romaji = state.romaji,
                     fontSize = state.lyricsFontSize,
+                    lineSpacing = state.lineSpacing,
+                    highContrast = state.highContrast,
+                    smoothScroll = state.smoothScroll,
+                    hapticEnabled = state.hapticEnabled,
+                    onSeekToLine = { ms -> onSeek(ms) },
+                    onLongPressShare = handleShare,
                 )
             }
         }
@@ -231,8 +306,10 @@ fun NowPlayingScreen(
                 )
             }
         } else {
+            // ControlsBar pakai rawProgressMs (real audio position), bukan
+            // effectiveProgressMs yang sudah di-offset lirik.
             ControlsBar(
-                progressMs = effectiveProgressMs,
+                progressMs = rawProgressMs,
                 durationMs = track.durationMs,
                 isPaused = track.isPaused,
                 accent = accent,
@@ -245,6 +322,7 @@ fun NowPlayingScreen(
                 onNext = onNext,
                 onPrevious = onPrevious,
             )
+        }
         }
     }
 }

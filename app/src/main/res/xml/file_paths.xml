@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Lyric share cards diset ke cache dir; auto-cleared by OS storage pressure. -->
+    <cache-path name="shared_cards" path="shared/" />
+</paths>

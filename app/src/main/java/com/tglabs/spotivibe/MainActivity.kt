@@ -121,6 +121,11 @@ class MainActivity : ComponentActivity() {
                             viewModel.logout()
                             showSettings = false
                         },
+                        onSetLyricsOffsetMs = { ms -> viewModel.setLyricsOffsetMs(ms) },
+                        onSetLineSpacing = { dp -> viewModel.setLineSpacing(dp) },
+                        onToggleHighContrast = { viewModel.toggleHighContrast() },
+                        onToggleSmoothScroll = { viewModel.toggleSmoothScroll() },
+                        onToggleHaptic = { viewModel.toggleHaptic() },
                     )
                 } else {
                     MainScreen(
