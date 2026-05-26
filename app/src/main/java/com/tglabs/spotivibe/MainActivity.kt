@@ -16,11 +16,16 @@ import androidx.activity.viewModels
 import androidx.core.content.ContextCompat
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.tglabs.spotivibe.data.SpotifyConnection
 import com.tglabs.spotivibe.service.SpotivibeNotificationService
 import com.tglabs.spotivibe.ui.screen.MainScreen
+import com.tglabs.spotivibe.ui.screen.SettingsScreen
 import com.tglabs.spotivibe.ui.theme.SpotivibeTheme
 import com.tglabs.spotivibe.ui.vm.SpotivibeViewModel
 import kotlinx.coroutines.flow.first
@@ -104,19 +109,35 @@ class MainActivity : ComponentActivity() {
 
             SpotivibeTheme(darkTheme = darkMode) {
                 val state = viewModel.uiState.collectAsStateWithLifecycle().value
-                MainScreen(
-                    state = state,
-                    onConnect = { viewModel.startAuth(this, spotifyAuthLauncher) },
-                    onTogglePlayPause = { viewModel.togglePlayPause() },
-                    onNext = { viewModel.next() },
-                    onPrevious = { viewModel.previous() },
-                    onSeek = { positionMs -> viewModel.seekTo(positionMs) },
-                    onToggleRomanization = { viewModel.toggleRomanization() },
-                    onToggleOverlay = { handleOverlayToggle() },
-                    onToggleDarkMode = { viewModel.toggleDarkMode() },
-                    onBumpFontSize = { delta -> viewModel.bumpFontSize(delta) },
-                    onLogout = { viewModel.logout() },
-                )
+                var showSettings by rememberSaveable { mutableStateOf(false) }
+
+                if (showSettings) {
+                    SettingsScreen(
+                        state = state,
+                        onBack = { showSettings = false },
+                        onToggleDarkMode = { viewModel.toggleDarkMode() },
+                        onSetFontSize = { size -> viewModel.setFontSize(size) },
+                        onLogout = {
+                            viewModel.logout()
+                            showSettings = false
+                        },
+                    )
+                } else {
+                    MainScreen(
+                        state = state,
+                        onConnect = { viewModel.startAuth(this, spotifyAuthLauncher) },
+                        onTogglePlayPause = { viewModel.togglePlayPause() },
+                        onNext = { viewModel.next() },
+                        onPrevious = { viewModel.previous() },
+                        onSeek = { positionMs -> viewModel.seekTo(positionMs) },
+                        onToggleRomanization = { viewModel.toggleRomanization() },
+                        onToggleOverlay = { handleOverlayToggle() },
+                        onToggleDarkMode = { viewModel.toggleDarkMode() },
+                        onBumpFontSize = { delta -> viewModel.bumpFontSize(delta) },
+                        onLogout = { viewModel.logout() },
+                        onOpenSettings = { showSettings = true },
+                    )
+                }
             }
         }
     }

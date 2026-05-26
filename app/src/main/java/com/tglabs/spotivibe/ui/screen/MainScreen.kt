@@ -30,6 +30,7 @@ fun MainScreen(
     onToggleDarkMode: () -> Unit,
     onBumpFontSize: (Int) -> Unit,
     onLogout: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Gradient endpoints dari Material colorScheme — auto switch dark/light
@@ -92,6 +93,7 @@ fun MainScreen(
                 onToggleDarkMode = onToggleDarkMode,
                 onBumpFontSize = onBumpFontSize,
                 onLogout = onLogout,
+                onOpenSettings = onOpenSettings,
             )
         }
     }

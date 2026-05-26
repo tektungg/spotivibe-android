@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MoreVert
@@ -87,6 +88,7 @@ fun NowPlayingScreen(
     onToggleDarkMode: () -> Unit,
     onBumpFontSize: (Int) -> Unit,
     onLogout: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val track = state.track
@@ -161,6 +163,7 @@ fun NowPlayingScreen(
                     onBumpFontSize = onBumpFontSize,
                     onEnterKaraoke = { karaokeMode = true },
                     onLogout = onLogout,
+                    onOpenSettings = onOpenSettings,
                     modifier = Modifier.width(180.dp).fillMaxHeight(),
                 )
 
@@ -193,6 +196,7 @@ fun NowPlayingScreen(
                 onBumpFontSize = onBumpFontSize,
                 onEnterKaraoke = { karaokeMode = true },
                 onLogout = onLogout,
+                onOpenSettings = onOpenSettings,
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -266,6 +270,7 @@ private fun LandscapeSidebar(
     onBumpFontSize: (Int) -> Unit,
     onEnterKaraoke: () -> Unit,
     onLogout: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -361,6 +366,7 @@ private fun LandscapeSidebar(
                 onBumpFontSize = onBumpFontSize,
                 onEnterKaraoke = onEnterKaraoke,
                 onLogout = onLogout,
+                onOpenSettings = onOpenSettings,
             )
         }
     }
@@ -383,6 +389,7 @@ private fun HeaderArea(
     onBumpFontSize: (Int) -> Unit,
     onEnterKaraoke: () -> Unit,
     onLogout: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -478,6 +485,7 @@ private fun HeaderArea(
                 onBumpFontSize = onBumpFontSize,
                 onEnterKaraoke = onEnterKaraoke,
                 onLogout = onLogout,
+                onOpenSettings = onOpenSettings,
             )
         }
     }
@@ -495,6 +503,7 @@ private fun SettingsOverflowMenu(
     onBumpFontSize: (Int) -> Unit,
     onEnterKaraoke: () -> Unit,
     onLogout: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -526,6 +535,28 @@ private fun SettingsOverflowMenu(
                 },
                 onClick = {
                     onEnterKaraoke()
+                    expanded = false
+                },
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            // Settings (full screen page) — entry point untuk semua settings + about
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = "Settings",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.Settings,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(20.dp),
+                    )
+                },
+                onClick = {
+                    onOpenSettings()
                     expanded = false
                 },
             )

@@ -148,6 +148,13 @@ class SpotivibeViewModel(
         }
     }
 
+    /** Direct set font size — dipakai oleh slider di SettingsScreen */
+    fun setFontSize(size: Int) {
+        viewModelScope.launch {
+            preferencesRepository.setLyricsFontSize(size)
+        }
+    }
+
     class Factory(
         private val controller: PlaybackController,
         private val connection: SpotifyConnection,
