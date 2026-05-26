@@ -1,84 +1,91 @@
 package com.tglabs.spotivibe.ui.component
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
-import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.background
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.SyncedLine
 import com.tglabs.spotivibe.domain.SyncedWord
+import com.tglabs.spotivibe.ui.theme.LocalSvColors
+import com.tglabs.spotivibe.ui.theme.SvIcons
+import com.tglabs.spotivibe.ui.theme.SvMotion
+import com.tglabs.spotivibe.ui.theme.SvSpace
+import com.tglabs.spotivibe.ui.theme.SvType
 import com.tglabs.spotivibe.util.Haptics
 
+/**
+ * Editorial lyrics list. Newsreader serif typography:
+ * - Active line: SvType.LyricActive (Medium 30sp), color = accent
+ * - Near lines (idx ±1): LyricPassive 22sp, color = ink2 + 85% alpha
+ * - Far lines (idx ±2): smaller 18sp, color = ink3 + 55% alpha
+ * - Distant lines: smaller still, color = ink4 + 35% alpha
+ *
+ * Romanization below each in Newsreader Italic Light, color = AccentDim.
+ * Selection mode shows accent-ghost bg + left-gutter checkmark.
+ * Per-word karaoke on active line when LRC+ words present.
+ *
+ * `fontSize` user override multiplies LyricActive base (30sp). 17 default
+ * maintains roughly current behavior; settings slider 12-56 maps directly.
+ */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun LyricsList(
     lyrics: LyricsResult?,
     progressMs: Long,
-    accent: Color,
-    /** Map keyed by SyncedLine.timeMs → romaji string (atau null kalau no need) */
     romaji: Map<Long, String?> = emptyMap(),
-    /** Font size lyrics dalam sp. Default 17, range 12-56. */
-    fontSize: Int = 17,
-    /** Extra vertical spacing antar baris (dp). Default 7. */
-    lineSpacing: Int = 7,
-    /** Bold weights + no dim fade — outdoor / accessibility. */
+    fontSize: Int = 30,
+    lineSpacing: Int = 22,
     highContrast: Boolean = false,
-    /** Auto-scroll animation: true = animateScrollToItem, false = scrollToItem snap. */
     smoothScroll: Boolean = true,
-    /** Trigger Vibrator tick saat active line berubah. */
     hapticEnabled: Boolean = true,
-    /** Tap-to-seek: short tap baris → jump ke timestamp. */
     onSeekToLine: ((Long) -> Unit)? = null,
-    /** Long-press baris → bagikan sebagai image card. */
     onLongPressShare: ((SyncedLine) -> Unit)? = null,
-    /** Set timeMs baris yang sedang dipilih untuk multi-line share. */
     selectedTimes: Set<Long> = emptySet(),
+    isSelecting: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    val sv = LocalSvColors.current
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when {
             lyrics == null -> StatusText("Mencari lirik…")
             lyrics.synced != null && lyrics.synced.isNotEmpty() ->
-                SyncedLyricsView(
+                SyncedView(
                     lines = lyrics.synced,
                     progressMs = progressMs,
-                    accent = accent,
                     romaji = romaji,
                     fontSize = fontSize,
                     lineSpacing = lineSpacing,
@@ -88,8 +95,9 @@ fun LyricsList(
                     onSeekToLine = onSeekToLine,
                     onLongPressShare = onLongPressShare,
                     selectedTimes = selectedTimes,
+                    isSelecting = isSelecting,
                 )
-            !lyrics.plain.isNullOrBlank() -> PlainLyricsView(lyrics.plain, fontSize)
+            !lyrics.plain.isNullOrBlank() -> PlainView(lyrics.plain, fontSize, sv.ink2)
             else -> StatusText("Lirik tidak ditemukan untuk track ini")
         }
     }
@@ -97,20 +105,21 @@ fun LyricsList(
 
 @Composable
 private fun StatusText(text: String) {
+    val sv = LocalSvColors.current
     Text(
         text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = SvType.BodyItalic,
+        color = sv.ink3,
         textAlign = TextAlign.Center,
-        modifier = Modifier.padding(horizontal = 24.dp),
+        modifier = Modifier.padding(horizontal = SvSpace.s6),
     )
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun SyncedLyricsView(
+private fun SyncedView(
     lines: List<SyncedLine>,
     progressMs: Long,
-    accent: Color,
     romaji: Map<Long, String?>,
     fontSize: Int,
     lineSpacing: Int,
@@ -120,11 +129,13 @@ private fun SyncedLyricsView(
     onSeekToLine: ((Long) -> Unit)?,
     onLongPressShare: ((SyncedLine) -> Unit)?,
     selectedTimes: Set<Long>,
+    isSelecting: Boolean,
 ) {
     val listState = rememberLazyListState()
     val activeIndex = findActiveIndex(lines, progressMs)
     val context = LocalContext.current
 
+    // Smooth scroll uses spring. Snap mode uses scrollToItem (no anim).
     LaunchedEffect(activeIndex) {
         if (activeIndex >= 0) {
             if (smoothScroll) {
@@ -135,7 +146,6 @@ private fun SyncedLyricsView(
         }
     }
 
-    // Haptic on line change — skip initial composition (activeIndex starts at -1 or first)
     if (hapticEnabled) {
         LaunchedEffect(activeIndex) {
             if (activeIndex >= 0) Haptics.tick(context)
@@ -145,8 +155,8 @@ private fun SyncedLyricsView(
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(lineSpacing.coerceIn(0, 20).dp),
+        contentPadding = PaddingValues(horizontal = 0.dp, vertical = SvSpace.s3),
+        verticalArrangement = Arrangement.spacedBy(lineSpacing.coerceIn(0, 40).dp),
     ) {
         item { Spacer(modifier = Modifier.height(80.dp)) }
 
@@ -154,12 +164,12 @@ private fun SyncedLyricsView(
             LyricLineItem(
                 line = line,
                 romaji = romaji[line.timeMs],
-                isActive = idx == activeIndex,
-                isSelected = selectedTimes.contains(line.timeMs),
+                state = lyricState(idx, activeIndex),
                 progressMs = progressMs,
-                accent = accent,
                 fontSize = fontSize,
                 highContrast = highContrast,
+                isSelected = selectedTimes.contains(line.timeMs),
+                isSelecting = isSelecting,
                 onTap = onSeekToLine?.let { { it(line.timeMs) } },
                 onLongPress = onLongPressShare?.let { { it(line) } },
             )
@@ -169,67 +179,70 @@ private fun SyncedLyricsView(
     }
 }
 
+private enum class LyricLineState { Active, Near, Far, Distant }
+
+private fun lyricState(idx: Int, active: Int): LyricLineState {
+    if (active < 0) return LyricLineState.Distant
+    val d = kotlin.math.abs(idx - active)
+    return when {
+        d == 0 -> LyricLineState.Active
+        d == 1 -> LyricLineState.Near
+        d == 2 -> LyricLineState.Far
+        else   -> LyricLineState.Distant
+    }
+}
+
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun LyricLineItem(
     line: SyncedLine,
     romaji: String?,
-    isActive: Boolean,
-    isSelected: Boolean,
+    state: LyricLineState,
     progressMs: Long,
-    accent: Color,
     fontSize: Int,
     highContrast: Boolean,
+    isSelected: Boolean,
+    isSelecting: Boolean,
     onTap: (() -> Unit)?,
     onLongPress: (() -> Unit)?,
 ) {
-    // High contrast: kurang dim, lebih opaque pada inactive lines (75% vs 40%)
-    val inactiveAlpha = if (highContrast) 0.75f else 0.4f
-    val dimColor = MaterialTheme.colorScheme.onBackground.copy(alpha = inactiveAlpha)
+    val sv = LocalSvColors.current
+
+    // Color + opacity per state. High contrast: kurang dim, lebih opaque.
+    val baseInactiveAlpha = if (highContrast) 0.85f else 1f
+    val (targetColor, targetAlpha) = when (state) {
+        LyricLineState.Active  -> sv.accent to 1f
+        LyricLineState.Near    -> sv.ink2   to (0.85f * baseInactiveAlpha)
+        LyricLineState.Far     -> sv.ink3   to (0.55f * baseInactiveAlpha)
+        LyricLineState.Distant -> sv.ink4   to (0.35f * baseInactiveAlpha)
+    }
     val color by animateColorAsState(
-        targetValue = if (isActive) accent else dimColor,
-        animationSpec = tween(durationMillis = 300),
+        targetValue = targetColor,
+        animationSpec = tween(SvMotion.DurLine, easing = SvMotion.EaseOut),
         label = "lineColor",
     )
-    val scale by animateFloatAsState(
-        targetValue = if (isActive) 1.04f else 1f,
-        animationSpec = tween(durationMillis = 300),
-        label = "lineScale",
-    )
-    val romajiColor by animateColorAsState(
-        targetValue = if (isActive) accent.copy(alpha = 0.85f) else dimColor.copy(alpha = 0.7f),
-        animationSpec = tween(durationMillis = 300),
-        label = "romajiColor",
-    )
 
-    val hasWordTiming = line.words.isNotEmpty()
-    // High contrast: semua line pakai SemiBold; active jadi Bold
-    val inactiveWeight = if (highContrast) FontWeight.Medium else FontWeight.Normal
-    val activeWeight = if (highContrast) FontWeight.Bold else FontWeight.SemiBold
+    // Font size per state. fontSize = user override base (default 30sp =
+    // LyricActive). Skew per state.
+    val activeSize  = fontSize.sp
+    val nearSize    = (fontSize - 8).coerceAtLeast(14).sp
+    val farSize     = (fontSize - 12).coerceAtLeast(12).sp
+    val distantSize = (fontSize - 14).coerceAtLeast(10).sp
 
-    // Selection visual — accent border + subtle bg tint. Animate alpha biar
-    // smooth saat masuk/keluar selection mode.
-    val selectionAlpha by animateFloatAsState(
-        targetValue = if (isSelected) 1f else 0f,
-        animationSpec = tween(durationMillis = 180),
-        label = "selectionAlpha",
-    )
+    val textStyle = when (state) {
+        LyricLineState.Active  -> SvType.LyricActive.copy(fontSize = activeSize, lineHeight = (activeSize.value + 6).sp)
+        LyricLineState.Near    -> SvType.LyricPassive.copy(fontSize = nearSize, lineHeight = (nearSize.value + 6).sp)
+        LyricLineState.Far     -> SvType.LyricDistant.copy(fontSize = farSize, lineHeight = (farSize.value + 4).sp)
+        LyricLineState.Distant -> SvType.LyricDistant.copy(fontSize = distantSize, lineHeight = (distantSize.value + 4).sp)
+    }
+
+    // Selection visual — accent-ghost bg
+    val selectionBg = if (isSelected) sv.accentGhost else Color.Transparent
 
     val baseModifier = Modifier
         .fillMaxWidth()
-        .padding(vertical = 6.dp, horizontal = 4.dp)
-        .clip(RoundedCornerShape(10.dp))
-        .background(accent.copy(alpha = 0.10f * selectionAlpha))
-        .border(
-            width = (1.5f * selectionAlpha).dp,
-            color = accent.copy(alpha = selectionAlpha),
-            shape = RoundedCornerShape(10.dp),
-        )
-        .padding(vertical = 4.dp, horizontal = 8.dp)
-        .graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-        }
+        .background(selectionBg)
+        .padding(vertical = SvSpace.s1)
 
     val interactiveModifier = if (onTap != null || onLongPress != null) {
         baseModifier.combinedClickable(
@@ -238,52 +251,85 @@ private fun LyricLineItem(
         )
     } else baseModifier
 
-    Column(
+    Row(
         modifier = interactiveModifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (isActive && hasWordTiming) {
-            // Per-word karaoke: render AnnotatedString dengan highlight per-kata.
-            WordHighlightText(
-                words = line.words,
-                progressMs = progressMs,
-                activeColor = accent,
-                pendingColor = dimColor,
-                fontSize = fontSize,
-                activeWeight = activeWeight,
-                pendingWeight = inactiveWeight,
-            )
-        } else {
-            Text(
-                text = line.text.ifBlank { "♪" },
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    fontSize = fontSize.sp,
-                    lineHeight = (fontSize + 7).sp,
-                ),
-                fontWeight = if (isActive) activeWeight else inactiveWeight,
-                color = color,
-                textAlign = TextAlign.Center,
-            )
+        // ── Left gutter — selection checkmark / hollow square ──
+        if (isSelecting) {
+            Box(
+                modifier = Modifier
+                    .padding(start = SvSpace.s3)
+                    .size(16.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (isSelected) {
+                    Icon(
+                        imageVector = SvIcons.Check,
+                        contentDescription = null,
+                        tint = sv.accent,
+                        modifier = Modifier.size(14.dp),
+                    )
+                } else {
+                    // Hollow square — pakai border modifier supaya minimalis
+                    Box(
+                        modifier = Modifier
+                            .size(9.dp)
+                            .border(1.dp, sv.rule),
+                    )
+                }
+            }
         }
-        if (!romaji.isNullOrBlank()) {
-            val romajiSize = (fontSize - 4).coerceAtLeast(10)
-            Text(
-                text = romaji,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = romajiSize.sp,
-                    lineHeight = (romajiSize + 5).sp,
+
+        // ── Lyric content ──────────────────────────────
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(
+                    horizontal = if (isSelecting) SvSpace.s4 else SvSpace.s5,
+                    vertical = SvSpace.s1,
                 ),
-                fontStyle = FontStyle.Italic,
-                color = romajiColor,
-                textAlign = TextAlign.Center,
-            )
+            horizontalAlignment = Alignment.Start,
+        ) {
+            val hasWordTiming = state == LyricLineState.Active && line.words.isNotEmpty()
+
+            if (hasWordTiming) {
+                WordHighlightText(
+                    words = line.words,
+                    progressMs = progressMs,
+                    activeColor = color,
+                    pendingColor = sv.ink3.copy(alpha = 0.55f),
+                    style = textStyle,
+                )
+            } else {
+                Text(
+                    text = line.text.ifBlank { "♪" },
+                    style = textStyle,
+                    color = color.copy(alpha = color.alpha * targetAlpha),
+                    textAlign = TextAlign.Start,
+                )
+            }
+
+            if (!romaji.isNullOrBlank() && state != LyricLineState.Distant) {
+                val romaSize = when (state) {
+                    LyricLineState.Active -> SvType.RomanizationActive
+                    else -> SvType.Romanization
+                }
+                Text(
+                    text = romaji,
+                    style = romaSize,
+                    color = sv.accentDim.copy(alpha = 0.85f * targetAlpha),
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
         }
     }
 }
 
 /**
- * Render baris lirik dengan highlight per-kata. Kata yang `timeMs <= progressMs`
- * di-render dengan activeColor (sudah dinyanyikan), kata sisanya pendingColor.
+ * Per-word karaoke render. Words dengan `timeMs <= progressMs` di-render
+ * dengan activeColor + Medium, sisanya pendingColor + Normal.
  */
 @Composable
 private fun WordHighlightText(
@@ -291,9 +337,7 @@ private fun WordHighlightText(
     progressMs: Long,
     activeColor: Color,
     pendingColor: Color,
-    fontSize: Int,
-    activeWeight: FontWeight,
-    pendingWeight: FontWeight,
+    style: androidx.compose.ui.text.TextStyle,
 ) {
     val annotated = buildAnnotatedString {
         words.forEach { word ->
@@ -301,7 +345,7 @@ private fun WordHighlightText(
             withStyle(
                 SpanStyle(
                     color = if (sung) activeColor else pendingColor,
-                    fontWeight = if (sung) activeWeight else pendingWeight,
+                    fontWeight = if (sung) FontWeight.Medium else FontWeight.Normal,
                 )
             ) {
                 append(word.text)
@@ -310,29 +354,23 @@ private fun WordHighlightText(
     }
     Text(
         text = annotated,
-        style = MaterialTheme.typography.bodyLarge.copy(
-            fontSize = fontSize.sp,
-            lineHeight = (fontSize + 7).sp,
-        ),
-        textAlign = TextAlign.Center,
+        style = style,
+        textAlign = TextAlign.Start,
     )
 }
 
 @Composable
-private fun PlainLyricsView(plain: String, fontSize: Int) {
+private fun PlainView(plain: String, fontSize: Int, color: Color) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(horizontal = SvSpace.s5, vertical = SvSpace.s3),
     ) {
         item {
             Text(
                 text = plain,
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    fontSize = fontSize.sp,
-                    lineHeight = (fontSize + 7).sp,
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
+                style = SvType.LyricPassive.copy(fontSize = fontSize.sp, lineHeight = (fontSize + 6).sp),
+                color = color,
+                textAlign = TextAlign.Start,
                 modifier = Modifier.fillMaxWidth(),
             )
         }

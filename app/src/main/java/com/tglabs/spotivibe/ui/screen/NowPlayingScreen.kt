@@ -1,91 +1,72 @@
 package com.tglabs.spotivibe.ui.screen
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
+import android.content.res.Configuration
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import android.content.res.Configuration
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.PictureInPictureAlt
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.TextDecrease
-import androidx.compose.material.icons.filled.TextIncrease
-import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import android.graphics.RenderEffect
-import android.graphics.Shader
-import android.os.Build
-import androidx.compose.ui.graphics.asComposeRenderEffect
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import com.tglabs.spotivibe.domain.UiState
+import com.tglabs.spotivibe.ui.component.AmbientBg
 import com.tglabs.spotivibe.ui.component.LyricsList
+import com.tglabs.spotivibe.ui.component.NPHeader
+import com.tglabs.spotivibe.ui.component.SelectionActionBar
+import com.tglabs.spotivibe.ui.component.SelectionHeader
+import com.tglabs.spotivibe.ui.component.Transport
 import com.tglabs.spotivibe.ui.theme.AccentDefault
+import com.tglabs.spotivibe.ui.theme.LocalSvColors
+import com.tglabs.spotivibe.ui.theme.SvSpace
+import com.tglabs.spotivibe.ui.theme.SvType
+import com.tglabs.spotivibe.ui.theme.SpotivibeTheme
+import com.tglabs.spotivibe.ui.theme.AccentLock
 import com.tglabs.spotivibe.util.LyricShareCard
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
+/**
+ * NowPlayingScreen — orchestrator. Layout per orientation:
+ *
+ * Portrait:
+ *  ┌────────────────────────┐
+ *  │ NPHeader / Selection   │
+ *  │ ─── hairline ──────────│
+ *  │                        │
+ *  │ LyricsList             │
+ *  │                        │
+ *  │ ─── hairline ──────────│
+ *  │ Transport / Selection  │
+ *  └────────────────────────┘
+ *
+ * Landscape: see NowPlayingTabletScreen (TBD task 17).
+ *
+ * Background = AmbientBg di belakang semua. Theme di-wrap dengan accent
+ * dinamis dari state.accentColor → AccentLock.lockedAccent() (sudah di
+ * controller, jadi pass langsung).
+ */
 @Composable
 fun NowPlayingScreen(
     state: UiState.Playing,
@@ -101,19 +82,13 @@ fun NowPlayingScreen(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Theme wrapping dipindahkan ke MainActivity — di sini cukup baca SvColors
+    val sv = LocalSvColors.current
     val track = state.track
-    val targetAccent = state.accentColor ?: AccentDefault
-    val accent by animateColorAsState(
-        targetValue = targetAccent,
-        animationSpec = tween(durationMillis = 500),
-        label = "accent",
-    )
+    val context = LocalContext.current
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-    // Ticker pakai track.capturedAtMs (wall clock saat Spotify push event),
-    // BUKAN System.currentTimeMillis() pas Composable mount. Tanpa ini,
-    // tiap recomposition (mis. balik dari Settings) baseline time di-reset
-    // ke "now" tapi baseline value adalah snapshot lama Spotify → progress
-    // tampak mundur ke nilai stale (sering 0 kalau push terjadi pas track ganti).
+    // ── Progress extrapolation (per fix di NowPlaying.extrapolatedProgressMs) ──
     val displayProgressMs by produceState(
         initialValue = track.extrapolatedProgressMs(),
         track,
@@ -126,55 +101,52 @@ fun NowPlayingScreen(
             }
         }
     }
-
     var draggingValue by remember(track.id) { mutableLongStateOf(-1L) }
     val rawProgressMs = if (draggingValue >= 0L) draggingValue else displayProgressMs
-    // Apply user lyrics offset — positive = lyrics dipercepat (kompensasi LRC lambat).
-    // Diteruskan ke LyricsList + scrubber, JANGAN ke seekbar/controls (itu posisi real audio).
     val effectiveProgressMs = (rawProgressMs + state.lyricsOffsetMs).coerceAtLeast(0L)
 
-    val context = LocalContext.current
+    // ── Karaoke fullscreen state ──
+    var karaokeMode by remember { mutableStateOf(false) }
+    if (karaokeMode) {
+        KaraokeView(
+            lyrics = state.lyrics,
+            progressMs = effectiveProgressMs,
+            accent = state.accentColor ?: sv.accent,
+            romaji = state.romaji,
+            fontSize = state.lyricsFontSize,
+            onExit = { karaokeMode = false },
+        )
+        return
+    }
 
-    // ── Multi-line share selection state ──────────────────────────
-    // Long-press masuk selection mode + pre-select baris yang di-press.
-    // Tap di selection mode → toggle add/remove (cap 5). Tap di luar selection
-    // mode → tap-to-seek seperti biasa. Reset on track change supaya selection
-    // tidak ngambang antar lagu.
+    // ── Selection mode state ──
     var selectedTimes by remember(track.id) { mutableStateOf<Set<Long>>(emptySet()) }
     val isSelecting = selectedTimes.isNotEmpty()
     val maxSelect = 5
-
-    // Hardware back keluar dari selection mode dulu sebelum back ke parent.
-    androidx.activity.compose.BackHandler(enabled = isSelecting) {
-        selectedTimes = emptySet()
-    }
+    BackHandler(enabled = isSelecting) { selectedTimes = emptySet() }
 
     val toggleSelect: (Long) -> Unit = { timeMs ->
-        selectedTimes = if (selectedTimes.contains(timeMs)) {
-            selectedTimes - timeMs
-        } else if (selectedTimes.size < maxSelect) {
-            selectedTimes + timeMs
-        } else {
-            selectedTimes // at cap, no-op
+        selectedTimes = when {
+            selectedTimes.contains(timeMs)    -> selectedTimes - timeMs
+            selectedTimes.size < maxSelect    -> selectedTimes + timeMs
+            else                              -> selectedTimes
         }
     }
-
-    val handleLineTap: (Long) -> Unit = { timeMs ->
-        if (isSelecting) toggleSelect(timeMs) else onSeek(timeMs)
+    val handleLineTap: (Long) -> Unit = { ms ->
+        if (isSelecting) toggleSelect(ms) else onSeek(ms)
     }
-
     val handleLineLongPress: (com.tglabs.spotivibe.domain.SyncedLine) -> Unit = { line ->
         if (isSelecting) toggleSelect(line.timeMs)
         else selectedTimes = setOf(line.timeMs)
     }
 
     val handleShareSelected: () -> Unit = handleShare@{
-        val lyrics = state.lyrics?.synced ?: return@handleShare
-        val ordered = lyrics
+        val synced = state.lyrics?.synced ?: return@handleShare
+        val ordered = synced
             .filter { it.timeMs in selectedTimes }
             .sortedBy { it.timeMs }
             .map { line ->
-                com.tglabs.spotivibe.util.LyricShareCard.Entry(
+                LyricShareCard.Entry(
                     text = line.text,
                     romaji = state.romaji[line.timeMs],
                 )
@@ -190,830 +162,102 @@ fun NowPlayingScreen(
         selectedTimes = emptySet()
     }
 
-    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-
-    // Karaoke fullscreen — local state, tap X exit. Tidak persist antar session.
-    var karaokeMode by remember { mutableStateOf(false) }
-    if (karaokeMode) {
-        KaraokeView(
-            lyrics = state.lyrics,
-            progressMs = effectiveProgressMs,
-            accent = accent,
-            romaji = state.romaji,
-            fontSize = state.lyricsFontSize,
-            onExit = { karaokeMode = false },
-        )
-        return
-    }
-
     Box(modifier = modifier.fillMaxSize()) {
-        // Album art blurred background (API 31+) — subtle, very dim layer di belakang
-        // semua content. Tampak hanya pada area lyrics, parent gradient masih dominan.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && state.albumBitmap != null) {
-            Image(
-                bitmap = state.albumBitmap.asImageBitmap(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        renderEffect = RenderEffect
-                            .createBlurEffect(80f, 80f, Shader.TileMode.CLAMP)
-                            .asComposeRenderEffect()
-                        alpha = 0.18f
-                    },
-            )
-        }
+        // ── AmbientBg ──
+        AmbientBg(
+            bitmap = state.albumBitmap,
+            highContrast = state.highContrast,
+        )
 
+        // ── Content stack ──
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp)
-                .padding(top = if (isLandscape) 16.dp else 32.dp, bottom = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .padding(top = if (isLandscape) SvSpace.s4 else SvSpace.s8),
         ) {
-        if (isLandscape) {
-            // ── Landscape: cover/meta kolom kiri + lyrics kolom kanan ──
-            Row(
-                modifier = Modifier
-                    .weight(1f, fill = true)
-                    .fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(20.dp),
-            ) {
-                // Left: vertical cover + meta + icons (fixed ~240dp wide)
-                LandscapeSidebar(
-                    bitmap = state.albumBitmap,
+            // Header: switches to selection mode header when selecting
+            if (isSelecting) {
+                SelectionHeader(
+                    count = selectedTimes.size,
+                    max = maxSelect,
+                    onCancel = { selectedTimes = emptySet() },
+                )
+            } else {
+                NPHeader(
+                    albumBitmap = state.albumBitmap,
                     title = track.title,
                     artist = track.artist,
-                    accent = accent,
-                    showRomajiToggle = state.canRomanize,
+                    album = track.album,
+                    showRomajiIcon = state.canRomanize,
                     romajiEnabled = state.romanizationEnabled,
                     overlayEnabled = state.overlayEnabled,
-                    darkMode = state.darkMode,
-                    fontSize = state.lyricsFontSize,
-                    onToggleRomanization = onToggleRomanization,
-                    onToggleOverlay = onToggleOverlay,
-                    onToggleDarkMode = onToggleDarkMode,
-                    onBumpFontSize = onBumpFontSize,
-                    onEnterKaraoke = { karaokeMode = true },
-                    onLogout = onLogout,
-                    onOpenSettings = onOpenSettings,
-                    modifier = Modifier.width(180.dp).fillMaxHeight(),
+                    onRomajiClick = onToggleRomanization,
+                    onOverlayClick = onToggleOverlay,
+                    onMoreClick = onOpenSettings,
                 )
-
-                // Right: lyrics fills remaining
-                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                    LyricsList(
-                        lyrics = state.lyrics,
-                        progressMs = effectiveProgressMs,
-                        accent = accent,
-                        romaji = state.romaji,
-                        fontSize = state.lyricsFontSize,
-                        lineSpacing = state.lineSpacing,
-                        highContrast = state.highContrast,
-                        smoothScroll = state.smoothScroll,
-                        hapticEnabled = state.hapticEnabled,
-                        onSeekToLine = handleLineTap,
-                        onLongPressShare = handleLineLongPress,
-                        selectedTimes = selectedTimes,
-                    )
-                }
             }
-        } else {
-            // ── Portrait: header row di atas, lyrics di tengah ──
-            HeaderArea(
-                bitmap = state.albumBitmap,
-                title = track.title,
-                artist = track.artist,
-                accent = accent,
-                showRomajiToggle = state.canRomanize,
-                romajiEnabled = state.romanizationEnabled,
-                overlayEnabled = state.overlayEnabled,
-                darkMode = state.darkMode,
-                fontSize = state.lyricsFontSize,
-                onToggleRomanization = onToggleRomanization,
-                onToggleOverlay = onToggleOverlay,
-                onToggleDarkMode = onToggleDarkMode,
-                onBumpFontSize = onBumpFontSize,
-                onEnterKaraoke = { karaokeMode = true },
-                onLogout = onLogout,
-                onOpenSettings = onOpenSettings,
-            )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            com.tglabs.spotivibe.ui.component.HairlineRule(soft = true)
 
+            // Lyrics list (mask via padding handles edge fade)
             Box(modifier = Modifier.weight(1f, fill = true).fillMaxWidth()) {
                 LyricsList(
                     lyrics = state.lyrics,
                     progressMs = effectiveProgressMs,
-                    accent = accent,
                     romaji = state.romaji,
                     fontSize = state.lyricsFontSize,
-                    lineSpacing = state.lineSpacing,
+                    lineSpacing = (state.lineSpacing + 14).coerceAtLeast(10), // base 7 → ~21dp gap target
                     highContrast = state.highContrast,
                     smoothScroll = state.smoothScroll,
                     hapticEnabled = state.hapticEnabled,
                     onSeekToLine = handleLineTap,
                     onLongPressShare = handleLineLongPress,
                     selectedTimes = selectedTimes,
+                    isSelecting = isSelecting,
                 )
             }
-        }
 
-        Spacer(modifier = Modifier.height(4.dp))
-
-        // ── Bottom: selection action bar (override ControlsBar + Premium banner) ──
-        if (isSelecting) {
-            SelectionActionBar(
-                count = selectedTimes.size,
-                max = maxSelect,
-                accent = accent,
-                onShare = handleShareSelected,
-                onCancel = { selectedTimes = emptySet() },
-            )
-        } else if (!state.isPremium) {
-            // Free account: control endpoints butuh Premium → banner kecil + sembunyikan controls
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "Spotify Premium required to control playback",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                )
-            }
-        } else {
-            // ControlsBar pakai rawProgressMs (real audio position), bukan
-            // effectiveProgressMs yang sudah di-offset lirik.
-            ControlsBar(
-                progressMs = rawProgressMs,
-                durationMs = track.durationMs,
-                isPaused = track.isPaused,
-                accent = accent,
-                onDrag = { draggingValue = it },
-                onSeek = { positionMs ->
-                    draggingValue = -1L
-                    onSeek(positionMs)
-                },
-                onTogglePlayPause = onTogglePlayPause,
-                onNext = onNext,
-                onPrevious = onPrevious,
-            )
-        }
-        }
-    }
-}
-
-/**
- * Landscape sidebar: cover gede di atas, title + artist, toolbar icons.
- * Layout vertikal — content stack ke bawah. Width fixed 240dp dari parent.
- */
-@Composable
-private fun LandscapeSidebar(
-    bitmap: android.graphics.Bitmap?,
-    title: String,
-    artist: String,
-    accent: Color,
-    showRomajiToggle: Boolean,
-    romajiEnabled: Boolean,
-    overlayEnabled: Boolean,
-    darkMode: Boolean,
-    fontSize: Int,
-    onToggleRomanization: () -> Unit,
-    onToggleOverlay: () -> Unit,
-    onToggleDarkMode: () -> Unit,
-    onBumpFontSize: (Int) -> Unit,
-    onEnterKaraoke: () -> Unit,
-    onLogout: () -> Unit,
-    onOpenSettings: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        // Cover compact 140dp
-        Box(
-            modifier = Modifier
-                .size(140.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center,
-        ) {
-            Crossfade(targetState = bitmap, animationSpec = tween(400), label = "cover_landscape") { bmp ->
-                if (bmp != null) {
-                    Image(
-                        bitmap = bmp.asImageBitmap(),
-                        contentDescription = "Album cover",
-                        contentScale = ContentScale.Crop,
-                        filterQuality = FilterQuality.High,
-                        modifier = Modifier.fillMaxSize(),
+            // ── Bottom: selection bar / premium banner / transport ──
+            when {
+                isSelecting -> {
+                    SelectionActionBar(
+                        count = selectedTimes.size,
+                        onShare = handleShareSelected,
+                        onCancel = { selectedTimes = emptySet() },
                     )
-                } else {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(text = "♪", style = MaterialTheme.typography.headlineSmall, color = accent)
-                    }
                 }
-            }
-        }
-
-        // Title + artist compact (centered)
-        AnimatedContent(
-            targetState = title.ifBlank { "Untitled" },
-            transitionSpec = {
-                (slideInVertically(tween(300)) { it / 3 } + fadeIn(tween(300)))
-                    .togetherWith(slideOutVertically(tween(200)) { -it / 3 } + fadeOut(tween(200)))
-            },
-            label = "title_landscape",
-        ) { t ->
-            Text(
-                text = t,
-                style = MaterialTheme.typography.titleMedium,
-                fontSize = 15.sp,
-                color = accent,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        AnimatedContent(
-            targetState = artist.ifBlank { "Unknown artist" },
-            transitionSpec = { fadeIn(tween(400, delayMillis = 100)).togetherWith(fadeOut(tween(200))) },
-            label = "artist_landscape",
-        ) { a ->
-            Text(
-                text = a,
-                style = MaterialTheme.typography.bodySmall,
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-
-        // Icons row — Translate (opsional) / Overlay / Overflow (theme + font)
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (showRomajiToggle) {
-                IconToggleButton(
-                    enabled = romajiEnabled,
-                    accent = accent,
-                    onClick = onToggleRomanization,
-                    icon = Icons.Filled.Translate,
-                    description = "Toggle romanization",
-                )
-            }
-            IconToggleButton(
-                enabled = overlayEnabled,
-                accent = accent,
-                onClick = onToggleOverlay,
-                icon = Icons.Filled.PictureInPictureAlt,
-                description = "Toggle floating overlay",
-            )
-            SettingsOverflowMenu(
-                darkMode = darkMode,
-                fontSize = fontSize,
-                onToggleDarkMode = onToggleDarkMode,
-                onBumpFontSize = onBumpFontSize,
-                onEnterKaraoke = onEnterKaraoke,
-                onLogout = onLogout,
-                onOpenSettings = onOpenSettings,
-            )
-        }
-    }
-}
-
-@Composable
-private fun HeaderArea(
-    bitmap: android.graphics.Bitmap?,
-    title: String,
-    artist: String,
-    accent: Color,
-    showRomajiToggle: Boolean,
-    romajiEnabled: Boolean,
-    overlayEnabled: Boolean,
-    darkMode: Boolean,
-    fontSize: Int,
-    onToggleRomanization: () -> Unit,
-    onToggleOverlay: () -> Unit,
-    onToggleDarkMode: () -> Unit,
-    onBumpFontSize: (Int) -> Unit,
-    onEnterKaraoke: () -> Unit,
-    onLogout: () -> Unit,
-    onOpenSettings: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        // Cover crossfade — compact 56dp
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center,
-        ) {
-            Crossfade(targetState = bitmap, animationSpec = tween(400), label = "cover") { bmp ->
-                if (bmp != null) {
-                    Image(
-                        bitmap = bmp.asImageBitmap(),
-                        contentDescription = "Album cover",
-                        contentScale = ContentScale.Crop,
-                        filterQuality = FilterQuality.High,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(text = "♪", style = MaterialTheme.typography.titleMedium, color = accent)
-                    }
-                }
-            }
-        }
-
-        // Title slide-in + fade saat track ganti — compact titleMedium 15sp
-        Column(modifier = Modifier.weight(1f)) {
-            AnimatedContent(
-                targetState = title.ifBlank { "Untitled" },
-                transitionSpec = {
-                    (slideInVertically(tween(300)) { it / 3 } + fadeIn(tween(300)))
-                        .togetherWith(slideOutVertically(tween(200)) { -it / 3 } + fadeOut(tween(200)))
-                },
-                label = "title",
-            ) { t ->
-                Text(
-                    text = t,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontSize = 15.sp,
-                    color = accent,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            AnimatedContent(
-                targetState = artist.ifBlank { "Unknown artist" },
-                transitionSpec = {
-                    (fadeIn(tween(400, delayMillis = 100)))
-                        .togetherWith(fadeOut(tween(200)))
-                },
-                label = "artist",
-            ) { a ->
-                Text(
-                    text = a,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-
-        // 3 icons row — Translate (opsional) / Overlay / Overflow (theme + font)
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (showRomajiToggle) {
-                IconToggleButton(
-                    enabled = romajiEnabled,
-                    accent = accent,
-                    onClick = onToggleRomanization,
-                    icon = Icons.Filled.Translate,
-                    description = "Toggle romanization",
-                )
-            }
-            IconToggleButton(
-                enabled = overlayEnabled,
-                accent = accent,
-                onClick = onToggleOverlay,
-                icon = Icons.Filled.PictureInPictureAlt,
-                description = "Toggle floating overlay",
-            )
-            SettingsOverflowMenu(
-                darkMode = darkMode,
-                fontSize = fontSize,
-                onToggleDarkMode = onToggleDarkMode,
-                onBumpFontSize = onBumpFontSize,
-                onEnterKaraoke = onEnterKaraoke,
-                onLogout = onLogout,
-                onOpenSettings = onOpenSettings,
-            )
-        }
-    }
-}
-
-/**
- * Compact "More" menu — anchor button + dropdown dengan theme toggle, font size,
- * dan karaoke fullscreen. Mengurangi clutter header.
- */
-@Composable
-private fun SettingsOverflowMenu(
-    darkMode: Boolean,
-    fontSize: Int,
-    onToggleDarkMode: () -> Unit,
-    onBumpFontSize: (Int) -> Unit,
-    onEnterKaraoke: () -> Unit,
-    onLogout: () -> Unit,
-    onOpenSettings: () -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        CompactIconButton(
-            onClick = { expanded = true },
-            icon = Icons.Filled.MoreVert,
-            description = "More settings",
-        )
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.background(MaterialTheme.colorScheme.surface),
-        ) {
-            // Karaoke fullscreen
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        text = "Karaoke fullscreen",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Filled.Fullscreen,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(20.dp),
-                    )
-                },
-                onClick = {
-                    onEnterKaraoke()
-                    expanded = false
-                },
-            )
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-            // Settings (full screen page) — entry point untuk semua settings + about
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        text = "Settings",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Filled.Settings,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(20.dp),
-                    )
-                },
-                onClick = {
-                    onOpenSettings()
-                    expanded = false
-                },
-            )
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-            // Theme toggle item
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        text = if (darkMode) "Light mode" else "Dark mode",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = if (darkMode) Icons.Filled.LightMode else Icons.Filled.DarkMode,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(20.dp),
-                    )
-                },
-                onClick = {
-                    onToggleDarkMode()
-                    expanded = false
-                },
-            )
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-            // Font size — custom row, JANGAN tutup menu saat tap A−/A+
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = "Lyrics size",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = { onBumpFontSize(-2) },
-                        modifier = Modifier.size(32.dp),
+                !state.isPremium -> {
+                    com.tglabs.spotivibe.ui.component.HairlineRule(soft = true)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = SvSpace.s4),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.TextDecrease,
-                            contentDescription = "Decrease",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                    Text(
-                        text = "$fontSize",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.width(28.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    )
-                    IconButton(
-                        onClick = { onBumpFontSize(2) },
-                        modifier = Modifier.size(32.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.TextIncrease,
-                            contentDescription = "Increase",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(18.dp),
+                        Text(
+                            text = "SPOTIFY PREMIUM REQUIRED TO CONTROL PLAYBACK",
+                            style = SvType.MonoUp,
+                            color = sv.ink3,
+                            textAlign = TextAlign.Center,
                         )
                     }
                 }
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-            // Logout — destructive action, kasih warna error
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        text = "Logout Spotify",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Logout,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(20.dp),
-                    )
-                },
-                onClick = {
-                    onLogout()
-                    expanded = false
-                },
-            )
-        }
-    }
-}
-
-/**
- * Stateless action icon (vs IconToggleButton yang punya ON/OFF state).
- * Pakai untuk font size +/− dan theme toggle.
- */
-@Composable
-private fun CompactIconButton(
-    onClick: () -> Unit,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    description: String,
-) {
-    Box(
-        modifier = Modifier
-            .size(32.dp)
-            .clip(CircleShape)
-            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
-        contentAlignment = Alignment.Center,
-    ) {
-        IconButton(onClick = onClick, modifier = Modifier.size(32.dp)) {
-            Icon(
-                imageVector = icon,
-                contentDescription = description,
-                tint = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.size(16.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun IconToggleButton(
-    enabled: Boolean,
-    accent: Color,
-    onClick: () -> Unit,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    description: String,
-) {
-    val bgColor by animateColorAsState(
-        targetValue = if (enabled) accent else Color.Transparent,
-        animationSpec = tween(durationMillis = 250),
-        label = "toggleBg",
-    )
-    val iconColor by animateColorAsState(
-        targetValue = if (enabled) Color.Black else MaterialTheme.colorScheme.onBackground,
-        animationSpec = tween(durationMillis = 250),
-        label = "toggleIcon",
-    )
-    Box(
-        modifier = Modifier
-            .size(32.dp)
-            .clip(CircleShape)
-            .background(bgColor)
-            .border(1.dp, if (enabled) accent else MaterialTheme.colorScheme.outline, CircleShape),
-        contentAlignment = Alignment.Center,
-    ) {
-        IconButton(onClick = onClick, modifier = Modifier.size(32.dp)) {
-            Icon(
-                imageVector = icon,
-                contentDescription = description,
-                tint = iconColor,
-                modifier = Modifier.size(16.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun ControlsBar(
-    progressMs: Long,
-    durationMs: Long,
-    isPaused: Boolean,
-    accent: Color,
-    onDrag: (Long) -> Unit,
-    onSeek: (Long) -> Unit,
-    onTogglePlayPause: () -> Unit,
-    onNext: () -> Unit,
-    onPrevious: () -> Unit,
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        val safeDuration = durationMs.coerceAtLeast(1L)
-        val ratio = (progressMs.toFloat() / safeDuration).coerceIn(0f, 1f)
-
-        // ── Row 1: time-left | slider flex | time-right (compact inline) ──
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = formatMs(progressMs),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.width(38.dp),
-            )
-            Slider(
-                value = ratio,
-                onValueChange = { newRatio -> onDrag((newRatio * safeDuration).toLong()) },
-                onValueChangeFinished = { onSeek((ratio * safeDuration).toLong()) },
-                colors = SliderDefaults.colors(
-                    thumbColor = accent,
-                    activeTrackColor = accent,
-                    inactiveTrackColor = Color.White.copy(alpha = 0.15f),
-                ),
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = formatMs(durationMs),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.width(38.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.End,
-            )
-        }
-
-        // ── Row 2: buttons (smaller: 24dp skip, 44dp play) ──
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onPrevious, modifier = Modifier.size(40.dp)) {
-                Icon(
-                    imageVector = Icons.Filled.SkipPrevious,
-                    contentDescription = "Previous",
-                    tint = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.size(26.dp),
-                )
-            }
-            Spacer(modifier = Modifier.size(12.dp))
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(accent),
-                contentAlignment = Alignment.Center,
-            ) {
-                IconButton(onClick = onTogglePlayPause, modifier = Modifier.size(44.dp)) {
-                    Icon(
-                        imageVector = if (isPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                        contentDescription = if (isPaused) "Play" else "Pause",
-                        tint = Color.Black,
-                        modifier = Modifier.size(26.dp),
+                else -> {
+                    Transport(
+                        progressMs = rawProgressMs,
+                        durationMs = track.durationMs,
+                        isPaused = track.isPaused,
+                        onDrag = { draggingValue = it },
+                        onSeek = { positionMs ->
+                            draggingValue = -1L
+                            onSeek(positionMs)
+                        },
+                        onTogglePlayPause = onTogglePlayPause,
+                        onNext = onNext,
+                        onPrevious = onPrevious,
                     )
                 }
             }
-            Spacer(modifier = Modifier.size(12.dp))
-            IconButton(onClick = onNext, modifier = Modifier.size(40.dp)) {
-                Icon(
-                    imageVector = Icons.Filled.SkipNext,
-                    contentDescription = "Next",
-                    tint = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.size(26.dp),
-                )
-            }
         }
     }
-}
-
-/**
- * Bottom action bar yang muncul saat user multi-select baris lirik untuk share.
- * Tampilkan count (n/max), tombol Share (disabled kalau 0), tombol Cancel.
- * Layout sengaja serupa ControlsBar (compact, fillMaxWidth) supaya replacement
- * tidak nyeret layout shift.
- */
-@Composable
-private fun SelectionActionBar(
-    count: Int,
-    max: Int,
-    accent: Color,
-    onShare: () -> Unit,
-    onCancel: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 10.dp, horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        // Counter chip
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .background(accent.copy(alpha = 0.18f))
-                .border(1.dp, accent.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
-                .padding(horizontal = 14.dp, vertical = 8.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = "$count / $max selected",
-                style = MaterialTheme.typography.labelLarge,
-                color = accent,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        // Cancel
-        IconButton(
-            onClick = onCancel,
-            modifier = Modifier.size(40.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Close,
-                contentDescription = "Cancel selection",
-                tint = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.size(22.dp),
-            )
-        }
-
-        // Share button — circle + accent
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(if (count > 0) accent else accent.copy(alpha = 0.3f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            IconButton(
-                onClick = { if (count > 0) onShare() },
-                modifier = Modifier.size(44.dp),
-                enabled = count > 0,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Share,
-                    contentDescription = "Share lyric card",
-                    tint = Color.Black,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
-        }
-    }
-}
-
-private fun formatMs(ms: Long): String {
-    val totalSec = (ms / 1000).coerceAtLeast(0)
-    val m = totalSec / 60
-    val s = totalSec % 60
-    return "%d:%02d".format(m, s)
 }

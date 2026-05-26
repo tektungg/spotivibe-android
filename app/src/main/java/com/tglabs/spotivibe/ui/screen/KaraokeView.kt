@@ -61,11 +61,11 @@ fun KaraokeView(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        // Lyrics — font 2x lebih besar dari setting normal
+        // Lyrics — font 1.7x lebih besar dari setting normal. Accent
+        // diread dari LocalSvColors (provided by SpotivibeTheme caller).
         LyricsList(
             lyrics = lyrics,
             progressMs = progressMs,
-            accent = accent,
             romaji = romaji,
             fontSize = (fontSize * 1.7f).toInt().coerceAtMost(56),
             modifier = Modifier.fillMaxSize(),

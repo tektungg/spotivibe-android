@@ -107,8 +107,12 @@ class MainActivity : ComponentActivity() {
             val darkMode by app.preferencesRepository.darkMode
                 .collectAsState(initial = true)
 
-            SpotivibeTheme(darkTheme = darkMode) {
-                val state = viewModel.uiState.collectAsStateWithLifecycle().value
+            val state = viewModel.uiState.collectAsStateWithLifecycle().value
+            // Accent dinamis per-track — extracted di PlaybackController via
+            // AccentLock.lockedAccent(). Diteruskan ke SpotivibeTheme supaya
+            // LocalSvColors.current.accent always reflects current song.
+            val accent = (state as? com.tglabs.spotivibe.domain.UiState.Playing)?.accentColor
+            SpotivibeTheme(darkTheme = darkMode, accent = accent) {
                 var showSettings by rememberSaveable { mutableStateOf(false) }
 
                 if (showSettings) {
