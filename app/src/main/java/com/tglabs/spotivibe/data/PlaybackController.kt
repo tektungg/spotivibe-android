@@ -7,6 +7,7 @@ import androidx.palette.graphics.Palette
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.NowPlaying
 import com.tglabs.spotivibe.domain.SyncedLine
+import com.tglabs.spotivibe.ui.theme.AccentLock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -242,9 +243,17 @@ class PlaybackController(
     }
 
     /**
-     * Extract dominant color dari album bitmap. Clamp ke range readable di
-     * dark theme (saturation 0.55-0.95, lightness 0.65-0.85).
+     * Extract dominant color dari album bitmap → AccentLock.lockedAccent().
+     * Hue dipertahankan dari album, chroma + lightness DIKUNCI ke nilai
+     * editorial-magazine spec (L=0.74 C=0.17 dark / L=0.55 C=0.13 light).
+     * Hasil: accent tetap readable terhadap ink-1 untuk lagu apapun.
+     *
      * MUST be called from non-main dispatcher — Palette.generate() blocking.
+     *
+     * Note: kita selalu output dark-mode locked accent dari sini. Theme
+     * layer (SpotivibeTheme) yang re-lock ke light variant kalau user
+     * pilih light mode. Compromise simplicity vs accuracy — di praktek
+     * track change paling sering daripada theme toggle.
      */
     private fun extractAccent(bitmap: Bitmap): Color {
         return try {
@@ -252,25 +261,12 @@ class PlaybackController(
             val argb = palette.getVibrantColor(0)
                 .takeIf { it != 0 }
                 ?: palette.getLightVibrantColor(0).takeIf { it != 0 }
-                ?: palette.getDominantColor(0xFFB8A4FF.toInt())
-            clampForDarkTheme(Color(argb))
+                ?: palette.getDominantColor(0xFFEC6A5C.toInt()) // Coral fallback
+            AccentLock.lockedAccent(Color(argb), dark = true)
         } catch (t: Throwable) {
             Log.w(TAG, "Palette extract failed: ${t.message}")
-            Color(0xFFB8A4FF)
+            Color(0xFFEC6A5C) // Coral fallback
         }
-    }
-
-    private fun clampForDarkTheme(c: Color): Color {
-        val hsv = FloatArray(3)
-        android.graphics.Color.RGBToHSV(
-            (c.red * 255).toInt(),
-            (c.green * 255).toInt(),
-            (c.blue * 255).toInt(),
-            hsv,
-        )
-        hsv[1] = hsv[1].coerceIn(0.55f, 0.95f)
-        hsv[2] = hsv[2].coerceIn(0.65f, 0.85f)
-        return Color(android.graphics.Color.HSVToColor(hsv))
     }
 
     companion object {
