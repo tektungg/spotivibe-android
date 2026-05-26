@@ -4,8 +4,11 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val Context.dataStore by preferencesDataStore(name = "spotivibe_prefs")
@@ -20,6 +23,8 @@ class PreferencesRepository(private val context: Context) {
     private val overlayXKey = intPreferencesKey("overlay_x")
     private val overlayYKey = intPreferencesKey("overlay_y")
     private val spotifyAuthorizedKey = booleanPreferencesKey("spotify_authorized")
+    private val spotifyTokenKey = stringPreferencesKey("spotify_access_token")
+    private val spotifyTokenExpiresAtKey = longPreferencesKey("spotify_token_expires_at_ms")
     private val darkModeKey = booleanPreferencesKey("dark_mode")
     private val lyricsFontSizeKey = intPreferencesKey("lyrics_font_size")
 
@@ -41,6 +46,36 @@ class PreferencesRepository(private val context: Context) {
      */
     val spotifyAuthorized: Flow<Boolean> = context.dataStore.data
         .map { prefs -> prefs[spotifyAuthorizedKey] ?: false }
+
+    /**
+     * Persisted access token + epoch ms expiry. Token reused di sesi berikutnya
+     * untuk Spotify Web API (Premium check, queue fetch) tanpa harus prompt
+     * AuthorizationClient lagi. Token expires ~1 jam — kalau lewat, getter
+     * return null dan caller fallback gracefully.
+     */
+    suspend fun getValidAccessToken(): String? {
+        val prefs = context.dataStore.data
+            .map { it[spotifyTokenKey] to (it[spotifyTokenExpiresAtKey] ?: 0L) }
+            .first()
+        val (token, expiresAt) = prefs
+        return if (!token.isNullOrBlank() && expiresAt > System.currentTimeMillis()) {
+            token
+        } else null
+    }
+
+    suspend fun setSpotifyAccessToken(token: String, expiresAtMs: Long) {
+        context.dataStore.edit { prefs ->
+            prefs[spotifyTokenKey] = token
+            prefs[spotifyTokenExpiresAtKey] = expiresAtMs
+        }
+    }
+
+    suspend fun clearSpotifyAccessToken() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(spotifyTokenKey)
+            prefs.remove(spotifyTokenExpiresAtKey)
+        }
+    }
 
     /** Dark theme default true. User toggle via icon di header. */
     val darkMode: Flow<Boolean> = context.dataStore.data

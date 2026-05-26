@@ -107,13 +107,19 @@ class PlaybackController(
                     if (connection.nowPlaying.value?.id == trackId) {
                         _lyrics.value = fetched
                     }
-                    // Premium detection (sekali per session)
+                    // Premium detection — retry per track change sampai dapat hasil valid.
+                    // Awalnya bisa fail kalau access token belum loaded dari DataStore
+                    // (race condition saat cold start + auto-reconnect).
                     if (!premiumChecked) {
-                        premiumChecked = true
                         scope.launch {
                             val product = webApiClient.getProduct()
-                            _isPremium.value = (product == "premium")
-                            Log.d(TAG, "Premium check: product=$product, isPremium=${_isPremium.value}")
+                            if (product != null) {
+                                premiumChecked = true
+                                _isPremium.value = (product == "premium")
+                                Log.d(TAG, "Premium check: product=$product, isPremium=${_isPremium.value}")
+                            } else {
+                                Log.d(TAG, "Premium check returned null — will retry next track change")
+                            }
                         }
                     }
                     // Preload queue — fetch lyrics untuk 3 track berikutnya

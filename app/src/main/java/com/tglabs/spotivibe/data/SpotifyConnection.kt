@@ -57,6 +57,20 @@ class SpotifyConnection(
     /** Public getter — WebApiClient pakai lambda ke method ini untuk Bearer header */
     fun currentAccessToken(): String? = accessToken
 
+    init {
+        // Load persisted token saat startup — supaya Web API calls (Premium check,
+        // queue preload) jalan walaupun user pakai auto-reconnect (skip auth dialog).
+        applicationScope.launch {
+            val token = preferencesRepository.getValidAccessToken()
+            if (!token.isNullOrBlank()) {
+                accessToken = token
+                Log.d(TAG, "Loaded persisted access token (length=${token.length})")
+            } else {
+                Log.d(TAG, "No valid persisted token — Web API features will be limited until auth")
+            }
+        }
+    }
+
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
@@ -119,10 +133,18 @@ class SpotifyConnection(
         when (response.type) {
             AuthorizationResponse.Type.TOKEN -> {
                 accessToken = response.accessToken
-                Log.d(TAG, "Got access token (length=${response.accessToken?.length ?: 0})")
-                // Persist authorized flag — next cold start, skip auth dialog
+                val expiresInSec = response.expiresIn.coerceAtLeast(0)
+                val expiresAt = System.currentTimeMillis() + expiresInSec * 1000L - 30_000L
+                Log.d(TAG, "Got access token (length=${response.accessToken?.length ?: 0}, expiresInSec=$expiresInSec)")
+                // Persist authorized flag + token + expiry — next cold start, skip
+                // auth dialog AND tetap punya token untuk Web API calls.
                 applicationScope.launch {
-                    runCatching { preferencesRepository.setSpotifyAuthorized(true) }
+                    runCatching {
+                        preferencesRepository.setSpotifyAuthorized(true)
+                        response.accessToken?.let {
+                            preferencesRepository.setSpotifyAccessToken(it, expiresAt)
+                        }
+                    }
                 }
                 connectAppRemote(context)
             }
@@ -198,8 +220,12 @@ class SpotifyConnection(
                     "NotLoggedIn" in name ||
                     "authorization" in msg.lowercase()
                 if (isAuthIssue) {
+                    accessToken = null
                     applicationScope.launch {
-                        runCatching { preferencesRepository.setSpotifyAuthorized(false) }
+                        runCatching {
+                            preferencesRepository.setSpotifyAuthorized(false)
+                            preferencesRepository.clearSpotifyAccessToken()
+                        }
                     }
                     // Set Disconnected (bukan Error) supaya ConnectScreen muncul normal
                     _connectionState.value = ConnectionState.Disconnected
