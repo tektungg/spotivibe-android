@@ -79,7 +79,6 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import com.tglabs.spotivibe.domain.UiState
 import com.tglabs.spotivibe.ui.component.LyricsList
-import com.tglabs.spotivibe.ui.component.LyricsScrubberBar
 import com.tglabs.spotivibe.ui.theme.AccentDefault
 import com.tglabs.spotivibe.util.LyricShareCard
 import kotlinx.coroutines.delay
@@ -213,29 +212,21 @@ fun NowPlayingScreen(
                     modifier = Modifier.width(180.dp).fillMaxHeight(),
                 )
 
-                // Right: lyrics fills remaining + scrubber bar on top
-                Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                    LyricsScrubberBar(
-                        lines = state.lyrics?.synced,
+                // Right: lyrics fills remaining
+                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    LyricsList(
+                        lyrics = state.lyrics,
                         progressMs = effectiveProgressMs,
                         accent = accent,
-                        modifier = Modifier.padding(vertical = 4.dp),
+                        romaji = state.romaji,
+                        fontSize = state.lyricsFontSize,
+                        lineSpacing = state.lineSpacing,
+                        highContrast = state.highContrast,
+                        smoothScroll = state.smoothScroll,
+                        hapticEnabled = state.hapticEnabled,
+                        onSeekToLine = { ms -> onSeek(ms) },
+                        onLongPressShare = handleShare,
                     )
-                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                        LyricsList(
-                            lyrics = state.lyrics,
-                            progressMs = effectiveProgressMs,
-                            accent = accent,
-                            romaji = state.romaji,
-                            fontSize = state.lyricsFontSize,
-                            lineSpacing = state.lineSpacing,
-                            highContrast = state.highContrast,
-                            smoothScroll = state.smoothScroll,
-                            hapticEnabled = state.hapticEnabled,
-                            onSeekToLine = { ms -> onSeek(ms) },
-                            onLongPressShare = handleShare,
-                        )
-                    }
                 }
             }
         } else {
@@ -259,16 +250,7 @@ fun NowPlayingScreen(
                 onOpenSettings = onOpenSettings,
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Scrubber: progress dalam current line — slim 3dp bar
-            LyricsScrubberBar(
-                lines = state.lyrics?.synced,
-                progressMs = effectiveProgressMs,
-                accent = accent,
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Box(modifier = Modifier.weight(1f, fill = true).fillMaxWidth()) {
                 LyricsList(

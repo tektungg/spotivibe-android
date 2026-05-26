@@ -1,5 +1,6 @@
 package com.tglabs.spotivibe.util
 
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -33,10 +34,16 @@ object LyricShareCard {
     ) {
         val bitmap = render(line, romaji, title, artist, accentArgb)
         val uri = persist(context, bitmap)
+        val caption = "\"$line\" — $title · $artist"
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "image/png"
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_TEXT, "\"$line\" — $title · $artist")
+            putExtra(Intent.EXTRA_TEXT, caption)
+            // ClipData WAJIB diset eksplisit supaya Android Sharesheet render
+            // rich preview (thumbnail) image — kalau cuma EXTRA_STREAM, banyak
+            // launcher (terutama Android 12+) cuma tampilin text preview saja.
+            // Reference: developer.android.com/training/sharing/send#adding-rich-content-previews
+            clipData = ClipData.newUri(context.contentResolver, "Lyric card", uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         val chooser = Intent.createChooser(intent, "Share lyric").apply {
