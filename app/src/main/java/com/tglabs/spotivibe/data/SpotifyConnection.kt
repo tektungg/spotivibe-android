@@ -51,7 +51,11 @@ class SpotifyConnection(
     private var appRemote: SpotifyAppRemote? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var timeoutRunnable: Runnable? = null
+    @Volatile
     private var accessToken: String? = null
+
+    /** Public getter — WebApiClient pakai lambda ke method ini untuk Bearer header */
+    fun currentAccessToken(): String? = accessToken
 
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()

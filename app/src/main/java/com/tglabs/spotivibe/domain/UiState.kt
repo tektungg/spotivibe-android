@@ -27,6 +27,7 @@ sealed interface UiState {
         val overlayEnabled: Boolean = false,
         val darkMode: Boolean = true,
         val lyricsFontSize: Int = 17,
+        val isPremium: Boolean = false,
     ) : UiState
 
     data class Error(val message: String) : UiState

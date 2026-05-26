@@ -190,20 +190,37 @@ fun NowPlayingScreen(
         Spacer(modifier = Modifier.height(4.dp))
 
         // ── Controls full-width di bawah (both orientations) ──
-        ControlsBar(
-            progressMs = effectiveProgressMs,
-            durationMs = track.durationMs,
-            isPaused = track.isPaused,
-            accent = accent,
-            onDrag = { draggingValue = it },
-            onSeek = { positionMs ->
-                draggingValue = -1L
-                onSeek(positionMs)
-            },
-            onTogglePlayPause = onTogglePlayPause,
-            onNext = onNext,
-            onPrevious = onPrevious,
-        )
+        if (!state.isPremium) {
+            // Free account: control endpoints butuh Premium → banner kecil + sembunyikan controls
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Spotify Premium required to control playback",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            }
+        } else {
+            ControlsBar(
+                progressMs = effectiveProgressMs,
+                durationMs = track.durationMs,
+                isPaused = track.isPaused,
+                accent = accent,
+                onDrag = { draggingValue = it },
+                onSeek = { positionMs ->
+                    draggingValue = -1L
+                    onSeek(positionMs)
+                },
+                onTogglePlayPause = onTogglePlayPause,
+                onNext = onNext,
+                onPrevious = onPrevious,
+            )
+        }
     }
 }
 

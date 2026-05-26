@@ -39,6 +39,7 @@ class PlaybackController(
     private val lyricsRepository: LyricsRepository,
     private val romanizationService: RomanizationService,
     private val preferencesRepository: PreferencesRepository,
+    private val webApiClient: WebApiClient,
     private val scope: CoroutineScope,
 ) {
     // ── Pass-through dari SpotifyConnection ──────────────────────
@@ -71,6 +72,11 @@ class PlaybackController(
     private val _accent = MutableStateFlow<Color?>(null)
     val accent: StateFlow<Color?> = _accent.asStateFlow()
 
+    // ── Premium detection (Web API /me) — cached per session ─────
+    private val _isPremium = MutableStateFlow(false)
+    val isPremium: StateFlow<Boolean> = _isPremium.asStateFlow()
+    @Volatile private var premiumChecked = false
+
     private var accentJob: Job? = null
     private var lastAccentBitmap: Bitmap? = null  // ref equality cache
 
@@ -80,7 +86,7 @@ class PlaybackController(
     @Volatile private var baselinePaused: Boolean = true
 
     init {
-        // 1. Fetch lyrics tiap track ID berubah
+        // 1. Fetch lyrics tiap track ID berubah + preload queue
         scope.launch {
             connection.nowPlaying
                 .map { it?.id }
@@ -100,6 +106,31 @@ class PlaybackController(
                     )
                     if (connection.nowPlaying.value?.id == trackId) {
                         _lyrics.value = fetched
+                    }
+                    // Premium detection (sekali per session)
+                    if (!premiumChecked) {
+                        premiumChecked = true
+                        scope.launch {
+                            val product = webApiClient.getProduct()
+                            _isPremium.value = (product == "premium")
+                            Log.d(TAG, "Premium check: product=$product, isPremium=${_isPremium.value}")
+                        }
+                    }
+                    // Preload queue — fetch lyrics untuk 3 track berikutnya
+                    scope.launch {
+                        val queue = webApiClient.getQueue(limit = 3)
+                        queue.forEach { next ->
+                            if (next.id.isBlank()) return@forEach
+                            Log.d(TAG, "Preload lyrics: ${next.title}")
+                            lyricsRepository.fetchLyrics(
+                                trackId = next.id,
+                                title = next.title,
+                                artist = next.artist,
+                                album = next.album,
+                                durationMs = next.durationMs,
+                            )
+                            // Result populates mem + disk cache; tidak set _lyrics
+                        }
                     }
                 }
         }

@@ -6,6 +6,7 @@ import com.tglabs.spotivibe.data.PlaybackController
 import com.tglabs.spotivibe.data.PreferencesRepository
 import com.tglabs.spotivibe.data.RomanizationService
 import com.tglabs.spotivibe.data.SpotifyConnection
+import com.tglabs.spotivibe.data.WebApiClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -30,6 +31,9 @@ class SpotivibeApp : Application() {
     }
     val lyricsRepository: LyricsRepository by lazy { LyricsRepository(this) }
     val romanizationService: RomanizationService by lazy { RomanizationService() }
+    val webApiClient: WebApiClient by lazy {
+        WebApiClient(tokenProvider = { spotifyConnection.currentAccessToken() })
+    }
 
     val playbackController: PlaybackController by lazy {
         PlaybackController(
@@ -37,6 +41,7 @@ class SpotivibeApp : Application() {
             lyricsRepository = lyricsRepository,
             romanizationService = romanizationService,
             preferencesRepository = preferencesRepository,
+            webApiClient = webApiClient,
             scope = applicationScope,
         )
     }

@@ -64,10 +64,11 @@ android {
             if (keystorePropsFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
-            // R8 minify disabled untuk MVP — Spotify SDK + kuromoji pakai reflection
-            // yang bisa kena strip. Enable + tambah keep rules di proguard-rules.pro
-            // saat siap test edge cases.
-            isMinifyEnabled = false
+            // R8 minify + resource shrinking — strip unused code, obfuscate names.
+            // Keep rules untuk Spotify SDK, kuromoji, pinyin4j, Moshi, Retrofit
+            // sudah di proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

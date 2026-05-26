@@ -40,6 +40,7 @@ class SpotivibeViewModel(
             controller.lyrics,
             controller.romaji,
             controller.accent,
+            controller.isPremium,
             preferencesRepository.romanizationEnabled,
             preferencesRepository.overlayEnabled,
             preferencesRepository.darkMode,
@@ -53,10 +54,11 @@ class SpotivibeViewModel(
         val lyrics = values[3] as LyricsResult?
         val romaji = values[4] as Map<Long, String?>
         val accent = values[5] as Color?
-        val romaEnabled = values[6] as Boolean
-        val overlayEnabled = values[7] as Boolean
-        val darkMode = values[8] as Boolean
-        val fontSize = values[9] as Int
+        val isPremium = values[6] as Boolean
+        val romaEnabled = values[7] as Boolean
+        val overlayEnabled = values[8] as Boolean
+        val darkMode = values[9] as Boolean
+        val fontSize = values[10] as Int
 
         when (connState) {
             ConnectionState.Disconnected -> UiState.Disconnected
@@ -74,6 +76,7 @@ class SpotivibeViewModel(
                     overlayEnabled = overlayEnabled,
                     darkMode = darkMode,
                     lyricsFontSize = fontSize,
+                    isPremium = isPremium,
                 )
             } ?: UiState.Idle
             is ConnectionState.Error -> UiState.Error(connState.message)
