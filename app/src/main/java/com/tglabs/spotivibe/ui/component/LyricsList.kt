@@ -36,6 +36,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.SyncedLine
 import com.tglabs.spotivibe.domain.SyncedWord
@@ -63,6 +67,8 @@ fun LyricsList(
     onSeekToLine: ((Long) -> Unit)? = null,
     /** Long-press baris → bagikan sebagai image card. */
     onLongPressShare: ((SyncedLine) -> Unit)? = null,
+    /** Set timeMs baris yang sedang dipilih untuk multi-line share. */
+    selectedTimes: Set<Long> = emptySet(),
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -81,6 +87,7 @@ fun LyricsList(
                     hapticEnabled = hapticEnabled,
                     onSeekToLine = onSeekToLine,
                     onLongPressShare = onLongPressShare,
+                    selectedTimes = selectedTimes,
                 )
             !lyrics.plain.isNullOrBlank() -> PlainLyricsView(lyrics.plain, fontSize)
             else -> StatusText("Lirik tidak ditemukan untuk track ini")
@@ -112,6 +119,7 @@ private fun SyncedLyricsView(
     hapticEnabled: Boolean,
     onSeekToLine: ((Long) -> Unit)?,
     onLongPressShare: ((SyncedLine) -> Unit)?,
+    selectedTimes: Set<Long>,
 ) {
     val listState = rememberLazyListState()
     val activeIndex = findActiveIndex(lines, progressMs)
@@ -147,6 +155,7 @@ private fun SyncedLyricsView(
                 line = line,
                 romaji = romaji[line.timeMs],
                 isActive = idx == activeIndex,
+                isSelected = selectedTimes.contains(line.timeMs),
                 progressMs = progressMs,
                 accent = accent,
                 fontSize = fontSize,
@@ -166,6 +175,7 @@ private fun LyricLineItem(
     line: SyncedLine,
     romaji: String?,
     isActive: Boolean,
+    isSelected: Boolean,
     progressMs: Long,
     accent: Color,
     fontSize: Int,
@@ -197,9 +207,25 @@ private fun LyricLineItem(
     val inactiveWeight = if (highContrast) FontWeight.Medium else FontWeight.Normal
     val activeWeight = if (highContrast) FontWeight.Bold else FontWeight.SemiBold
 
+    // Selection visual — accent border + subtle bg tint. Animate alpha biar
+    // smooth saat masuk/keluar selection mode.
+    val selectionAlpha by animateFloatAsState(
+        targetValue = if (isSelected) 1f else 0f,
+        animationSpec = tween(durationMillis = 180),
+        label = "selectionAlpha",
+    )
+
     val baseModifier = Modifier
         .fillMaxWidth()
-        .padding(vertical = 6.dp)
+        .padding(vertical = 6.dp, horizontal = 4.dp)
+        .clip(RoundedCornerShape(10.dp))
+        .background(accent.copy(alpha = 0.10f * selectionAlpha))
+        .border(
+            width = (1.5f * selectionAlpha).dp,
+            color = accent.copy(alpha = selectionAlpha),
+            shape = RoundedCornerShape(10.dp),
+        )
+        .padding(vertical = 4.dp, horizontal = 8.dp)
         .graphicsLayer {
             scaleX = scale
             scaleY = scale

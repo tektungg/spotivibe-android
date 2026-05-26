@@ -30,8 +30,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MoreVert
@@ -133,17 +135,59 @@ fun NowPlayingScreen(
 
     val context = LocalContext.current
 
-    // Long-press share — JANGAN remember karena state/track berubah tiap recomposition,
-    // dan lambda closure kalau di-remember bisa pegang reference lama. Lambda creation cheap.
-    val handleShare: (com.tglabs.spotivibe.domain.SyncedLine) -> Unit = { line ->
-        LyricShareCard.shareLine(
+    // ── Multi-line share selection state ──────────────────────────
+    // Long-press masuk selection mode + pre-select baris yang di-press.
+    // Tap di selection mode → toggle add/remove (cap 5). Tap di luar selection
+    // mode → tap-to-seek seperti biasa. Reset on track change supaya selection
+    // tidak ngambang antar lagu.
+    var selectedTimes by remember(track.id) { mutableStateOf<Set<Long>>(emptySet()) }
+    val isSelecting = selectedTimes.isNotEmpty()
+    val maxSelect = 5
+
+    // Hardware back keluar dari selection mode dulu sebelum back ke parent.
+    androidx.activity.compose.BackHandler(enabled = isSelecting) {
+        selectedTimes = emptySet()
+    }
+
+    val toggleSelect: (Long) -> Unit = { timeMs ->
+        selectedTimes = if (selectedTimes.contains(timeMs)) {
+            selectedTimes - timeMs
+        } else if (selectedTimes.size < maxSelect) {
+            selectedTimes + timeMs
+        } else {
+            selectedTimes // at cap, no-op
+        }
+    }
+
+    val handleLineTap: (Long) -> Unit = { timeMs ->
+        if (isSelecting) toggleSelect(timeMs) else onSeek(timeMs)
+    }
+
+    val handleLineLongPress: (com.tglabs.spotivibe.domain.SyncedLine) -> Unit = { line ->
+        if (isSelecting) toggleSelect(line.timeMs)
+        else selectedTimes = setOf(line.timeMs)
+    }
+
+    val handleShareSelected: () -> Unit = handleShare@{
+        val lyrics = state.lyrics?.synced ?: return@handleShare
+        val ordered = lyrics
+            .filter { it.timeMs in selectedTimes }
+            .sortedBy { it.timeMs }
+            .map { line ->
+                com.tglabs.spotivibe.util.LyricShareCard.Entry(
+                    text = line.text,
+                    romaji = state.romaji[line.timeMs],
+                )
+            }
+        if (ordered.isEmpty()) return@handleShare
+        LyricShareCard.shareLines(
             context = context,
-            line = line.text,
-            romaji = state.romaji[line.timeMs],
+            entries = ordered,
             title = track.title,
             artist = track.artist,
             accentArgb = (state.accentColor ?: AccentDefault).toArgb(),
         )
+        selectedTimes = emptySet()
     }
 
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -229,8 +273,9 @@ fun NowPlayingScreen(
                         highContrast = state.highContrast,
                         smoothScroll = state.smoothScroll,
                         hapticEnabled = state.hapticEnabled,
-                        onSeekToLine = { ms -> onSeek(ms) },
-                        onLongPressShare = handleShare,
+                        onSeekToLine = handleLineTap,
+                        onLongPressShare = handleLineLongPress,
+                        selectedTimes = selectedTimes,
                     )
                 }
             }
@@ -268,16 +313,25 @@ fun NowPlayingScreen(
                     highContrast = state.highContrast,
                     smoothScroll = state.smoothScroll,
                     hapticEnabled = state.hapticEnabled,
-                    onSeekToLine = { ms -> onSeek(ms) },
-                    onLongPressShare = handleShare,
+                    onSeekToLine = handleLineTap,
+                    onLongPressShare = handleLineLongPress,
+                    selectedTimes = selectedTimes,
                 )
             }
         }
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // ── Controls full-width di bawah (both orientations) ──
-        if (!state.isPremium) {
+        // ── Bottom: selection action bar (override ControlsBar + Premium banner) ──
+        if (isSelecting) {
+            SelectionActionBar(
+                count = selectedTimes.size,
+                max = maxSelect,
+                accent = accent,
+                onShare = handleShareSelected,
+                onCancel = { selectedTimes = emptySet() },
+            )
+        } else if (!state.isPremium) {
             // Free account: control endpoints butuh Premium → banner kecil + sembunyikan controls
             Box(
                 modifier = Modifier
@@ -874,6 +928,83 @@ private fun ControlsBar(
                     contentDescription = "Next",
                     tint = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.size(26.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Bottom action bar yang muncul saat user multi-select baris lirik untuk share.
+ * Tampilkan count (n/max), tombol Share (disabled kalau 0), tombol Cancel.
+ * Layout sengaja serupa ControlsBar (compact, fillMaxWidth) supaya replacement
+ * tidak nyeret layout shift.
+ */
+@Composable
+private fun SelectionActionBar(
+    count: Int,
+    max: Int,
+    accent: Color,
+    onShare: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        // Counter chip
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(accent.copy(alpha = 0.18f))
+                .border(1.dp, accent.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "$count / $max selected",
+                style = MaterialTheme.typography.labelLarge,
+                color = accent,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        // Cancel
+        IconButton(
+            onClick = onCancel,
+            modifier = Modifier.size(40.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = "Cancel selection",
+                tint = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+
+        // Share button — circle + accent
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(if (count > 0) accent else accent.copy(alpha = 0.3f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            IconButton(
+                onClick = { if (count > 0) onShare() },
+                modifier = Modifier.size(44.dp),
+                enabled = count > 0,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Share,
+                    contentDescription = "Share lyric card",
+                    tint = Color.Black,
+                    modifier = Modifier.size(22.dp),
                 )
             }
         }
