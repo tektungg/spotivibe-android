@@ -17,10 +17,15 @@ import java.io.File
 import java.io.FileOutputStream
 
 /**
- * Render 1-5 baris lirik ke bitmap 1080×1080 + share via system chooser.
- * Tidak pakai Compose-to-bitmap karena lebih reliable pakai Canvas langsung
- * (no recomposition hazard, no measuring twice). Format square biar oke
- * di Twitter / IG / Threads.
+ * Render 1-5 baris lirik ke bitmap 1080×1920 + share via system chooser.
+ * Editorial layout per claude-design-handoff: mono "EXCERPT" eyebrow +
+ * hairline divider + big Newsreader lyrics with AccentDim italic
+ * romanization underneath each + mono colophon footer.
+ *
+ * Canvas API langsung (no Compose-to-bitmap) untuk reliability — no
+ * recomposition hazard, predictable layout.
+ *
+ * Format: 1080×1920 (9:16 portrait, IG / Threads / WA story-friendly).
  */
 object LyricShareCard {
 
@@ -76,49 +81,61 @@ object LyricShareCard {
         artist: String,
         accentArgb: Int,
     ): Bitmap {
-        val size = 1080
-        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        // Editorial portrait format — 9:16. Width 1080, height 1920.
+        val w = 1080
+        val h = 1920
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
 
-        // BG: vertical gradient — deep top, accent-tinted bottom.
+        // BG: paper-warm dark gradient. Top sedikit lighter, bottom accent-tinted.
+        val inkBgTop = 0xFF1A1B22.toInt()     // BgDark1
+        val inkBgBottom = blendColor(accentArgb, 0xFF14151B.toInt(), 0.25f)
         val bgPaint = Paint().apply {
             shader = LinearGradient(
-                0f, 0f, 0f, size.toFloat(),
-                intArrayOf(0xFF0E0E12.toInt(), blendColor(accentArgb, 0xFF1A1A22.toInt(), 0.30f)),
+                0f, 0f, 0f, h.toFloat(),
+                intArrayOf(inkBgTop, inkBgBottom),
                 null,
                 Shader.TileMode.CLAMP,
             )
         }
-        canvas.drawRect(0f, 0f, size.toFloat(), size.toFloat(), bgPaint)
+        canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), bgPaint)
 
-        // Sizing yang adaptif. Single-line dapat decorative quote mark.
-        // Multi-line skip quote — content harus muat dalam ~720px tinggi area.
-        val isSingle = entries.size == 1
-        val (lineSize, romaSize, lineGap) = sizingFor(entries.size)
+        // Layout constants — magazine grid
+        val margin = 100f
+        val maxTextWidth = (w - 2 * margin).toInt()
 
-        if (isSingle) {
-            // Decorative ❝ — only for single-line; multiline already busy enough.
-            val quotePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = (accentArgb and 0x00FFFFFF) or 0x55000000.toInt()
-                textSize = 320f
-                typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
-            }
-            canvas.drawText("“", 60f, 320f, quotePaint)
+        // ── Top: eyebrow + hairline rule ────────────────────
+        val eyebrowPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFF8A877F.toInt() // InkDark3
+            textSize = 28f
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+            letterSpacing = 0.12f
         }
+        canvas.drawText("EXCERPT · ${entries.size} OF 5", margin, 180f, eyebrowPaint)
 
+        // Hairline rule under eyebrow
+        val rulePaint = Paint().apply {
+            color = 0xFF3C3D44.toInt() // RuleDark
+            strokeWidth = 1f
+        }
+        canvas.drawLine(margin, 220f, (w - margin).toFloat(), 220f, rulePaint)
+
+        // ── Center: lyric block ──────────────────────────────
+        val (lineSize, romaSize, lineGap) = sizingFor(entries.size)
         val linePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
+            color = 0xFFF4F1EA.toInt() // InkDark1
             textSize = lineSize
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            // Newsreader serif tidak tersedia di Canvas; SERIF system fallback
+            // memberi feel yang dekat untuk runtime render.
+            typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL)
+            letterSpacing = -0.005f
         }
         val romaPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = accentArgb
+            color = dimAccent(accentArgb)
             textSize = romaSize
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.ITALIC)
+            typeface = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
         }
 
-        // Pre-wrap supaya bisa hitung total tinggi → vertikal center di tengah area.
-        val maxTextWidth = size - 160
         data class RenderedBlock(val lines: List<String>, val romajiLines: List<String>)
         val blocks = entries.map { e ->
             RenderedBlock(
@@ -128,57 +145,89 @@ object LyricShareCard {
         }
 
         val lineStep = lineSize + 16f
-        val romaStep = romaSize + 8f
+        val romaStep = romaSize + 6f
         val totalHeight = blocks.sumOf { b ->
-            (b.lines.size * lineStep + b.romajiLines.size * romaStep + (if (b.romajiLines.isNotEmpty()) 12f else 0f)).toDouble()
+            (b.lines.size * lineStep + b.romajiLines.size * romaStep + (if (b.romajiLines.isNotEmpty()) 14f else 0f)).toDouble()
         }.toFloat() + (blocks.size - 1) * lineGap
 
-        // Vertical center within the content band (top 200px header area, bottom 200px footer area)
-        val contentTop = 220f
-        val contentBottom = (size - 200).toFloat()
+        val contentTop = 320f
+        val contentBottom = (h - 280).toFloat()
         val contentArea = contentBottom - contentTop
         var y = contentTop + (contentArea - totalHeight) / 2f + lineSize
 
         blocks.forEach { block ->
             block.lines.forEach { l ->
-                canvas.drawText(l, 80f, y, linePaint)
+                canvas.drawText(l, margin, y, linePaint)
                 y += lineStep
             }
             if (block.romajiLines.isNotEmpty()) {
-                y += 4f
+                y += 6f
                 block.romajiLines.forEach { l ->
-                    canvas.drawText(l, 80f, y, romaPaint)
+                    canvas.drawText(l, margin, y, romaPaint)
                     y += romaStep
                 }
             }
             y += lineGap
         }
 
-        // Footer — track meta + brand
-        val metaPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFFAAAAAA.toInt()
-            textSize = 32f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
-        }
-        canvas.drawText(truncate("$title · $artist", metaPaint, size - 160), 80f, (size - 120).toFloat(), metaPaint)
+        // ── Bottom: hairline rule + track meta + brand ───────
+        canvas.drawLine(margin, (h - 240).toFloat(), (w - margin).toFloat(), (h - 240).toFloat(), rulePaint)
 
+        // Track meta — serif title, mono artist
+        val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFC2BFB6.toInt() // InkDark2
+            textSize = 42f
+            typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL)
+            letterSpacing = -0.01f
+        }
+        canvas.drawText(truncate(title, titlePaint, maxTextWidth), margin, (h - 170).toFloat(), titlePaint)
+
+        val artistPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFF8A877F.toInt() // InkDark3
+            textSize = 28f
+            typeface = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
+        }
+        canvas.drawText(truncate(artist, artistPaint, maxTextWidth), margin, (h - 130).toFloat(), artistPaint)
+
+        // Brand colophon — bottom right mono
         val brandPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = accentArgb
-            textSize = 26f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            textSize = 24f
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+            letterSpacing = 0.15f
         }
-        canvas.drawText("Spotivibe", 80f, (size - 70).toFloat(), brandPaint)
+        canvas.drawText("SPOTIVIBE", margin, (h - 70).toFloat(), brandPaint)
+
+        val tagPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFF8A877F.toInt()
+            textSize = 22f
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
+            letterSpacing = 0.15f
+            textAlign = Paint.Align.RIGHT
+        }
+        canvas.drawText("CODE · VIBE · SING", (w - margin).toFloat(), (h - 70).toFloat(), tagPaint)
 
         return bmp
     }
 
-    /** Triple of (lineFontSize, romajiFontSize, gapBetweenBlocks). Scaled down per count. */
+    /** Compute accent-dim untuk romanization. Simple: factor down RGB
+     *  components ke 50% supaya kelihatan "same hue, lower lightness". */
+    private fun dimAccent(accentArgb: Int): Int {
+        val r = (Color.red(accentArgb) * 0.62f).toInt()
+        val g = (Color.green(accentArgb) * 0.62f).toInt()
+        val b = (Color.blue(accentArgb) * 0.62f).toInt()
+        return Color.argb(255, r, g, b)
+    }
+
+    /** Triple of (lineFontSize, romajiFontSize, gapBetweenBlocks). Scaled
+     *  per count untuk 1080×1920 layout — sedikit lebih besar dari versi
+     *  square karena ada lebih banyak vertical real estate. */
     private fun sizingFor(count: Int): Triple<Float, Float, Float> = when (count) {
-        1 -> Triple(64f, 42f, 0f)
-        2 -> Triple(58f, 38f, 24f)
-        3 -> Triple(52f, 34f, 20f)
-        4 -> Triple(46f, 30f, 16f)
-        else -> Triple(40f, 28f, 12f) // 5
+        1 -> Triple(82f, 50f, 0f)
+        2 -> Triple(72f, 44f, 32f)
+        3 -> Triple(64f, 40f, 28f)
+        4 -> Triple(56f, 36f, 22f)
+        else -> Triple(48f, 32f, 18f) // 5
     }
 
     /** Manual word-wrap. Tidak pakai StaticLayout supaya tetap ringan + predictable. */

@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,37 +16,47 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tglabs.spotivibe.BuildConfig
 import com.tglabs.spotivibe.domain.UiState
+import com.tglabs.spotivibe.ui.component.HairlineIconButton
+import com.tglabs.spotivibe.ui.component.HairlineRule
+import com.tglabs.spotivibe.ui.component.MonoEyebrow
+import com.tglabs.spotivibe.ui.component.SegControl
+import com.tglabs.spotivibe.ui.component.TickSlider
+import com.tglabs.spotivibe.ui.component.Toggle
+import com.tglabs.spotivibe.ui.theme.LocalSvColors
+import com.tglabs.spotivibe.ui.theme.SvIcons
+import com.tglabs.spotivibe.ui.theme.SvRadius
+import com.tglabs.spotivibe.ui.theme.SvSpace
+import com.tglabs.spotivibe.ui.theme.SvType
 
+/**
+ * Editorial Settings — numbered sections, hairline dividers, custom
+ * primitives (SegControl / TickSlider / Toggle) replacing Material chrome.
+ *
+ * Structure (per screens-settings.jsx):
+ *   ── Header: back + mono SPOTIVIBE/v0.x.x + big "Settings." display ──
+ *   01 — APPEARANCE  · Theme & type
+ *   02 — LYRICS      · Sync, spacing, feedback
+ *   03 — SPOTIFY     · Connection
+ *   04 — COLOPHON    · About this app
+ */
 @Composable
 fun SettingsScreen(
     state: UiState,
@@ -59,8 +70,10 @@ fun SettingsScreen(
     onToggleSmoothScroll: () -> Unit = {},
     onToggleHaptic: () -> Unit = {},
 ) {
+    val sv = LocalSvColors.current
     val context = LocalContext.current
     val playing = state as? UiState.Playing
+
     val darkMode = playing?.darkMode ?: true
     val fontSize = playing?.lyricsFontSize ?: 17
     val lyricsOffsetMs = playing?.lyricsOffsetMs ?: 0
@@ -74,444 +87,406 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(sv.bg0),
     ) {
-        // ── Top app bar ──────────────────────────────
-        Row(
+        // ── Header ─────────────────────────────────
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 8.dp, end = 16.dp, top = 32.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .padding(start = SvSpace.s5, end = SvSpace.s5, top = SvSpace.s8, bottom = SvSpace.s4),
         ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                HairlineIconButton(
+                    onClick = onBack,
+                    icon = SvIcons.Back,
                     contentDescription = "Back",
-                    tint = MaterialTheme.colorScheme.onBackground,
                 )
+                Spacer(modifier = Modifier.width(SvSpace.s3))
+                MonoEyebrow(text = "SPOTIVIBE / V${BuildConfig.VERSION_NAME}")
             }
-            Spacer(modifier = Modifier.size(8.dp))
+            Spacer(modifier = Modifier.height(SvSpace.s4))
             Text(
-                text = "Settings",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onBackground,
-                fontWeight = FontWeight.SemiBold,
+                text = "Settings.",
+                style = SvType.Display.copy(fontSize = 56.sp, lineHeight = 56.sp, letterSpacing = (-1.4).sp),
+                color = sv.ink1,
             )
         }
+        HairlineRule()
 
-        // ── Scrollable content ──────────────────────
+        // ── Scrollable content ─────────────────────
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .verticalScroll(rememberScrollState()),
         ) {
-            SectionHeader(title = "Appearance", icon = Icons.Filled.Palette)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Theme toggle row
-            SettingRow(
-                title = "Dark theme",
-                subtitle = if (darkMode) "Tampilan gelap (default)" else "Tampilan terang (untuk outdoor)",
-                trailing = {
-                    Switch(
-                        checked = darkMode,
-                        onCheckedChange = { onToggleDarkMode() },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.primary,
-                            checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        ),
+            // ── 01 APPEARANCE ──
+            SectionHeader(number = "01", title = "Appearance", hint = "Theme & type")
+            SettingsRow(
+                label = "Theme",
+                trail = if (darkMode) "DARK" else "LIGHT",
+                content = {
+                    SegControl(
+                        options = listOf("Dark", "Light"),
+                        selected = if (darkMode) "Dark" else "Light",
+                        onSelect = { sel ->
+                            if ((sel == "Dark") != darkMode) onToggleDarkMode()
+                        },
                     )
                 },
             )
-
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                modifier = Modifier.padding(vertical = 8.dp),
-            )
-
-            // Font size slider
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(modifier = Modifier.padding(end = 16.dp)) {
-                        Text(
-                            text = "Lyrics font size",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onBackground,
-                        )
-                        Text(
-                            text = "${fontSize}sp — ${getFontDescription(fontSize)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Text(
-                        text = "$fontSize",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
+            SettingsRow(
+                label = "Lyrics font size",
+                trail = "${fontSize}sp · ${fontSizeDescription(fontSize)}",
+                content = {
+                    TickSlider(
+                        value = ((fontSize - 12).coerceIn(0, 44)).toFloat() / 44f,
+                        onValueChange = { v ->
+                            val new = (12 + (v * 44).toInt()).coerceIn(12, 56)
+                            onSetFontSize(new)
+                        },
                     )
-                }
-                Slider(
-                    value = fontSize.toFloat(),
-                    onValueChange = { onSetFontSize(it.toInt()) },
-                    valueRange = 12f..56f,
-                    steps = (56 - 12) / 2 - 1,
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                    ),
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-            SectionHeader(title = "Lyrics", icon = Icons.Filled.MusicNote)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Lyrics sync offset — kompensasi LRC yang slightly off
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(modifier = Modifier.padding(end = 16.dp)) {
-                        Text(
-                            text = "Sync offset",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onBackground,
-                        )
-                        Text(
-                            text = "Geser lirik kalau LRC slow/cepat — ${if (lyricsOffsetMs >= 0) "+" else ""}${lyricsOffsetMs}ms",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Text(
-                        text = "${lyricsOffsetMs}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-                Slider(
-                    value = lyricsOffsetMs.toFloat(),
-                    onValueChange = { onSetLyricsOffsetMs(it.toInt()) },
-                    valueRange = -2000f..2000f,
-                    steps = 39, // 100ms increments across 4000ms range
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                    ),
-                )
-            }
-
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                modifier = Modifier.padding(vertical = 8.dp),
-            )
-
-            // Line spacing — gap antar baris lyric
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(modifier = Modifier.padding(end = 16.dp)) {
-                        Text(
-                            text = "Line spacing",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onBackground,
-                        )
-                        Text(
-                            text = "Jarak antar baris — ${lineSpacing}dp",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Text(
-                        text = "$lineSpacing",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-                Slider(
-                    value = lineSpacing.toFloat(),
-                    onValueChange = { onSetLineSpacing(it.toInt()) },
-                    valueRange = 0f..20f,
-                    steps = 19,
-                    colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                    ),
-                )
-            }
-
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                modifier = Modifier.padding(vertical = 8.dp),
-            )
-
-            // High contrast
-            SettingRow(
-                title = "High contrast",
-                subtitle = if (highContrast) "Bold, no dim — outdoor mode" else "Default styling",
-                trailing = {
-                    Switch(
-                        checked = highContrast,
-                        onCheckedChange = { onToggleHighContrast() },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.primary,
-                            checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        ),
-                    )
+                    SliderUnitLabel(text = "12 → 56")
                 },
             )
 
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                modifier = Modifier.padding(vertical = 8.dp),
+            // ── 02 LYRICS ──
+            SectionHeader(number = "02", title = "Lyrics", hint = "Sync, spacing, feedback")
+            SettingsRow(
+                label = "Sync offset",
+                trail = "${if (lyricsOffsetMs >= 0) "+" else ""}${lyricsOffsetMs} ms",
+                content = {
+                    TickSlider(
+                        value = ((lyricsOffsetMs + 2000).coerceIn(0, 4000)).toFloat() / 4000f,
+                        twoSided = true,
+                        onValueChange = { v ->
+                            val new = ((v - 0.5f) * 4000f).toInt().coerceIn(-2000, 2000)
+                            onSetLyricsOffsetMs(new)
+                        },
+                    )
+                    SliderUnitLabel(text = "−2000 / 0 / +2000")
+                },
             )
-
-            // Smooth scroll
-            SettingRow(
-                title = "Smooth scroll",
-                subtitle = if (smoothScroll) "Animasi halus saat ganti baris" else "Snap instan, lebih responsif",
-                trailing = {
-                    Switch(
-                        checked = smoothScroll,
-                        onCheckedChange = { onToggleSmoothScroll() },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.primary,
-                            checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        ),
+            SettingsRow(
+                label = "Line spacing",
+                trail = "${lineSpacing} dp",
+                content = {
+                    TickSlider(
+                        value = (lineSpacing.coerceIn(0, 20)).toFloat() / 20f,
+                        onValueChange = { v -> onSetLineSpacing((v * 20).toInt().coerceIn(0, 20)) },
+                    )
+                    SliderUnitLabel(text = "0 → 20")
+                },
+            )
+            SettingsRow(
+                label = "High contrast",
+                trail = "for outdoor use",
+                content = {
+                    Toggle(on = highContrast, onChange = { onToggleHighContrast() })
+                },
+                inlineTrailing = true,
+            )
+            SettingsRow(
+                label = "Scroll",
+                trail = if (smoothScroll) "SMOOTH" else "SNAP",
+                content = {
+                    SegControl(
+                        options = listOf("Smooth", "Snap"),
+                        selected = if (smoothScroll) "Smooth" else "Snap",
+                        onSelect = { sel ->
+                            if ((sel == "Smooth") != smoothScroll) onToggleSmoothScroll()
+                        },
                     )
                 },
             )
-
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                modifier = Modifier.padding(vertical = 8.dp),
-            )
-
-            // Haptic feedback
-            SettingRow(
-                title = "Haptic feedback",
-                subtitle = "Getaran kecil saat baris berganti",
-                trailing = {
-                    Switch(
-                        checked = hapticEnabled,
-                        onCheckedChange = { onToggleHaptic() },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.primary,
-                            checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        ),
-                    )
+            SettingsRow(
+                label = "Haptic feedback",
+                trail = if (hapticEnabled) "ON" else "OFF",
+                content = {
+                    Toggle(on = hapticEnabled, onChange = { onToggleHaptic() })
                 },
+                inlineTrailing = true,
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
-            SectionHeader(title = "Spotify", icon = Icons.Filled.MusicNote)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Connection status
-            val statusText = when {
-                playing == null -> "Tidak terhubung"
-                playing.isPremium -> "Terhubung sebagai Premium"
-                else -> "Terhubung sebagai Free"
-            }
-            val statusColor = when {
-                playing == null -> MaterialTheme.colorScheme.onSurfaceVariant
-                playing.isPremium -> MaterialTheme.colorScheme.primary
-                else -> MaterialTheme.colorScheme.onSurfaceVariant
-            }
-            SettingRow(
-                title = "Status",
-                subtitle = statusText,
-                trailing = {
-                    if (playing != null) {
-                        Icon(
-                            imageVector = Icons.Filled.CheckCircle,
-                            contentDescription = null,
-                            tint = statusColor,
-                            modifier = Modifier.size(24.dp),
-                        )
-                    }
-                },
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Logout button
-            Button(
-                onClick = onLogout,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                ),
+            // ── 03 SPOTIFY ──
+            SectionHeader(number = "03", title = "Spotify", hint = "Connection")
+            Column(
+                modifier = Modifier.padding(horizontal = SvSpace.s5, vertical = SvSpace.s3),
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Logout,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(modifier = Modifier.size(8.dp))
-                Text(text = "Logout Spotify")
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(SvSpace.s3),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(
+                                when {
+                                    playing == null     -> sv.ink4
+                                    playing.isPremium   -> sv.accent
+                                    else                -> sv.ink3
+                                }
+                            ),
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = when {
+                                playing == null     -> "Tidak terhubung"
+                                playing.isPremium   -> "Premium · Terhubung"
+                                else                -> "Free tier · Terhubung"
+                            },
+                            style = SvType.Body,
+                            color = sv.ink1,
+                        )
+                        Text(
+                            text = when {
+                                playing == null     -> "tap Connect untuk mulai"
+                                playing.isPremium   -> "full playback control"
+                                else                -> "view-only · upgrade untuk control"
+                            },
+                            style = SvType.BodyItalic.copy(fontSize = 13.sp),
+                            color = sv.ink3,
+                        )
+                    }
+                    if (playing != null) {
+                        MonoEyebrow(
+                            text = if (playing.isPremium) "● ACTIVE" else "● VIEW",
+                            color = if (playing.isPremium) sv.accent else sv.ink3,
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(SvSpace.s3))
+                Row(horizontalArrangement = Arrangement.spacedBy(SvSpace.s2)) {
+                    // Logout button
+                    OutlinedActionButton(
+                        label = "LOGOUT",
+                        icon = SvIcons.Logout,
+                        onClick = onLogout,
+                        modifier = Modifier.weight(1f),
+                    )
+                    // Revoke link
+                    OutlinedActionButton(
+                        label = "REVOKE",
+                        icon = SvIcons.External,
+                        onClick = {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse("https://www.spotify.com/account/apps"))
+                                )
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
 
-            // Revoke link
-            Spacer(modifier = Modifier.height(12.dp))
-            LinkRow(
-                text = "Revoke akses sepenuhnya di Spotify Account",
-                subtitle = "spotify.com/account/apps — opens browser",
-                onClick = {
-                    val intent = Intent(
-                        Intent.ACTION_VIEW,
-                        Uri.parse("https://www.spotify.com/account/apps"),
-                    )
-                    runCatching { context.startActivity(intent) }
-                },
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-            SectionHeader(title = "About", icon = Icons.Filled.Info)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            SettingRow(
-                title = "Version",
-                subtitle = BuildConfig.VERSION_NAME,
-                trailing = {},
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            LinkRow(
-                text = "Source code on GitHub",
-                subtitle = "github.com/tektungg/spotivibe-android",
-                onClick = {
-                    val intent = Intent(
-                        Intent.ACTION_VIEW,
-                        Uri.parse("https://github.com/tektungg/spotivibe-android"),
-                    )
-                    runCatching { context.startActivity(intent) }
-                },
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Text(
-                text = "Spotivibe — Code. Vibe. Sing along.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
+            // ── 04 COLOPHON ──
+            SectionHeader(number = "04", title = "Colophon", hint = "About this app")
+            Column(modifier = Modifier.padding(horizontal = SvSpace.s5, vertical = SvSpace.s3)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(SvSpace.s8)) {
+                    MetricColumn(label = "VERSION", value = BuildConfig.VERSION_NAME)
+                    MetricColumn(label = "BUILD", value = currentBuildDate())
+                    MetricColumn(label = "LRCLIB", value = "v3")
+                }
+                Spacer(modifier = Modifier.height(SvSpace.s4))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(SvRadius.r1))
+                        .border(1.dp, sv.rule, RoundedCornerShape(SvRadius.r1))
+                        .clickable {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/tektungg/spotivibe-android"))
+                                )
+                            }
+                        }
+                        .padding(SvSpace.s4),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(SvSpace.s3),
+                        ) {
+                            Icon(
+                                imageVector = SvIcons.Github,
+                                contentDescription = null,
+                                tint = sv.ink2,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Text(
+                                text = "github.com/tektungg/spotivibe-android",
+                                style = SvType.Mono.copy(fontSize = 13.sp),
+                                color = sv.ink1,
+                            )
+                        }
+                        Icon(
+                            imageVector = SvIcons.External,
+                            contentDescription = null,
+                            tint = sv.ink2,
+                            modifier = Modifier.size(12.dp),
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(SvSpace.s5))
+                Text(
+                    text = "Code. Vibe. Sing along.",
+                    style = SvType.BodyItalic,
+                    color = sv.ink3,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(modifier = Modifier.height(SvSpace.s8))
+            }
         }
     }
 }
 
 @Composable
-private fun SectionHeader(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp),
-        )
-        Spacer(modifier = Modifier.size(8.dp))
-        Text(
-            text = title.uppercase(),
-            style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold,
-        )
-    }
-}
-
-@Composable
-private fun SettingRow(
-    title: String,
-    subtitle: String? = null,
-    trailing: @Composable () -> Unit = {},
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier
-            .weight(1f)
-            .padding(end = 16.dp)) {
+private fun SectionHeader(number: String, title: String, hint: String? = null) {
+    val sv = LocalSvColors.current
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = SvSpace.s5, end = SvSpace.s5, top = SvSpace.s5, bottom = SvSpace.s3),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(SvSpace.s3),
+        ) {
+            Text(
+                text = number,
+                style = SvType.MonoTabular.copy(fontSize = 13.sp),
+                color = sv.ink3,
+            )
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground,
+                style = SvType.H2.copy(fontSize = 32.sp, lineHeight = 32.sp),
+                color = sv.ink1,
             )
-            if (subtitle != null) {
+            Spacer(modifier = Modifier.weight(1f))
+            if (hint != null) {
                 Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = hint,
+                    style = SvType.BodyItalic.copy(fontSize = 12.sp),
+                    color = sv.ink3,
                 )
             }
         }
-        trailing()
     }
 }
 
 @Composable
-private fun LinkRow(
-    text: String,
-    subtitle: String? = null,
-    onClick: () -> Unit,
+private fun SettingsRow(
+    label: String,
+    trail: String? = null,
+    content: @Composable () -> Unit,
+    inlineTrailing: Boolean = false,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    val sv = LocalSvColors.current
+    HairlineRule(soft = true)
+    Column(
+        modifier = Modifier.padding(horizontal = SvSpace.s5, vertical = SvSpace.s3),
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = text,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.primary,
+                text = label,
+                style = SvType.H3.copy(fontSize = 18.sp, lineHeight = 22.sp),
+                color = sv.ink1,
+                modifier = Modifier.weight(1f),
             )
-            if (subtitle != null) {
+            if (inlineTrailing) {
+                content()
+            } else if (trail != null) {
                 Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = trail,
+                    style = SvType.MonoTabular.copy(fontSize = 12.sp),
+                    color = sv.ink3,
                 )
             }
         }
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
+        if (!inlineTrailing) {
+            Spacer(modifier = Modifier.height(SvSpace.s2))
+            content()
+        }
+    }
+}
+
+@Composable
+private fun SliderUnitLabel(text: String) {
+    val sv = LocalSvColors.current
+    Text(
+        text = text,
+        style = SvType.Mono.copy(fontSize = 10.sp, letterSpacing = 1.sp),
+        color = sv.ink4,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+}
+
+@Composable
+private fun OutlinedActionButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val sv = LocalSvColors.current
+    Box(
+        modifier = modifier
+            .height(44.dp)
+            .clip(RoundedCornerShape(SvRadius.r1))
+            .background(Color.Transparent)
+            .border(1.dp, sv.rule, RoundedCornerShape(SvRadius.r1))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(SvSpace.s2),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = sv.ink2,
+                modifier = Modifier.size(14.dp),
+            )
+            Text(
+                text = label,
+                style = SvType.MonoUp,
+                color = sv.ink1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun MetricColumn(label: String, value: String) {
+    val sv = LocalSvColors.current
+    Column {
+        MonoEyebrow(text = label, color = sv.ink3)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = value,
+            style = SvType.H2.copy(fontSize = 28.sp, lineHeight = 28.sp, letterSpacing = (-0.3).sp),
+            color = sv.ink1,
         )
     }
 }
 
-private fun getFontDescription(size: Int): String = when {
-    size <= 14 -> "Kecil"
-    size <= 18 -> "Normal"
-    size <= 24 -> "Besar"
-    size <= 36 -> "Sangat besar"
-    else -> "Karaoke"
+private fun fontSizeDescription(size: Int): String = when {
+    size <= 14 -> "small"
+    size <= 18 -> "normal"
+    size <= 24 -> "large"
+    size <= 36 -> "huge"
+    else       -> "karaoke"
+}
+
+private fun currentBuildDate(): String {
+    val cal = java.util.Calendar.getInstance()
+    val year = cal.get(java.util.Calendar.YEAR)
+    val month = cal.get(java.util.Calendar.MONTH) + 1
+    return "%d.%02d".format(year, month)
 }
