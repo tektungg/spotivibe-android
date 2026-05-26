@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.LightMode
@@ -85,6 +86,7 @@ fun NowPlayingScreen(
     onToggleOverlay: () -> Unit,
     onToggleDarkMode: () -> Unit,
     onBumpFontSize: (Int) -> Unit,
+    onLogout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val track = state.track
@@ -158,6 +160,7 @@ fun NowPlayingScreen(
                     onToggleDarkMode = onToggleDarkMode,
                     onBumpFontSize = onBumpFontSize,
                     onEnterKaraoke = { karaokeMode = true },
+                    onLogout = onLogout,
                     modifier = Modifier.width(180.dp).fillMaxHeight(),
                 )
 
@@ -189,6 +192,7 @@ fun NowPlayingScreen(
                 onToggleDarkMode = onToggleDarkMode,
                 onBumpFontSize = onBumpFontSize,
                 onEnterKaraoke = { karaokeMode = true },
+                onLogout = onLogout,
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -261,6 +265,7 @@ private fun LandscapeSidebar(
     onToggleDarkMode: () -> Unit,
     onBumpFontSize: (Int) -> Unit,
     onEnterKaraoke: () -> Unit,
+    onLogout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -355,6 +360,7 @@ private fun LandscapeSidebar(
                 onToggleDarkMode = onToggleDarkMode,
                 onBumpFontSize = onBumpFontSize,
                 onEnterKaraoke = onEnterKaraoke,
+                onLogout = onLogout,
             )
         }
     }
@@ -376,6 +382,7 @@ private fun HeaderArea(
     onToggleDarkMode: () -> Unit,
     onBumpFontSize: (Int) -> Unit,
     onEnterKaraoke: () -> Unit,
+    onLogout: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -470,6 +477,7 @@ private fun HeaderArea(
                 onToggleDarkMode = onToggleDarkMode,
                 onBumpFontSize = onBumpFontSize,
                 onEnterKaraoke = onEnterKaraoke,
+                onLogout = onLogout,
             )
         }
     }
@@ -486,6 +494,7 @@ private fun SettingsOverflowMenu(
     onToggleDarkMode: () -> Unit,
     onBumpFontSize: (Int) -> Unit,
     onEnterKaraoke: () -> Unit,
+    onLogout: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -588,6 +597,29 @@ private fun SettingsOverflowMenu(
                     }
                 }
             }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            // Logout — destructive action, kasih warna error
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = "Logout Spotify",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Logout,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp),
+                    )
+                },
+                onClick = {
+                    onLogout()
+                    expanded = false
+                },
+            )
         }
     }
 }

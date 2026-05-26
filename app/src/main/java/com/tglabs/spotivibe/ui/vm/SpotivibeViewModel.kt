@@ -97,6 +97,21 @@ class SpotivibeViewModel(
 
     fun disconnect() = connection.disconnect()
 
+    /**
+     * Local logout — clear authorized flag + access token + disconnect AppRemote.
+     * NOTE: Tidak revoke authorization di Spotify side. Spotify masih simpan
+     * grant untuk Client ID + signing key — next Connect = silent re-auth.
+     * Untuk benar-benar revoke: spotify.com → Account → Apps → Remove Access.
+     */
+    fun logout() {
+        viewModelScope.launch {
+            preferencesRepository.setSpotifyAuthorized(false)
+            preferencesRepository.clearSpotifyAccessToken()
+            preferencesRepository.setOverlayEnabled(false)
+            connection.disconnect()
+        }
+    }
+
     fun togglePlayPause() {
         val state = uiState.value
         if (state is UiState.Playing) {

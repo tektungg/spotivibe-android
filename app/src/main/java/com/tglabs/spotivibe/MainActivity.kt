@@ -115,6 +115,7 @@ class MainActivity : ComponentActivity() {
                     onToggleOverlay = { handleOverlayToggle() },
                     onToggleDarkMode = { viewModel.toggleDarkMode() },
                     onBumpFontSize = { delta -> viewModel.bumpFontSize(delta) },
+                    onLogout = { viewModel.logout() },
                 )
             }
         }
