@@ -29,8 +29,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.SyncedLine
+import com.tglabs.spotivibe.domain.SyncedWord
 import com.tglabs.spotivibe.ui.theme.TextDim
 import com.tglabs.spotivibe.ui.theme.TextSecondary
 
@@ -94,9 +98,10 @@ private fun SyncedLyricsView(
 
         itemsIndexed(lines, key = { _, line -> line.timeMs }) { idx, line ->
             LyricLineItem(
-                text = line.text,
+                line = line,
                 romaji = romaji[line.timeMs],
                 isActive = idx == activeIndex,
+                progressMs = progressMs,
                 accent = accent,
                 fontSize = fontSize,
             )
@@ -108,14 +113,13 @@ private fun SyncedLyricsView(
 
 @Composable
 private fun LyricLineItem(
-    text: String,
+    line: SyncedLine,
     romaji: String?,
     isActive: Boolean,
+    progressMs: Long,
     accent: Color,
     fontSize: Int,
 ) {
-    // Theme-aware dim color — pakai onBackground dengan alpha rendah,
-    // works untuk dark (light text dim) dan light (dark text dim).
     val dimColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
     val color by animateColorAsState(
         targetValue = if (isActive) accent else dimColor,
@@ -133,6 +137,8 @@ private fun LyricLineItem(
         label = "romajiColor",
     )
 
+    val hasWordTiming = line.words.isNotEmpty()
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -143,16 +149,29 @@ private fun LyricLineItem(
             },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = text.ifBlank { "♪" },
-            style = MaterialTheme.typography.bodyLarge.copy(
-                fontSize = fontSize.sp,
-                lineHeight = (fontSize + 7).sp,
-            ),
-            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
-            color = color,
-            textAlign = TextAlign.Center,
-        )
+        if (isActive && hasWordTiming) {
+            // Per-word karaoke: render AnnotatedString dengan highlight per-kata
+            // berdasarkan progressMs. Kata yang sudah di-sing pakai accent full,
+            // kata yang belum sing pakai dim (kayak teleprompter karaoke).
+            WordHighlightText(
+                words = line.words,
+                progressMs = progressMs,
+                activeColor = accent,
+                pendingColor = dimColor,
+                fontSize = fontSize,
+            )
+        } else {
+            Text(
+                text = line.text.ifBlank { "♪" },
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontSize = fontSize.sp,
+                    lineHeight = (fontSize + 7).sp,
+                ),
+                fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
+                color = color,
+                textAlign = TextAlign.Center,
+            )
+        }
         if (!romaji.isNullOrBlank()) {
             val romajiSize = (fontSize - 4).coerceAtLeast(10)
             Text(
@@ -167,6 +186,42 @@ private fun LyricLineItem(
             )
         }
     }
+}
+
+/**
+ * Render baris lirik dengan highlight per-kata. Kata yang `timeMs <= progressMs`
+ * di-render dengan activeColor (sudah dinyanyikan), kata sisanya pendingColor.
+ * Pakai AnnotatedString untuk single Text dengan span color berbeda.
+ */
+@Composable
+private fun WordHighlightText(
+    words: List<SyncedWord>,
+    progressMs: Long,
+    activeColor: Color,
+    pendingColor: Color,
+    fontSize: Int,
+) {
+    val annotated = buildAnnotatedString {
+        words.forEach { word ->
+            val sung = word.timeMs <= progressMs
+            withStyle(
+                SpanStyle(
+                    color = if (sung) activeColor else pendingColor,
+                    fontWeight = if (sung) FontWeight.SemiBold else FontWeight.Normal,
+                )
+            ) {
+                append(word.text)
+            }
+        }
+    }
+    Text(
+        text = annotated,
+        style = MaterialTheme.typography.bodyLarge.copy(
+            fontSize = fontSize.sp,
+            lineHeight = (fontSize + 7).sp,
+        ),
+        textAlign = TextAlign.Center,
+    )
 }
 
 @Composable

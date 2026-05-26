@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
@@ -112,6 +113,20 @@ fun NowPlayingScreen(
 
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
+    // Karaoke fullscreen — local state, tap X exit. Tidak persist antar session.
+    var karaokeMode by remember { mutableStateOf(false) }
+    if (karaokeMode) {
+        KaraokeView(
+            lyrics = state.lyrics,
+            progressMs = effectiveProgressMs,
+            accent = accent,
+            romaji = state.romaji,
+            fontSize = state.lyricsFontSize,
+            onExit = { karaokeMode = false },
+        )
+        return
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -142,6 +157,7 @@ fun NowPlayingScreen(
                     onToggleOverlay = onToggleOverlay,
                     onToggleDarkMode = onToggleDarkMode,
                     onBumpFontSize = onBumpFontSize,
+                    onEnterKaraoke = { karaokeMode = true },
                     modifier = Modifier.width(180.dp).fillMaxHeight(),
                 )
 
@@ -172,6 +188,7 @@ fun NowPlayingScreen(
                 onToggleOverlay = onToggleOverlay,
                 onToggleDarkMode = onToggleDarkMode,
                 onBumpFontSize = onBumpFontSize,
+                onEnterKaraoke = { karaokeMode = true },
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -243,6 +260,7 @@ private fun LandscapeSidebar(
     onToggleOverlay: () -> Unit,
     onToggleDarkMode: () -> Unit,
     onBumpFontSize: (Int) -> Unit,
+    onEnterKaraoke: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -336,6 +354,7 @@ private fun LandscapeSidebar(
                 fontSize = fontSize,
                 onToggleDarkMode = onToggleDarkMode,
                 onBumpFontSize = onBumpFontSize,
+                onEnterKaraoke = onEnterKaraoke,
             )
         }
     }
@@ -356,6 +375,7 @@ private fun HeaderArea(
     onToggleOverlay: () -> Unit,
     onToggleDarkMode: () -> Unit,
     onBumpFontSize: (Int) -> Unit,
+    onEnterKaraoke: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -449,14 +469,15 @@ private fun HeaderArea(
                 fontSize = fontSize,
                 onToggleDarkMode = onToggleDarkMode,
                 onBumpFontSize = onBumpFontSize,
+                onEnterKaraoke = onEnterKaraoke,
             )
         }
     }
 }
 
 /**
- * Compact "More" menu — anchor button + dropdown dengan theme toggle dan
- * font size +/− inline. Mengurangi clutter header dari 5 icons jadi 3.
+ * Compact "More" menu — anchor button + dropdown dengan theme toggle, font size,
+ * dan karaoke fullscreen. Mengurangi clutter header.
  */
 @Composable
 private fun SettingsOverflowMenu(
@@ -464,6 +485,7 @@ private fun SettingsOverflowMenu(
     fontSize: Int,
     onToggleDarkMode: () -> Unit,
     onBumpFontSize: (Int) -> Unit,
+    onEnterKaraoke: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -477,6 +499,28 @@ private fun SettingsOverflowMenu(
             onDismissRequest = { expanded = false },
             modifier = Modifier.background(MaterialTheme.colorScheme.surface),
         ) {
+            // Karaoke fullscreen
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        text = "Karaoke fullscreen",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.Fullscreen,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(20.dp),
+                    )
+                },
+                onClick = {
+                    onEnterKaraoke()
+                    expanded = false
+                },
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
             // Theme toggle item
             DropdownMenuItem(
                 text = {
