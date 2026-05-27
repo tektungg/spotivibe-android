@@ -410,7 +410,11 @@ class SpotivibeNotificationService : Service() {
         private const val REQ_PLAY_PAUSE = 2
         private const val REQ_NEXT = 3
 
-        private const val ACCENT_COLOR: Int = 0xFFB8A4FF.toInt()
+        // Editorial coral accent — matches AccentCoralDark in ui/theme/Color.kt.
+        // Notif chrome ditint dengan ini (icon ring, sub-text emphasis).
+        // Idealnya dynamic per-track tapi RemoteViews API tidak support live
+        // recolor easily — biarkan static brand accent saja.
+        private const val ACCENT_COLOR: Int = 0xFFEC6A5C.toInt()
 
         fun start(context: Context) {
             val intent = Intent(context, SpotivibeNotificationService::class.java)

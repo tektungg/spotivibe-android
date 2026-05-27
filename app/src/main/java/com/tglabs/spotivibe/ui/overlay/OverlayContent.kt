@@ -17,14 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -49,24 +42,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.NowPlaying
-import com.tglabs.spotivibe.ui.theme.AccentDefault
-import com.tglabs.spotivibe.ui.theme.BorderHairline
-import com.tglabs.spotivibe.ui.theme.TextDim
-import com.tglabs.spotivibe.ui.theme.TextPrimary
-import com.tglabs.spotivibe.ui.theme.TextSecondary
+import com.tglabs.spotivibe.ui.theme.LocalSvColors
+import com.tglabs.spotivibe.ui.theme.SvIcons
+import com.tglabs.spotivibe.ui.theme.SvRadius
+import com.tglabs.spotivibe.ui.theme.SvSpace
+import com.tglabs.spotivibe.ui.theme.SvType
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Background hampir solid biar tetap legible di atas app apapun, tapi tetap
- * sedikit transparan untuk hint glass effect. Nilai dipilih 95% opaque dari
- * BackgroundDeep (#0A0E1A).
- */
-private val OverlayBackground = Color(0xF20A0E1A)
-
-/**
- * Root Composable overlay. Mengobservasi flows dari PlaybackController dan
- * mendelegasikan drag/tap ke caller (OverlayManager). Punya dua state UI:
- * mini bar (pill) atau expanded card.
+ * Editorial overlay — hairline 1px border, square corners (r2 = 6dp).
+ * Drag handle row dengan mono "SPOTIVIBE · NOW" eyebrow.
+ * Two states: mini bar (collapsed) atau expanded card.
  */
 @Composable
 fun OverlayContent(
@@ -122,13 +108,8 @@ fun OverlayContent(
 }
 
 /**
- * Modifier yang membedakan drag vs tap dalam satu gesture.
- * - Kalau total displacement kurang dari [tapThresholdPx] saat finger lifted → onTap()
- * - Selama drag berlangsung → emit onDrag(dx, dy) per frame
- *
- * Kenapa custom (bukan combine clickable + draggable)? Karena clickable steal
- * pointer setelah long-press window, dan kombinasinya sering bikin drag terasa
- * "lengket" di pertama frame. Implementasi manual ini terasa lebih responsif.
+ * Drag-or-tap gesture differentiator (preserved dari versi sebelumnya).
+ * Total drag < threshold = tap; else = drag.
  */
 private fun Modifier.dragOrTap(
     tapThresholdPx: Float = 16f,
@@ -138,11 +119,9 @@ private fun Modifier.dragOrTap(
 ): Modifier = pointerInput(Unit) {
     awaitPointerEventScope {
         while (true) {
-            // Tunggu first down
             val down = awaitPointerEvent()
             if (down.changes.none { it.changedToDown() }) continue
             var totalDrag = 0f
-            // Loop sampai semua finger lifted
             while (true) {
                 val event = awaitPointerEvent()
                 val change: PointerInputChange = event.changes.firstOrNull() ?: break
@@ -154,20 +133,14 @@ private fun Modifier.dragOrTap(
                 }
                 if (event.changes.none { it.pressed }) break
             }
-            if (totalDrag < tapThresholdPx) {
-                onTap()
-            } else {
-                // User drag dan release — caller bisa snap ke edge atau settle
-                onDragEnd()
-            }
+            if (totalDrag < tapThresholdPx) onTap() else onDragEnd()
         }
     }
 }
 
-private fun PointerInputChange.changedToDown(): Boolean =
-    pressed && !previousPressed
+private fun PointerInputChange.changedToDown(): Boolean = pressed && !previousPressed
 
-/** Mini bar: 280dp × 48dp pill horizontal. Cover + active lyric + play/pause. */
+/** Mini bar — full-width, ~52dp tall (64dp if romaji), hairline border. */
 @Composable
 private fun MiniBar(
     track: NowPlaying?,
@@ -181,108 +154,90 @@ private fun MiniBar(
     onClose: () -> Unit,
     onPlayPause: () -> Unit,
 ) {
+    val sv = LocalSvColors.current
     val activeLine = lyrics?.synced?.getOrNull(idx)
     val activeText = activeLine?.text
         ?: lyrics?.plain?.lineSequence()?.firstOrNull { it.isNotBlank() }
         ?: track?.title.orEmpty()
     val activeRomaji = activeLine?.let { romaji[it.timeMs] }?.takeIf { it.isNotBlank() }
 
-    // Auto-grow height saat ada romaji — 48dp default, 64dp dengan romaji
-    val barHeight = if (activeRomaji != null) 64.dp else 48.dp
-
-    // Full-width dengan padding 16dp dari edge layar (outer wrapper Box).
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = SvSpace.s4),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(barHeight)
-                .clip(RoundedCornerShape(24.dp))
-                .background(OverlayBackground)
-                .border(1.dp, BorderHairline, RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(SvRadius.r2))
+                .background(sv.bg0.copy(alpha = 0.95f))
+                .border(1.dp, sv.rule, RoundedCornerShape(SvRadius.r2))
                 .dragOrTap(onDrag = onDrag, onTap = onExpand, onDragEnd = onDragEnd)
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = SvSpace.s3, vertical = SvSpace.s2),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(SvSpace.s3),
         ) {
-        CoverThumb(bitmap = bitmap, size = if (activeRomaji != null) 40 else 32)
+            CoverThumb(bitmap = bitmap, size = if (activeRomaji != null) 40 else 32)
 
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = activeText.ifBlank { "♪ Spotivibe" },
-                color = if (activeText.isBlank()) TextDim else TextPrimary,
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (activeRomaji != null) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = activeRomaji,
-                    color = TextSecondary,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Normal,
+                    text = activeText.ifBlank { "♪ Spotivibe" },
+                    style = SvType.LyricPassive.copy(
+                        fontSize = 14.sp,
+                        lineHeight = 18.sp,
+                        fontWeight = FontWeight.Medium,
+                    ),
+                    color = if (activeText.isBlank()) sv.ink4 else sv.ink1,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (activeRomaji != null) {
+                    Text(
+                        text = activeRomaji,
+                        style = SvType.Romanization.copy(fontSize = 11.sp),
+                        color = sv.accentDim,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+
+            // Mini play/pause — accent square (consume tap)
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(sv.accent.copy(alpha = 0.15f))
+                    .consumeTap(onTap = onPlayPause),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = if (track?.isPaused != false) SvIcons.Play else SvIcons.Pause,
+                    contentDescription = if (track?.isPaused != false) "Play" else "Pause",
+                    tint = sv.accent,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+
+            // Close
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .consumeTap(onTap = onClose),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = SvIcons.Close,
+                    contentDescription = "Close overlay",
+                    tint = sv.ink3,
+                    modifier = Modifier.size(16.dp),
+                )
             }
         }
-
-        // Mini play/pause — stopPropagation supaya tap di tombol tidak expand
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .pointerInput(Unit) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val down = awaitPointerEvent()
-                            if (down.changes.any { it.changedToDown() }) {
-                                down.changes.forEach { it.consume() }
-                                // Tunggu sampai release tanpa drag meaningful
-                                var moved = 0f
-                                while (true) {
-                                    val ev = awaitPointerEvent()
-                                    moved += ev.changes.firstOrNull()?.positionChange()?.getDistance() ?: 0f
-                                    if (ev.changes.none { it.pressed }) break
-                                }
-                                if (moved < 16f) onPlayPause()
-                            }
-                        }
-                    }
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = if (track?.isPaused != false) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                contentDescription = if (track?.isPaused != false) "Play" else "Pause",
-                tint = AccentDefault,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-
-        // Close (X) — disable overlay sepenuhnya
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .consumeTap(onTap = onClose),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Close,
-                contentDescription = "Close overlay",
-                tint = TextSecondary,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-        } // close Row
-    } // close outer Box (fillMaxWidth + padding)
+    }
 }
 
-/** Expanded card: full-width dengan padding 16dp. Cover, metadata, 3 baris lirik + romaji, controls. */
+/** Expanded card — magazine-style with mono eyebrow, drag handle, transport. */
 @Composable
 private fun ExpandedCard(
     track: NowPlaying?,
@@ -298,6 +253,7 @@ private fun ExpandedCard(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
 ) {
+    val sv = LocalSvColors.current
     val synced = lyrics?.synced.orEmpty()
     val prevEntry = synced.getOrNull(idx - 1)
     val curEntry = synced.getOrNull(idx)
@@ -312,147 +268,174 @@ private fun ExpandedCard(
     val curRomaji = curEntry?.let { romaji[it.timeMs] }?.takeIf { it.isNotBlank() }
     val nextRomaji = nextEntry?.let { romaji[it.timeMs] }?.takeIf { it.isNotBlank() }
 
-    // Outer wrapper: full-width dengan padding 16dp dari edge layar
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = SvSpace.s4),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
-                .background(OverlayBackground)
-                .border(1.dp, BorderHairline, RoundedCornerShape(20.dp))
-                // Drag area: seluruh card draggable; tombol di dalam consume event sendiri
-                .dragOrTap(onDrag = onDrag, onTap = onCollapse, onDragEnd = onDragEnd)
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .clip(RoundedCornerShape(SvRadius.r2))
+                .background(sv.bg0.copy(alpha = 0.96f))
+                .border(1.dp, sv.rule, RoundedCornerShape(SvRadius.r2))
+                .dragOrTap(onDrag = onDrag, onTap = onCollapse, onDragEnd = onDragEnd),
         ) {
-        // Header row: cover + title/artist + close
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            CoverThumb(bitmap = bitmap, size = 60)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = track?.title.orEmpty().ifBlank { "Spotivibe" },
-                    color = TextPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = track?.artist.orEmpty().ifBlank { "—" },
-                    color = TextSecondary,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            ControlButton(
-                onClick = onClose,
-                size = 32,
+            // ── Drag handle row: dot dots + mono eyebrow + close ──
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = SvSpace.s3, vertical = SvSpace.s2),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Close,
-                    contentDescription = "Close overlay",
-                    tint = TextSecondary,
-                    modifier = Modifier.size(18.dp),
+                // Drag visual indicator (3 dots horizontal)
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    repeat(3) {
+                        Box(
+                            modifier = Modifier
+                                .size(3.dp)
+                                .clip(CircleShape)
+                                .background(sv.ink4),
+                        )
+                    }
+                }
+                Text(
+                    text = "SPOTIVIBE · NOW",
+                    style = SvType.MonoUp.copy(fontSize = 10.sp),
+                    color = sv.ink3,
                 )
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .consumeTap(onTap = onClose),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = SvIcons.Close,
+                        contentDescription = "Close overlay",
+                        tint = sv.ink3,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
             }
-        }
 
-        // Lyrics — 3 lines (prev dim, current accent, next dim) dengan romaji per-baris
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            LyricLineGroup(
-                main = prevLine.ifBlank { " " },
-                romaji = prevRomaji,
-                mainColor = TextDim,
-                romajiColor = TextDim,
-                mainFontSize = 12,
-                romajiFontSize = 10,
-                bold = false,
-            )
-            LyricLineGroup(
-                main = curLine.ifBlank { "♪" },
-                romaji = curRomaji,
-                mainColor = AccentDefault,
-                romajiColor = AccentDefault.copy(alpha = 0.75f),
-                mainFontSize = 14,
-                romajiFontSize = 11,
-                bold = true,
-            )
-            LyricLineGroup(
-                main = nextLine.ifBlank { " " },
-                romaji = nextRomaji,
-                mainColor = TextDim,
-                romajiColor = TextDim,
-                mainFontSize = 12,
-                romajiFontSize = 10,
-                bold = false,
-            )
-        }
-
-        Spacer(modifier = Modifier.height(2.dp))
-
-        // Controls row
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            ControlButton(onClick = onPrevious, size = 40) {
-                Icon(
-                    imageVector = Icons.Filled.SkipPrevious,
-                    contentDescription = "Previous",
-                    tint = TextPrimary,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
+            // Hairline rule under handle
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(AccentDefault)
-                    .consumeTap(onTap = onPlayPause),
-                contentAlignment = Alignment.Center,
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(sv.ruleSoft),
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(SvSpace.s3),
+                verticalArrangement = Arrangement.spacedBy(SvSpace.s2),
             ) {
-                Icon(
-                    imageVector = if (track?.isPaused != false) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                    contentDescription = if (track?.isPaused != false) "Play" else "Pause",
-                    tint = Color.Black,
-                    modifier = Modifier.size(26.dp),
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            ControlButton(onClick = onNext, size = 40) {
-                Icon(
-                    imageVector = Icons.Filled.SkipNext,
-                    contentDescription = "Next",
-                    tint = TextPrimary,
-                    modifier = Modifier.size(24.dp),
-                )
+                // ── Header row: cover + title/artist ──
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(SvSpace.s3),
+                ) {
+                    CoverThumb(bitmap = bitmap, size = 52)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = track?.title.orEmpty().ifBlank { "Spotivibe" },
+                            style = SvType.H3.copy(fontSize = 15.sp, lineHeight = 18.sp),
+                            color = sv.ink1,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = track?.artist.orEmpty().ifBlank { "—" },
+                            style = SvType.BodyItalic.copy(fontSize = 12.sp),
+                            color = sv.ink3,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+
+                // ── Lyrics — 3 lines magazine style ──
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(SvSpace.s1),
+                ) {
+                    OverlayLyricLine(
+                        text = prevLine.ifBlank { " " },
+                        romaji = prevRomaji,
+                        state = OverlayLineState.Inactive,
+                    )
+                    OverlayLyricLine(
+                        text = curLine.ifBlank { "♪" },
+                        romaji = curRomaji,
+                        state = OverlayLineState.Active,
+                    )
+                    OverlayLyricLine(
+                        text = nextLine.ifBlank { " " },
+                        romaji = nextRomaji,
+                        state = OverlayLineState.Inactive,
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(SvSpace.s1))
+
+                // ── Transport ──
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    OverlayControlButton(onClick = onPrevious, size = 36) {
+                        Icon(
+                            imageVector = SvIcons.Prev,
+                            contentDescription = "Previous",
+                            tint = sv.ink2,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(SvSpace.s4))
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(sv.accent)
+                            .consumeTap(onTap = onPlayPause),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = if (track?.isPaused != false) SvIcons.Play else SvIcons.Pause,
+                            contentDescription = if (track?.isPaused != false) "Play" else "Pause",
+                            tint = sv.accentInk,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(SvSpace.s4))
+                    OverlayControlButton(onClick = onNext, size = 36) {
+                        Icon(
+                            imageVector = SvIcons.Next,
+                            contentDescription = "Next",
+                            tint = sv.ink2,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
             }
         }
-        } // close Column (card)
-    } // close outer Box (fillMaxWidth + padding)
+    }
 }
 
 @Composable
 private fun CoverThumb(bitmap: Bitmap?, size: Int) {
+    val sv = LocalSvColors.current
     Box(
         modifier = Modifier
             .size(size.dp)
-            .clip(RoundedCornerShape((size / 6).dp))
-            .background(Color(0x14FFFFFF)),
+            .clip(RoundedCornerShape(SvRadius.r1))
+            .background(sv.bg2),
         contentAlignment = Alignment.Center,
     ) {
         if (bitmap != null) {
@@ -463,40 +446,45 @@ private fun CoverThumb(bitmap: Bitmap?, size: Int) {
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
-            Text(text = "♪", color = AccentDefault, fontSize = (size / 2).sp)
+            Text(
+                text = "♪",
+                style = SvType.H3.copy(fontSize = (size / 2).sp),
+                color = sv.accent,
+            )
         }
     }
 }
 
-/**
- * Render baris lirik original + romaji (kalau ada) sebagai sebuah group.
- * Aktif vs non-aktif diatur dari luar via warna + ukuran font.
- */
+private enum class OverlayLineState { Active, Inactive }
+
 @Composable
-private fun LyricLineGroup(
-    main: String,
+private fun OverlayLyricLine(
+    text: String,
     romaji: String?,
-    mainColor: Color,
-    romajiColor: Color,
-    mainFontSize: Int,
-    romajiFontSize: Int,
-    bold: Boolean,
+    state: OverlayLineState,
 ) {
+    val sv = LocalSvColors.current
+    val mainColor = if (state == OverlayLineState.Active) sv.accent else sv.ink4
+    val mainSize = if (state == OverlayLineState.Active) 15 else 13
+    val romaSize = if (state == OverlayLineState.Active) 12 else 10
+
     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
         Text(
-            text = main,
+            text = text,
+            style = if (state == OverlayLineState.Active) {
+                SvType.LyricActive.copy(fontSize = mainSize.sp, lineHeight = (mainSize + 4).sp)
+            } else {
+                SvType.LyricPassive.copy(fontSize = mainSize.sp, lineHeight = (mainSize + 4).sp)
+            },
             color = mainColor,
-            fontSize = mainFontSize.sp,
-            fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
         if (!romaji.isNullOrBlank()) {
             Text(
                 text = romaji,
-                color = romajiColor,
-                fontSize = romajiFontSize.sp,
-                fontStyle = FontStyle.Italic,
+                style = SvType.Romanization.copy(fontSize = romaSize.sp, fontStyle = FontStyle.Italic),
+                color = if (state == OverlayLineState.Active) sv.accentDim else sv.ink4,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -504,12 +492,8 @@ private fun LyricLineGroup(
     }
 }
 
-/**
- * Tombol kontrol yang consume gesture sendiri supaya gak ikut nge-drag parent.
- * IconButton biasa di pakai di dalam draggable area sering ditelan drag detector.
- */
 @Composable
-private fun ControlButton(
+private fun OverlayControlButton(
     onClick: () -> Unit,
     size: Int,
     content: @Composable () -> Unit,
@@ -525,10 +509,6 @@ private fun ControlButton(
     }
 }
 
-/**
- * Modifier yang consume semua pointer event dan call onTap kalau total drag kecil.
- * Mencegah gesture bocor ke drag detector di parent.
- */
 private fun Modifier.consumeTap(onTap: () -> Unit): Modifier = pointerInput(Unit) {
     awaitPointerEventScope {
         while (true) {

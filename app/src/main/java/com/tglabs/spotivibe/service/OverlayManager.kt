@@ -9,6 +9,7 @@ import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.animation.doOnEnd
 import androidx.lifecycle.Lifecycle
@@ -98,19 +99,28 @@ class OverlayManager(
                 setViewTreeViewModelStoreOwner(owner)
                 setViewTreeSavedStateRegistryOwner(owner)
                 setContent {
-                    OverlayContent(
-                        trackFlow = controller.track,
-                        bitmapFlow = controller.albumBitmap,
-                        lyricsFlow = controller.lyrics,
-                        currentLineIndexFlow = controller.currentLineIndex,
-                        romajiFlow = controller.romaji,
-                        onDrag = { dx, dy -> handleDrag(dx, dy) },
-                        onDragEnd = { snapToNearestEdge() },
-                        onPlayPause = { handlePlayPause() },
-                        onNext = { handleNext() },
-                        onPrevious = { handlePrevious() },
-                        onClose = onCloseRequested,
-                    )
+                    // Wrap dengan SpotivibeTheme supaya LocalSvColors tersedia
+                    // di OverlayContent. Accent diread dari controller flow
+                    // — overlay reactive ke ganti track sama seperti app utama.
+                    val accent = controller.accent.collectAsState(initial = null).value
+                    com.tglabs.spotivibe.ui.theme.SpotivibeTheme(
+                        darkTheme = true,
+                        accent = accent,
+                    ) {
+                        OverlayContent(
+                            trackFlow = controller.track,
+                            bitmapFlow = controller.albumBitmap,
+                            lyricsFlow = controller.lyrics,
+                            currentLineIndexFlow = controller.currentLineIndex,
+                            romajiFlow = controller.romaji,
+                            onDrag = { dx, dy -> handleDrag(dx, dy) },
+                            onDragEnd = { snapToNearestEdge() },
+                            onPlayPause = { handlePlayPause() },
+                            onNext = { handleNext() },
+                            onPrevious = { handlePrevious() },
+                            onClose = onCloseRequested,
+                        )
+                    }
                 }
             }
             composeView = view

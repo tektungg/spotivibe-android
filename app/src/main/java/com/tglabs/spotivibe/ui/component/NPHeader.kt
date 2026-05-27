@@ -82,14 +82,20 @@ fun NPHeader(
                 color = sv.ink3,
                 modifier = Modifier.padding(bottom = 2.dp),
             )
+            // Track-change spec: 540ms total. Old fades + slides -20dp over
+            // 0-220ms. New crossfades at delayMillis=180ms, slides +10dp→0
+            // over 360ms. Easing = SvMotion.EaseOut (cubic-bezier 0.16,1,0.3,1).
             AnimatedContent(
                 targetState = title.ifBlank { "Untitled" },
                 transitionSpec = {
-                    (slideInVertically(tween(SvMotion.DurBase, easing = SvMotion.EaseOut)) { it / 3 } +
-                        fadeIn(tween(SvMotion.DurBase)))
+                    (slideInVertically(
+                        tween(360, delayMillis = 180, easing = SvMotion.EaseOut),
+                    ) { it / 3 } + fadeIn(
+                        tween(360, delayMillis = 180, easing = SvMotion.EaseOut),
+                    ))
                         .togetherWith(
-                            slideOutVertically(tween(SvMotion.DurFast)) { -it / 3 } +
-                                fadeOut(tween(SvMotion.DurFast))
+                            slideOutVertically(tween(220, easing = SvMotion.EaseOut)) { -it / 3 } +
+                                fadeOut(tween(220, easing = SvMotion.EaseOut))
                         )
                 },
                 label = "title",
@@ -105,7 +111,8 @@ fun NPHeader(
             AnimatedContent(
                 targetState = artist.ifBlank { "Unknown artist" },
                 transitionSpec = {
-                    fadeIn(tween(SvMotion.DurBase + 100)).togetherWith(fadeOut(tween(SvMotion.DurFast)))
+                    fadeIn(tween(360, delayMillis = 180, easing = SvMotion.EaseOut))
+                        .togetherWith(fadeOut(tween(220, easing = SvMotion.EaseOut)))
                 },
                 label = "artist",
             ) { a ->
