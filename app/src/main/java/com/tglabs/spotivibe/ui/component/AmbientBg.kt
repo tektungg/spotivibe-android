@@ -115,24 +115,29 @@ fun AmbientBg(
         )
 
         // ── Layer 3: vertical gradient veil ──
-        val gradientColors = if (isDark) {
-            listOf(
-                Color.Black.copy(alpha = 0.35f),
-                Color.Black.copy(alpha = 0.55f),
-                Color.Black.copy(alpha = 0.75f),
+        // 4-stop: gelap di TOP (header area readability) + BOTTOM (transport)
+        // dengan bagian tengah (lyrics) lebih terang supaya album art tetap
+        // terlihat. Tanpa top-scrim ini, header susah dibaca saat album art
+        // dominan warna terang.
+        val gradientStops = if (isDark) {
+            arrayOf(
+                0.0f to Color.Black.copy(alpha = 0.62f),  // top — header
+                0.16f to Color.Black.copy(alpha = 0.32f),
+                0.55f to Color.Black.copy(alpha = 0.42f),
+                1.0f to Color.Black.copy(alpha = 0.78f),  // bottom — transport
             )
         } else {
-            // Warm paper-white veil — sv.bg0 with rising alpha
-            listOf(
-                sv.bg0.copy(alpha = 0.55f),
-                sv.bg0.copy(alpha = 0.70f),
-                sv.bg0.copy(alpha = 0.85f),
+            arrayOf(
+                0.0f to sv.bg0.copy(alpha = 0.78f),
+                0.16f to sv.bg0.copy(alpha = 0.55f),
+                0.55f to sv.bg0.copy(alpha = 0.62f),
+                1.0f to sv.bg0.copy(alpha = 0.88f),
             )
         }
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Brush.verticalGradient(gradientColors)),
+                .background(Brush.verticalGradient(colorStops = gradientStops)),
         )
     }
 }

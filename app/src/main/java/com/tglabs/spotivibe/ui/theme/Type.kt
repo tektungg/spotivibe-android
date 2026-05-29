@@ -2,54 +2,48 @@ package com.tglabs.spotivibe.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.googlefonts.Font
-import androidx.compose.ui.text.googlefonts.GoogleFont
 import androidx.compose.ui.unit.sp
 import com.tglabs.spotivibe.R
 
 /**
  * Editorial Magazine design tokens — type layer.
  *
- * Three faces:
- * - InstrumentSerif — display + big editorial headlines
- * - Newsreader     — body lyrics (the hero) + italic light romanization
- * - JetBrainsMono  — uppercase eyebrows + tabular metadata
+ * Three faces, bundled sebagai TTF di res/font/ (BUKAN Google Fonts
+ * downloadable provider — itu sering gagal silent + fallback ke system
+ * font, bikin design tidak match. Bundle = reliable offline + no Play
+ * Services dependency):
+ * - InstrumentSerif — display + big editorial headlines (static TTF)
+ * - Newsreader     — body lyrics (the hero) + italic romanization
+ *                    (variable font; weight axis auto-applied API 26+)
+ * - JetBrainsMono  — uppercase eyebrows + tabular metadata (variable)
  *
- * All three loaded via Google Fonts downloadable provider — no TTF
- * bundled in APK. Provider certs in res/values/font_certs.xml.
- *
- * Fallback: kalau provider request gagal (offline, expired cert), Font
- * loaders auto-fallback ke FontFamily.Serif / Monospace system fonts.
+ * Variable font note: pada minSdk 26 (Android O), Compose otomatis
+ * memetakan FontWeight ke wght axis variable font. Jadi cukup deklarasi
+ * Font(resource, weight) — tidak perlu FontVariation.Settings manual.
  */
 
-private val googleFontsProvider = GoogleFont.Provider(
-    providerAuthority = "com.google.android.gms.fonts",
-    providerPackage = "com.google.android.gms",
-    certificates = R.array.com_google_android_gms_fonts_certs,
-)
-
-private fun gfont(name: String) = GoogleFont(name)
-
 val InstrumentSerif = FontFamily(
-    Font(gfont("Instrument Serif"), googleFontsProvider, FontWeight.Normal),
-    Font(gfont("Instrument Serif"), googleFontsProvider, FontWeight.Normal, FontStyle.Italic),
+    Font(R.font.instrument_serif_regular, FontWeight.Normal),
+    Font(R.font.instrument_serif_italic, FontWeight.Normal, FontStyle.Italic),
 )
 
 val Newsreader = FontFamily(
-    Font(gfont("Newsreader"), googleFontsProvider, FontWeight.Light),
-    Font(gfont("Newsreader"), googleFontsProvider, FontWeight.Light, FontStyle.Italic),
-    Font(gfont("Newsreader"), googleFontsProvider, FontWeight.Normal),
-    Font(gfont("Newsreader"), googleFontsProvider, FontWeight.Medium),
-    Font(gfont("Newsreader"), googleFontsProvider, FontWeight.SemiBold),
+    Font(R.font.newsreader_variable, FontWeight.Light),
+    Font(R.font.newsreader_variable, FontWeight.Normal),
+    Font(R.font.newsreader_variable, FontWeight.Medium),
+    Font(R.font.newsreader_variable, FontWeight.SemiBold),
+    Font(R.font.newsreader_italic_variable, FontWeight.Light, FontStyle.Italic),
+    Font(R.font.newsreader_italic_variable, FontWeight.Normal, FontStyle.Italic),
 )
 
 val JetBrainsMono = FontFamily(
-    Font(gfont("JetBrains Mono"), googleFontsProvider, FontWeight.Normal),
-    Font(gfont("JetBrains Mono"), googleFontsProvider, FontWeight.Medium),
-    Font(gfont("JetBrains Mono"), googleFontsProvider, FontWeight.SemiBold),
+    Font(R.font.jetbrains_mono_variable, FontWeight.Normal),
+    Font(R.font.jetbrains_mono_variable, FontWeight.Medium),
+    Font(R.font.jetbrains_mono_variable, FontWeight.SemiBold),
 )
 
 /**

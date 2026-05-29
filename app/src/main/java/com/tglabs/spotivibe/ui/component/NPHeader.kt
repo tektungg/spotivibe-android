@@ -78,7 +78,10 @@ fun NPHeader(
         // ── Title block ──
         Column(modifier = Modifier.weight(1f)) {
             MonoEyebrow(
-                text = if (album.isNotBlank()) "$album · ${currentYearShort()}" else "NOW PLAYING",
+                // Album sebagai eyebrow. Release year tidak tersedia dari
+                // Spotify App Remote PlayerState (cuma name/artist/album/uri/
+                // duration), jadi tidak ditampilkan daripada hardcode salah.
+                text = album.ifBlank { "NOW PLAYING" },
                 color = sv.ink3,
                 modifier = Modifier.padding(bottom = 2.dp),
             )
@@ -200,9 +203,4 @@ private fun HeaderToggleIcon(
         iconSize = 16.dp,
         tint = if (enabled) sv.accent else sv.ink2,
     )
-}
-
-private fun currentYearShort(): String {
-    val y = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
-    return y.toString()
 }
