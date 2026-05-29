@@ -148,9 +148,14 @@ fun SpotivibeTheme(
     val m3Scheme = if (darkTheme) svColors.toM3DarkScheme() else svColors.toM3LightScheme()
 
     val view = LocalView.current
-    if (!view.isInEditMode) {
+    // Safe cast — SpotivibeTheme juga dipakai di overlay (hosted oleh Service,
+    // BUKAN Activity). Cast paksa ke Activity di sana → ClassCastException
+    // FATAL saat toggle overlay. System bar manipulation hanya relevan di
+    // Activity, jadi skip kalau context bukan Activity.
+    val activity = view.context as? Activity
+    if (!view.isInEditMode && activity != null) {
         SideEffect {
-            val window = (view.context as Activity).window
+            val window = activity.window
             window.statusBarColor = Color.Transparent.toArgb()
             window.navigationBarColor = Color.Transparent.toArgb()
             val insets = WindowCompat.getInsetsController(window, view)

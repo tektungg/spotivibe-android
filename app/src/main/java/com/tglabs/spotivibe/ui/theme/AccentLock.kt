@@ -46,18 +46,21 @@ object AccentLock {
     }
 
     /**
-     * Accent-dim untuk romanization. ARAH dim berbeda per mode:
-     * - Dark: lebih GELAP (recede ke arah dark bg)
-     * - Light: lebih TERANG (recede ke arah paper bg)
-     * Plus chroma dikurangi supaya tidak bersaing dengan active line.
+     * Accent-dim untuk romanization. Harus READABLE tapi lebih redup dari
+     * active line. Versi sebelumnya terlalu gelap (L≈0.515) → teks italic
+     * kecil susah dibaca di dark mode.
+     *
+     * - Dark: L=0.66 (jelas di atas dark bg, masih < active 0.78), chroma
+     *   sedang supaya tetap ke-tie ke accent tanpa silau.
+     * - Light: L=0.62 (sedikit lebih terang dari active 0.55 = kurang
+     *   prominent, tapi tetap kontras di atas paper).
      */
     fun dimOf(accent: Color, dark: Boolean = true): Color {
         val hue = oklchHueOf(accent)
         return if (dark) {
-            oklchToColor(DARK_L * 0.66, DARK_C * 0.62, hue)
+            oklchToColor(0.66, 0.11, hue)
         } else {
-            // Light: naikkan L menuju paper, turunkan chroma.
-            oklchToColor((LIGHT_L + 0.16).coerceAtMost(0.74), LIGHT_C * 0.62, hue)
+            oklchToColor(0.62, 0.10, hue)
         }
     }
 
