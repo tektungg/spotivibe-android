@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -105,12 +106,34 @@ fun NowPlayingTabletScreen(
     val effectiveProgressMs = (rawProgressMs + state.lyricsOffsetMs).coerceAtLeast(0L)
 
     // Selection state (sama dengan portrait)
+    val context = androidx.compose.ui.platform.LocalContext.current
     var selectedTimes by remember(track.id) { mutableStateOf<Set<Long>>(emptySet()) }
     val isSelecting = selectedTimes.isNotEmpty()
     BackHandler(enabled = isSelecting) { selectedTimes = emptySet() }
     val toggleSelect: (Long) -> Unit = { ms ->
         selectedTimes = if (selectedTimes.contains(ms)) selectedTimes - ms
             else if (selectedTimes.size < 5) selectedTimes + ms else selectedTimes
+    }
+    val handleShareSelected: () -> Unit = handleShare@{
+        val synced = state.lyrics?.synced ?: return@handleShare
+        val ordered = synced
+            .filter { it.timeMs in selectedTimes }
+            .sortedBy { it.timeMs }
+            .map { line ->
+                com.tglabs.spotivibe.util.LyricShareCard.Entry(
+                    text = line.text,
+                    romaji = state.romaji[line.timeMs],
+                )
+            }
+        if (ordered.isEmpty()) return@handleShare
+        com.tglabs.spotivibe.util.LyricShareCard.shareLines(
+            context = context,
+            entries = ordered,
+            title = track.title,
+            artist = track.artist,
+            accentArgb = (state.accentColor ?: com.tglabs.spotivibe.ui.theme.AccentDefault).toArgb(),
+        )
+        selectedTimes = emptySet()
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -193,7 +216,7 @@ fun NowPlayingTabletScreen(
                 when {
                     isSelecting -> SelectionActionBar(
                         count = selectedTimes.size,
-                        onShare = { /* handled at portrait flow — tablet keeps share inactive */ },
+                        onShare = handleShareSelected,
                         onCancel = { selectedTimes = emptySet() },
                     )
                     !state.isPremium -> {
@@ -254,14 +277,24 @@ fun NowPlayingTabletScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     MonoEyebrow(text = "LYRICS")
-                    Row(horizontalArrangement = Arrangement.spacedBy(SvSpace.s3)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(SvSpace.s2),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         if (state.canRomanize) {
-                            HairlineIconButton(
-                                onClick = onToggleRomanization,
-                                icon = SvIcons.Check,
-                                contentDescription = "Toggle romanization",
-                                tint = if (state.romanizationEnabled) sv.accent else sv.ink2,
-                            )
+                            // "Rm" text toggle (match portrait header)
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clickable(onClick = onToggleRomanization),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = "Rm",
+                                    style = SvType.Mono.copy(fontSize = 13.sp),
+                                    color = if (state.romanizationEnabled) sv.accent else sv.ink2,
+                                )
+                            }
                         }
                         HairlineIconButton(
                             onClick = onToggleOverlay,

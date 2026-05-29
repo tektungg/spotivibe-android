@@ -10,6 +10,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,6 +59,7 @@ fun NPHeader(
     album: String,
     onRomajiClick: () -> Unit,
     onOverlayClick: () -> Unit,
+    onEnterKaraoke: () -> Unit,
     onMoreClick: () -> Unit,
     modifier: Modifier = Modifier,
     showRomajiIcon: Boolean = true,
@@ -132,15 +134,15 @@ fun NPHeader(
             }
         }
 
-        // ── Icon row ──
+        // ── Icon row ── Rm / overlay / fullscreen / more
         Row(
-            horizontalArrangement = Arrangement.spacedBy(SvSpace.s3),
+            horizontalArrangement = Arrangement.spacedBy(SvSpace.s2),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (showRomajiIcon) {
-                HeaderToggleIcon(
-                    icon = SvIcons.Check,            // placeholder — Rm icon belum dibuat
-                    description = "Toggle romanization",
+                // "Rm" text toggle — ImageVector tidak bisa render teks, jadi
+                // pakai mono Text di hairline button (match design canvas).
+                HeaderRomanizeButton(
                     enabled = romajiEnabled,
                     onClick = onRomajiClick,
                 )
@@ -151,6 +153,12 @@ fun NPHeader(
                 enabled = overlayEnabled,
                 onClick = onOverlayClick,
             )
+            HeaderToggleIcon(
+                icon = SvIcons.Fullscreen,
+                description = "Karaoke fullscreen",
+                enabled = false,
+                onClick = onEnterKaraoke,
+            )
             HairlineIconButton(
                 onClick = onMoreClick,
                 icon = SvIcons.Kebab,
@@ -159,6 +167,26 @@ fun NPHeader(
                 iconSize = 16.dp,
             )
         }
+    }
+}
+
+@Composable
+private fun HeaderRomanizeButton(
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val sv = LocalSvColors.current
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "Rm",
+            style = SvType.Mono.copy(fontSize = 13.sp),
+            color = if (enabled) sv.accent else sv.ink2,
+        )
     }
 }
 

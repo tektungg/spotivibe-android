@@ -116,6 +116,8 @@ fun NowPlayingScreen(
             romaji = state.romaji,
             fontSize = state.lyricsFontSize,
             onExit = { karaokeMode = false },
+            durationMs = track.durationMs,
+            artist = track.artist,
         )
         return
     }
@@ -234,6 +236,7 @@ fun NowPlayingScreen(
                     overlayEnabled = state.overlayEnabled,
                     onRomajiClick = onToggleRomanization,
                     onOverlayClick = onToggleOverlay,
+                    onEnterKaraoke = { karaokeMode = true },
                     onMoreClick = onOpenSettings,
                 )
             }
