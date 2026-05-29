@@ -111,6 +111,10 @@ fun SegControl(
     val sv = LocalSvColors.current
     Row(
         modifier = modifier
+            // clip DULU sebelum border supaya background accent segment aktif
+            // ter-clip ke rounded shape — tanpa ini fill rectangular bocor
+            // keluar di sudut rounded border.
+            .clip(RoundedCornerShape(SvRadius.r1))
             .border(1.dp, sv.rule, RoundedCornerShape(SvRadius.r1)),
     ) {
         options.forEachIndexed { idx, opt ->
