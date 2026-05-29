@@ -125,8 +125,16 @@ fun SpotivibeTheme(
     content: @Composable () -> Unit,
 ) {
     val baseColors = if (darkTheme) DarkSvColors else LightSvColors
-    val activeAccent = accent ?: baseColors.accent
-    val activeAccentDim = accentDim ?: baseColors.accentDim
+    // Re-lock accent ke nilai yang COCOK untuk mode aktif. accent yang masuk
+    // dari controller di-lock dark (carrier hue) — di sini di-relock supaya
+    // dark mode dapat accent terang/vivid, light mode dapat accent gelap/
+    // kontras di paper. accentDim DITURUNKAN dari accent (bukan fallback
+    // coral) — warna romanization ikut hue track + arah dim sesuai mode.
+    val activeAccent = accent?.let { AccentLock.lockedAccent(it, dark = darkTheme) }
+        ?: baseColors.accent
+    val activeAccentDim = accentDim
+        ?: accent?.let { AccentLock.dimOf(it, dark = darkTheme) }
+        ?: baseColors.accentDim
     val activeAccentInk = if (darkTheme) AccentInkDark else AccentInkLight
 
     val svColors = baseColors.copy(

@@ -25,16 +25,19 @@ import kotlin.math.sin
  */
 object AccentLock {
 
-    private const val DARK_L = 0.74
+    // Dark: accent harus terang + vivid biar pop di atas near-black bg.
+    // 0.78 (naik dari 0.74) supaya hue warm/kuning tidak jadi muddy gold.
+    private const val DARK_L = 0.78
     private const val DARK_C = 0.17
+    // Light: accent harus lebih gelap + sedikit lebih saturated biar kontras
+    // di atas paper-white bg.
     private const val LIGHT_L = 0.55
-    private const val LIGHT_C = 0.13
-    private const val DIM_L_FACTOR = 0.68
-    private const val DIM_C_FACTOR = 0.66
+    private const val LIGHT_C = 0.14
 
     /**
      * Lock accent: extract hue dari input color, ganti chroma + lightness
-     * ke nilai target sesuai mode.
+     * ke nilai target sesuai mode. Hue dipertahankan; L+C dikunci supaya
+     * kontras predictable terhadap ink-1 untuk lagu apapun.
      */
     fun lockedAccent(source: Color, dark: Boolean = true): Color {
         val hue = oklchHueOf(source)
@@ -42,11 +45,20 @@ object AccentLock {
         return oklchToColor(l, c, hue)
     }
 
-    /** Same hue as locked accent, lebih gelap + lebih low-chroma. */
+    /**
+     * Accent-dim untuk romanization. ARAH dim berbeda per mode:
+     * - Dark: lebih GELAP (recede ke arah dark bg)
+     * - Light: lebih TERANG (recede ke arah paper bg)
+     * Plus chroma dikurangi supaya tidak bersaing dengan active line.
+     */
     fun dimOf(accent: Color, dark: Boolean = true): Color {
         val hue = oklchHueOf(accent)
-        val (l, c) = if (dark) DARK_L to DARK_C else LIGHT_L to LIGHT_C
-        return oklchToColor(l * DIM_L_FACTOR, c * DIM_C_FACTOR, hue)
+        return if (dark) {
+            oklchToColor(DARK_L * 0.66, DARK_C * 0.62, hue)
+        } else {
+            // Light: naikkan L menuju paper, turunkan chroma.
+            oklchToColor((LIGHT_L + 0.16).coerceAtMost(0.74), LIGHT_C * 0.62, hue)
+        }
     }
 
     // ── OkLCh / OkLab / sRGB conversion math ─────────────────────────
