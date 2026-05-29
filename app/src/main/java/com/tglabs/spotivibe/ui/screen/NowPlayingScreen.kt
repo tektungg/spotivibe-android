@@ -191,6 +191,25 @@ fun NowPlayingScreen(
                 ),
         )
 
+        // ── Control scrim (mirror header) ──
+        // Bottom-anchored gradient supaya transport/banner legible di atas
+        // album art terang. Transparan di atas, bg0 strong di bawah.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+                .align(Alignment.BottomCenter)
+                .background(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0.0f to sv.bg0.copy(alpha = 0f),
+                            0.4f to sv.bg0.copy(alpha = 0.78f),
+                            1.0f to sv.bg0.copy(alpha = 0.92f),
+                        ),
+                    )
+                ),
+        )
+
         // ── Content stack ──
         Column(
             modifier = Modifier
@@ -219,7 +238,7 @@ fun NowPlayingScreen(
                 )
             }
 
-            com.tglabs.spotivibe.ui.component.HairlineRule(soft = true)
+            com.tglabs.spotivibe.ui.component.HairlineRule()
 
             // Lyrics list (mask via padding handles edge fade)
             Box(modifier = Modifier.weight(1f, fill = true).fillMaxWidth()) {
@@ -249,7 +268,7 @@ fun NowPlayingScreen(
                     )
                 }
                 !state.isPremium -> {
-                    com.tglabs.spotivibe.ui.component.HairlineRule(soft = true)
+                    com.tglabs.spotivibe.ui.component.HairlineRule()
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()

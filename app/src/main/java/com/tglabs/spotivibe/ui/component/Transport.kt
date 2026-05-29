@@ -56,7 +56,7 @@ fun Transport(
     val ratio = (progressMs.toFloat() / safeDuration).coerceIn(0f, 1f)
 
     Column(modifier = modifier.fillMaxWidth()) {
-        HairlineRule(soft = true, modifier = Modifier.padding(bottom = SvSpace.s4))
+        HairlineRule(modifier = Modifier.padding(bottom = SvSpace.s4))
 
         // ── Seek row ─────────────────────────────────
         Row(

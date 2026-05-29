@@ -105,7 +105,7 @@ fun SelectionActionBar(
 ) {
     val sv = LocalSvColors.current
     Column(modifier = modifier.fillMaxWidth()) {
-        HairlineRule(soft = true)
+        HairlineRule()
         Row(
             modifier = Modifier
                 .fillMaxWidth()
