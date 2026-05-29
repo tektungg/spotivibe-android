@@ -135,6 +135,18 @@ private fun SyncedView(
     val activeIndex = findActiveIndex(lines, progressMs)
     val context = LocalContext.current
 
+    // Reset scroll ke atas saat KONTEN lirik berubah (ganti lagu). Tanpa ini,
+    // kalau lirik lagu baru preloaded/cached, transisi null→loaded di controller
+    // terjadi dalam 1 frame sehingga SyncedView tidak keluar-masuk composition
+    // dan LazyListState lama (ter-scroll di bawah dari lagu sebelumnya) kebawa.
+    // Hanya reset kalau belum ada active line (intro) — kalau sudah ada,
+    // biarkan efek activeIndex di bawah yang handle supaya tidak double-jump.
+    LaunchedEffect(lines) {
+        if (findActiveIndex(lines, progressMs) < 0) {
+            listState.scrollToItem(0)
+        }
+    }
+
     // Smooth scroll uses spring. Snap mode uses scrollToItem (no anim).
     LaunchedEffect(activeIndex) {
         if (activeIndex >= 0) {
