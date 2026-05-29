@@ -2,6 +2,7 @@ package com.tglabs.spotivibe.ui.screen
 
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -167,6 +168,27 @@ fun NowPlayingScreen(
         AmbientBg(
             bitmap = state.albumBitmap,
             highContrast = state.highContrast,
+        )
+
+        // ── Header scrim ──
+        // Solid-ish gradient di belakang header supaya teks (terutama mono
+        // eyebrow album) tetap legible di atas album art terang + halftone
+        // noise. Tinggi ~180dp menutup status bar + header + hairline rule.
+        // bg0 strong di top, fade transparan ke bawah supaya lyrics tidak
+        // ketutupan.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .background(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0.0f to sv.bg0.copy(alpha = 0.92f),
+                            0.6f to sv.bg0.copy(alpha = 0.78f),
+                            1.0f to sv.bg0.copy(alpha = 0f),
+                        ),
+                    )
+                ),
         )
 
         // ── Content stack ──

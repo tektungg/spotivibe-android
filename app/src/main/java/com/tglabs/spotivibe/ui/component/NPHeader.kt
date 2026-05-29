@@ -81,8 +81,11 @@ fun NPHeader(
                 // Album sebagai eyebrow. Release year tidak tersedia dari
                 // Spotify App Remote PlayerState (cuma name/artist/album/uri/
                 // duration), jadi tidak ditampilkan daripada hardcode salah.
+                // ink2 (bukan ink3) + maxLines 1 supaya tetap legible di atas
+                // album art terang + tidak wrap jadi 2 baris yang berantakan.
                 text = album.ifBlank { "NOW PLAYING" },
-                color = sv.ink3,
+                color = sv.ink2,
+                maxLines = 1,
                 modifier = Modifier.padding(bottom = 2.dp),
             )
             // Track-change spec: 540ms total. Old fades + slides -20dp over

@@ -82,12 +82,15 @@ fun MonoEyebrow(
     text: String,
     modifier: Modifier = Modifier,
     color: Color? = null,
+    maxLines: Int = Int.MAX_VALUE,
 ) {
     val sv = LocalSvColors.current
     Text(
         text = text.uppercase(),
         style = SvType.MonoUp,
         color = color ?: sv.ink3,
+        maxLines = maxLines,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
         modifier = modifier,
     )
 }
