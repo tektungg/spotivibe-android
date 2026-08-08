@@ -224,6 +224,21 @@ tahu kenapa berhenti bergerak.
 
 Tiga lapis: memory LRU 50, file JSON di `cacheDir`, lalu jaringan.
 
+Lapis disk dibatasi **500 entry atau 8 MB**, mana yang lebih dulu tercapai, plus
+buang otomatis apa pun yang lebih tua dari 30 hari. Sebelumnya tidak ada batas
+sama sekali: file hanya terhapus kalau kebetulan dibaca lagi setelah
+kedaluwarsa, jadi lagu yang diputar sekali lalu tidak pernah disentuh menetap
+selamanya.
+
+Pembuangannya LRU, bukan FIFO. Stempel waktu file di-sentuh ulang saat dibaca,
+supaya lagu yang sering diputar bertahan lebih lama daripada yang ditulis
+belakangan tapi tidak pernah dibuka lagi. `setLastModified` tidak selalu berhasil
+di semua filesystem Android; kalau gagal, kebijakannya merosot jadi FIFO, yang
+masih terbatas dan tetap benar.
+
+Sapuan berjalan sekali per 25 penulisan, bukan tiap penulisan, supaya tidak
+melisting seluruh direktori setiap ganti lagu.
+
 Yang masuk cache HANYA jawaban sungguhan:
 
 | Hasil lookup | Ditulis? | TTL |

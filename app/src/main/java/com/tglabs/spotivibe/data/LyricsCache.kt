@@ -5,11 +5,14 @@ import android.util.Log
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import com.tglabs.spotivibe.domain.CacheFileInfo
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.SyncedLine
 import com.tglabs.spotivibe.domain.SyncedWord
+import com.tglabs.spotivibe.domain.filesToEvict
 import com.tglabs.spotivibe.domain.withPositionalIds
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * JSON file-based cache untuk hasil lookup LRCLIB.
@@ -35,10 +38,22 @@ class LyricsCache(context: Context) {
         .build()
     private val adapter = moshi.adapter(CachedEntry::class.java)
 
+    /** Mulai dari 0 supaya penulisan PERTAMA sesi ini langsung memicu sapuan. */
+    private val writesSinceSweep = AtomicInteger(0)
+
     /** Ambil cache kalau ada dan belum expired. Return null kalau miss/expired/corrupt. */
     fun get(trackId: String): LyricsResult? {
         val file = fileFor(trackId)
         if (!file.exists()) return null
+        // Sentuh stempel waktunya supaya pembatasan berperilaku LRU, bukan FIFO:
+        // lagu yang sering diputar ulang harus bertahan lebih lama daripada yang
+        // ditulis belakangan tapi tidak pernah disentuh lagi.
+        //
+        // setLastModified() dikenal tidak selalu berhasil di sebagian filesystem
+        // Android. Kalau gagal, kebijakannya merosot jadi FIFO, yang masih
+        // terbatas dan tetap benar, cuma kurang pintar. Karena itu hasilnya
+        // sengaja tidak diperiksa.
+        runCatching { file.setLastModified(System.currentTimeMillis()) }
         return try {
             val json = file.readText()
             val entry = adapter.fromJson(json) ?: return null
@@ -75,9 +90,48 @@ class LyricsCache(context: Context) {
                 cachedAt = System.currentTimeMillis(),
             )
             fileFor(result.trackId).writeText(adapter.toJson(entry))
+            maybeSweep()
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to write cache for ${result.trackId}: ${t.message}")
         }
+    }
+
+    /**
+     * Jalankan pembatasan sesekali, bukan tiap tulis.
+     *
+     * Menyapu di setiap `put` berarti melisting seluruh direktori setiap ganti
+     * lagu. Sekali per [SWEEP_EVERY] penulisan sudah cukup: batasnya boleh
+     * terlampaui sedikit di antara sapuan, dan itu tidak masalah karena yang
+     * dijaga adalah pertumbuhan jangka panjang, bukan angka pasti di tiap saat.
+     *
+     * Sapuan pertama terjadi di penulisan pertama sesi, jadi cache yang sudah
+     * membengkak dari pemakaian sebelumnya langsung dirapikan.
+     */
+    private fun maybeSweep() {
+        if (writesSinceSweep.getAndIncrement() % SWEEP_EVERY != 0) return
+        runCatching { sweep() }
+            .onFailure { Log.w(TAG, "Sweep cache gagal: ${it.message}") }
+    }
+
+    private fun sweep() {
+        val files = dir.listFiles()?.filter { it.isFile } ?: return
+        val buang = filesToEvict(
+            files = files.map {
+                CacheFileInfo(
+                    name = it.name,
+                    sizeBytes = it.length(),
+                    lastAccessMs = it.lastModified(),
+                )
+            },
+            nowMs = System.currentTimeMillis(),
+            maxAgeMs = POSITIVE_TTL_MS,
+            maxEntries = MAX_ENTRIES,
+            maxBytes = MAX_BYTES,
+        )
+        if (buang.isEmpty()) return
+        val perNama = files.associateBy { it.name }
+        buang.forEach { perNama[it]?.delete() }
+        Log.d(TAG, "Sweep cache: ${buang.size} dari ${files.size} file dibuang")
     }
 
     /** Sanitize trackId untuk pakai sebagai nama file — `:` → `_`. */
@@ -134,5 +188,17 @@ class LyricsCache(context: Context) {
         private const val DAY_MS = 24L * 60L * 60L * 1000L
         private const val POSITIVE_TTL_MS = 30L * DAY_MS
         private const val NEGATIVE_TTL_MS = 1L * DAY_MS
+
+        /**
+         * Cukup untuk beberapa playlist besar tanpa membuang yang masih mungkin
+         * dipakai lagi. File lirik biasanya 2 sampai 10 KB.
+         */
+        private const val MAX_ENTRIES = 500
+
+        /** Jaring terhadap satu entry patologis, bukan batas utama. */
+        private const val MAX_BYTES = 8L * 1024L * 1024L
+
+        /** Sapu tiap sekian penulisan, bukan tiap penulisan. */
+        private const val SWEEP_EVERY = 25
     }
 }
