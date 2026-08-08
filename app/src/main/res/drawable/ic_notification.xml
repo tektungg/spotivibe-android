@@ -1,9 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Ikon status bar. Android MEMBUANG warna di sini dan cuma memakai kanal
+    alpha, lalu mewarnai ulang seluruh bentuk. Karena itu semuanya putih dan
+    identitasnya dijaga lewat proporsi.
+
+    Turun dari lima baris jadi tiga: lima tidak terbaca di sekitar 18 px.
+    Baris tengah tetap paling lebar dan paling tinggi, sama seperti di ikon
+    penuh, supaya tetap terbaca sebagai "lirik dengan satu baris aktif" dan
+    bukan sekadar ikon daftar.
+
+    Menggantikan not balok generik bawaan template.
+    Sumber: logo/spotivibe-notification.svg
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M12,3v9.28c-0.47,-0.17 -0.97,-0.28 -1.5,-0.28C8.01,12 6,14.01 6,16.5S8.01,21 10.5,21s4.5,-2.01 4.5,-4.5L15,6h4L19,3h-7z" />
+        android:fillAlpha="0.6"
+        android:pathData="M8.25,5 H15.75 A1.25,1.25 0 0 1 15.75,7.5 H8.25 A1.25,1.25 0 0 1 8.25,5 Z" />
+
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M4.25,10.5 H19.75 A1.75,1.75 0 0 1 19.75,14 H4.25 A1.75,1.75 0 0 1 4.25,10.5 Z" />
+
+    <path
+        android:fillColor="@android:color/white"
+        android:fillAlpha="0.6"
+        android:pathData="M9.25,17 H14.75 A1.25,1.25 0 0 1 14.75,19.5 H9.25 A1.25,1.25 0 0 1 9.25,17 Z" />
 </vector>

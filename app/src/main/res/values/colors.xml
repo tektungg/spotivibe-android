@@ -1,8 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Glassmorphism Tokyo base colors (mirror Color.kt) -->
-    <color name="background_deep">#0A0E1A</color>
-    <color name="background_lift">#141A2A</color>
+    <!--
+        Editorial Magazine base colors (cermin dari ui/theme/Color.kt).
+        Sumber kebenaran tetap Color.kt; di sini hanya yang dibutuhkan XML
+        resource, yang tidak bisa membaca Kotlin.
+    -->
+
+    <!-- Latar adaptive icon. Sama dengan BgDark0. -->
+    <color name="ic_launcher_background">#14151B</color>
+
+    <color name="bg_dark_0">#14151B</color>
+    <color name="bg_dark_1">#1A1B22</color>
+    <color name="ink_dark_1">#F4F1EA</color>
+    <color name="accent_coral">#EC6A5C</color>
+
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 </resources>

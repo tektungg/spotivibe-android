@@ -2,7 +2,13 @@
 <resources>
 
     <style name="Theme.Spotivibe" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/background_deep</item>
+        <!--
+            Harus sama dengan BgDark0 di Color.kt. Sebelumnya menunjuk warna
+            era Glassmorphism (#0A0E1A) sementara app-nya sudah #14151B, jadi
+            ada kedipan warna yang salah antara window muncul dan Compose
+            menggambar frame pertama.
+        -->
+        <item name="android:windowBackground">@color/bg_dark_0</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
