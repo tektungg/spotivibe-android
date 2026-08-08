@@ -40,6 +40,71 @@ import net.sourceforge.pinyin4j.format.HanyuPinyinVCharType
  */
 class RomanizationService {
 
+    // ---- Cache ------------------------------------------------------------------
+    //
+    // Romanisasi itu deterministik: teks yang sama dengan script yang sama selalu
+    // menghasilkan keluaran yang sama. Sebelumnya tidak ada cache sama sekali,
+    // jadi kuromoji dijalankan ulang setiap kali user mematikan lalu menyalakan
+    // toggle romanisasi, dan setiap kali lagu yang sama diputar lagi, bahkan
+    // saat liriknya sendiri datang dari disk cache.
+    //
+    // Key-nya (teks, script), BUKAN teks saja. Teks yang sama beda hasilnya
+    // tergantung script: 運命 jadi "unmei" sebagai JA, "yun ming" sebagai ZH.
+    //
+    // Hasil null (baris kosong, baris Latin, atau gagal) SENGAJA tidak di-cache.
+    // Ketiganya murah dideteksi ulang, dan tidak menyimpannya menghilangkan
+    // ambiguitas antara "miss" dan "pernah dihitung, hasilnya null".
+
+    private data class CacheKey(val text: String, val script: Script)
+
+    private val cache = object : LinkedHashMap<CacheKey, String>(256, 0.75f, true) {
+        override fun removeEldestEntry(eldest: Map.Entry<CacheKey, String>?): Boolean =
+            size > CACHE_MAX
+    }
+
+    @Volatile private var hits = 0L
+    @Volatile private var misses = 0L
+
+    // Ukuran batch terakhir. Dicatat terpisah dari hits/misses karena hits dan
+    // misses bergantung penjadwalan coroutine: tanpa dedup, baris kembar yang
+    // dilempar bersamaan bisa kebetulan saling menunggu dan menghasilkan hit.
+    // Dua angka ini menggambarkan dedup secara langsung dan deterministik.
+    @Volatile private var lastBatchTotal = 0
+    @Volatile private var lastBatchDistinct = 0
+
+    /** Angka untuk melihat cache-nya benar-benar bekerja. Dipakai log dan test. */
+    data class Stats(
+        val hits: Long,
+        val misses: Long,
+        val size: Int,
+        /** Jumlah baris di panggilan [romanizeLines] terakhir. */
+        val lastBatchTotal: Int,
+        /** Berapa di antaranya yang benar-benar dikirim ke mesin romanisasi. */
+        val lastBatchDistinct: Int,
+    )
+
+    fun stats(): Stats = synchronized(cache) {
+        Stats(hits, misses, cache.size, lastBatchTotal, lastBatchDistinct)
+    }
+
+    fun clearCache() = synchronized(cache) {
+        cache.clear()
+        hits = 0
+        misses = 0
+        lastBatchTotal = 0
+        lastBatchDistinct = 0
+    }
+
+    private fun cacheGet(key: CacheKey): String? = synchronized(cache) {
+        val v = cache[key]
+        if (v != null) hits++ else misses++
+        v
+    }
+
+    private fun cachePut(key: CacheKey, value: String) = synchronized(cache) {
+        cache[key] = value
+    }
+
     // ---- JA (kuromoji + Hepburn) -------------------------------------------------
 
     private val tokenizer: Tokenizer by lazy {
@@ -76,7 +141,11 @@ class RomanizationService {
         if (text.isBlank()) return@withContext null
         // Baris yang murni Latin tidak perlu diromanisasi, apa pun script lagunya.
         if (detectScript(text) == Script.LATIN) return@withContext null
-        try {
+
+        val key = CacheKey(text, script)
+        cacheGet(key)?.let { return@withContext it }
+
+        val result = try {
             when (script) {
                 Script.JA -> romanizeJapanese(text).takeIf { it.isNotBlank() }
                 Script.KO -> romanizeKorean(text).takeIf { it.isNotBlank() }
@@ -87,6 +156,8 @@ class RomanizationService {
             Log.w(TAG, "romanize() failed for line='${text.take(40)}…': ${t.message}", t)
             null
         }
+        if (result != null) cachePut(key, result)
+        result
     }
 
     /**
@@ -94,16 +165,35 @@ class RomanizationService {
      * lalu dipakai konsisten untuk semuanya, supaya satu lagu tidak pernah
      * bercampur romaji dan pinyin.
      *
+     * Baris kembar dihitung SEKALI. Reff yang berulang tiga kali dulu
+     * memromanisasi teks yang sama tiga kali, dan karena semuanya dilempar ke
+     * `async` bersamaan, cache pun tidak menolong: ketiganya miss sebelum ada
+     * yang sempat menulis hasilnya. Dedup di depan menutup itu.
+     *
      * Hasil list size sama persis dengan input (1:1 mapping, null untuk yang
      * gagal / Latin / blank).
      */
     suspend fun romanizeLines(texts: List<String>): List<String?> = coroutineScope {
         val script = detectDocumentScript(texts)
-        Log.d(TAG, "Script lagu: $script (${texts.size} baris)")
         if (script == Script.LATIN) return@coroutineScope texts.map { null }
-        texts.map { line ->
+
+        val before = stats()
+        val unik = texts.distinct()
+        lastBatchTotal = texts.size
+        lastBatchDistinct = unik.size
+        val hasil = unik.map { line ->
             async(Dispatchers.IO) { romanize(line, script) }
         }.awaitAll()
+        val perTeks = unik.zip(hasil).toMap()
+
+        val after = stats()
+        Log.d(
+            TAG,
+            "Romaji $script: ${texts.size} baris, ${unik.size} unik, " +
+                "${after.hits - before.hits} dari cache, " +
+                "${after.misses - before.misses} dihitung (cache ${after.size})",
+        )
+        texts.map { perTeks[it] }
     }
 
     // ---- Japanese ----------------------------------------------------------------
@@ -273,6 +363,13 @@ class RomanizationService {
 
     companion object {
         private const val TAG = "RomanizationService"
+
+        /**
+         * Baris lirik pendek, jadi entry-nya murah. 2000 baris kira-kira 25
+         * lagu, cukup untuk satu playlist tanpa membuang hasil yang masih
+         * mungkin dipakai lagi.
+         */
+        private const val CACHE_MAX = 2000
 
         // ---- Korean Revised Romanization tables --------------------------------
 
