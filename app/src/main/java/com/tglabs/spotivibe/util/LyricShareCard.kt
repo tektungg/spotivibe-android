@@ -8,11 +8,13 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
-import android.graphics.Rect
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.text.TextPaint
+import android.util.Log
 import androidx.core.content.FileProvider
+import com.tglabs.spotivibe.domain.truncateText
+import com.tglabs.spotivibe.domain.wrapText
 import java.io.File
 import java.io.FileOutputStream
 
@@ -48,7 +50,15 @@ object LyricShareCard {
         require(entries.size <= 5) { "max 5 lines per card" }
 
         val bitmap = render(entries, title, artist, accentArgb)
-        val uri = persist(context, bitmap)
+        val uri = try {
+            persist(context, bitmap)
+        } finally {
+            // Bitmap 1080x1920 ARGB_8888 = 8,3 MB. Isinya sudah masuk file, jadi
+            // memorinya tidak ada gunanya lagi. GC memang akhirnya membereskan,
+            // tapi share beberapa kali beruntun menumpuk tekanan memori yang
+            // tidak perlu.
+            bitmap.recycle()
+        }
         val caption = buildCaption(entries, title, artist)
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "image/png"
@@ -230,41 +240,19 @@ object LyricShareCard {
         else -> Triple(48f, 32f, 18f) // 5
     }
 
-    /** Manual word-wrap. Tidak pakai StaticLayout supaya tetap ringan + predictable. */
-    private fun wrap(text: String, paint: Paint, maxWidth: Int): List<String> {
-        val words = text.split(' ')
-        val result = mutableListOf<String>()
-        val current = StringBuilder()
-        val bounds = Rect()
-        words.forEach { word ->
-            val candidate = if (current.isEmpty()) word else "$current $word"
-            paint.getTextBounds(candidate, 0, candidate.length, bounds)
-            if (bounds.width() > maxWidth && current.isNotEmpty()) {
-                result.add(current.toString())
-                current.clear()
-                current.append(word)
-            } else {
-                current.clear()
-                current.append(candidate)
-            }
-        }
-        if (current.isNotEmpty()) result.add(current.toString())
-        return result
-    }
+    /**
+     * Word-wrap sadar CJK. Logikanya ada di [wrapText] supaya bisa diuji tanpa
+     * Android; di sini cuma menyuntikkan pengukurnya.
+     *
+     * `measureText` (advance width), BUKAN `getTextBounds` (ink bounds). Yang
+     * kedua mengembalikan kotak ketat di sekitar goresan glyph dan mengabaikan
+     * side bearing serta spasi tepi, jadi keputusan layoutnya meleset.
+     */
+    private fun wrap(text: String, paint: Paint, maxWidth: Int): List<String> =
+        wrapText(text, maxWidth.toFloat()) { paint.measureText(it) }
 
-    private fun truncate(text: String, paint: Paint, maxWidth: Int): String {
-        val bounds = Rect()
-        paint.getTextBounds(text, 0, text.length, bounds)
-        if (bounds.width() <= maxWidth) return text
-        var cut = text.length
-        while (cut > 1) {
-            cut--
-            val attempt = text.substring(0, cut) + "…"
-            paint.getTextBounds(attempt, 0, attempt.length, bounds)
-            if (bounds.width() <= maxWidth) return attempt
-        }
-        return text
-    }
+    private fun truncate(text: String, paint: Paint, maxWidth: Int): String =
+        truncateText(text, maxWidth.toFloat()) { paint.measureText(it) }
 
     /** Linear blend di sRGB space. Good enough untuk gradient subtle. */
     private fun blendColor(a: Int, b: Int, ratio: Float): Int {
@@ -277,6 +265,7 @@ object LyricShareCard {
     private fun persist(context: Context, bmp: Bitmap): android.net.Uri {
         val dir = File(context.cacheDir, "shared")
         if (!dir.exists()) dir.mkdirs()
+        sweepOldCards(dir)
         val file = File(dir, "lyric_${System.currentTimeMillis()}.png")
         FileOutputStream(file).use { out ->
             bmp.compress(Bitmap.CompressFormat.PNG, 100, out)
@@ -287,4 +276,28 @@ object LyricShareCard {
             file,
         )
     }
+
+    /**
+     * Buang card lama. Tanpa ini setiap share meninggalkan PNG yang tidak
+     * pernah dihapus; lokasinya memang `cacheDir` sehingga sistem BOLEH
+     * menghapusnya, tapi baru saat penyimpanan sudah sesak. Sebelum itu
+     * ratusan file menumpuk.
+     *
+     * Ambang [CARD_TTL_MS] sengaja longgar. App tujuan share membaca file lewat
+     * FileProvider tak lama setelah intent dikirim, tapi menghapus terlalu
+     * cepat berisiko menarik file dari bawah kaki app yang lambat membuka.
+     */
+    private fun sweepOldCards(dir: File) {
+        runCatching {
+            val batas = System.currentTimeMillis() - CARD_TTL_MS
+            dir.listFiles()?.forEach { f ->
+                if (f.isFile && f.lastModified() < batas) f.delete()
+            }
+        }.onFailure { Log.w(TAG, "Gagal menyapu card lama: ${it.message}") }
+    }
+
+    private const val TAG = "LyricShareCard"
+
+    /** Satu jam. Jauh lebih lama dari yang dibutuhkan, dan tetap terbatas. */
+    private const val CARD_TTL_MS = 60L * 60L * 1000L
 }

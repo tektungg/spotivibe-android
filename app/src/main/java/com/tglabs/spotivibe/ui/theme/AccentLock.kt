@@ -34,6 +34,12 @@ object AccentLock {
     private const val LIGHT_L = 0.55
     private const val LIGHT_C = 0.14
 
+    /** Iterasi pencarian biner chroma. 16 langkah sudah jauh di bawah presisi mata. */
+    private const val GAMUT_SEARCH_STEPS = 16
+
+    /** Ruang untuk galat pembulatan saat menilai keanggotaan gamut. */
+    private const val GAMUT_EPS = 1e-6
+
     /**
      * Lock accent: extract hue dari input color, ganti chroma + lightness
      * ke nilai target sesuai mode. Hue dipertahankan; L+C dikunci supaya
@@ -73,16 +79,55 @@ object AccentLock {
         return atan2(b, a)
     }
 
+    /**
+     * OkLCh → sRGB dengan gamut mapping.
+     *
+     * Sebagian kombinasi L dan C yang sah di OkLCh berada di LUAR gamut sRGB.
+     * Merah jenuh di L=0.78 C=0.17 salah satunya. Versi sebelumnya memotong tiap
+     * kanal dengan `coerceIn(0f, 1f)`, dan pemotongan per kanal itu MENURUNKAN
+     * lightness efektifnya: merah keluar di L≈0.754, bukan 0.78. Padahal
+     * mengunci lightness adalah seluruh alasan kelas ini ada.
+     *
+     * Sekarang chroma diturunkan sampai warnanya muat, sementara L dan hue
+     * dipertahankan. Itu pertukaran yang benar di sini: yang dijanjikan ke
+     * pemakai adalah kontras yang bisa diprediksi (L) dengan hue dari sampul
+     * album. Chroma cuma bumbu.
+     */
     private fun oklchToColor(l: Double, chroma: Double, hueRad: Double): Color {
-        val a = chroma * cos(hueRad)
-        val b = chroma * sin(hueRad)
+        var lo = 0.0
+        var hi = chroma
+        // Chroma nol (abu-abu) selalu di dalam gamut untuk L 0..1, jadi
+        // pencarian ini dijamin bertemu.
+        if (!inGamut(l, hi, hueRad)) {
+            repeat(GAMUT_SEARCH_STEPS) {
+                val mid = (lo + hi) / 2
+                if (inGamut(l, mid, hueRad)) lo = mid else hi = mid
+            }
+        } else {
+            lo = hi
+        }
+
+        val a = lo * cos(hueRad)
+        val b = lo * sin(hueRad)
         val (r, g, blue) = oklabToSRgb(l, a, b)
         return Color(
+            // coerceIn tetap ada sebagai penjaga terakhir terhadap galat
+            // pembulatan, bukan sebagai strategi gamut.
             red   = r.toFloat().coerceIn(0f, 1f),
             green = g.toFloat().coerceIn(0f, 1f),
             blue  = blue.toFloat().coerceIn(0f, 1f),
             alpha = 1f,
         )
+    }
+
+    /** Apakah (L, C, hue) menghasilkan RGB linear yang muat di 0..1 tanpa dipotong. */
+    private fun inGamut(l: Double, chroma: Double, hueRad: Double): Boolean {
+        val a = chroma * cos(hueRad)
+        val b = chroma * sin(hueRad)
+        val (r, g, blue) = oklabToLinearSRgb(l, a, b)
+        return r >= -GAMUT_EPS && r <= 1 + GAMUT_EPS &&
+            g >= -GAMUT_EPS && g <= 1 + GAMUT_EPS &&
+            blue >= -GAMUT_EPS && blue <= 1 + GAMUT_EPS
     }
 
     /**
@@ -108,7 +153,11 @@ object AccentLock {
         return Triple(l, a, bb)
     }
 
-    private fun oklabToSRgb(l: Double, a: Double, b: Double): Triple<Double, Double, Double> {
+    /**
+     * OkLab → sRGB LINEAR, tanpa dipotong. Nilainya bisa keluar dari 0..1, dan
+     * justru itu yang dipakai [inGamut] untuk menilai muat atau tidak.
+     */
+    private fun oklabToLinearSRgb(l: Double, a: Double, b: Double): Triple<Double, Double, Double> {
         val l_ = l + 0.3963377774 * a + 0.2158037573 * b
         val m_ = l - 0.1055613458 * a - 0.0638541728 * b
         val s_ = l - 0.0894841775 * a - 1.2914855480 * b
@@ -117,10 +166,15 @@ object AccentLock {
         val lms_m = m_ * m_ * m_
         val lms_s = s_ * s_ * s_
 
-        val lr =  4.0767416621 * lms_l - 3.3077115913 * lms_m + 0.2309699292 * lms_s
-        val lg = -1.2684380046 * lms_l + 2.6097574011 * lms_m - 0.3413193965 * lms_s
-        val lb = -0.0041960863 * lms_l - 0.7034186147 * lms_m + 1.7076147010 * lms_s
+        return Triple(
+            4.0767416621 * lms_l - 3.3077115913 * lms_m + 0.2309699292 * lms_s,
+            -1.2684380046 * lms_l + 2.6097574011 * lms_m - 0.3413193965 * lms_s,
+            -0.0041960863 * lms_l - 0.7034186147 * lms_m + 1.7076147010 * lms_s,
+        )
+    }
 
+    private fun oklabToSRgb(l: Double, a: Double, b: Double): Triple<Double, Double, Double> {
+        val (lr, lg, lb) = oklabToLinearSRgb(l, a, b)
         return Triple(linearToSrgb(lr), linearToSrgb(lg), linearToSrgb(lb))
     }
 
