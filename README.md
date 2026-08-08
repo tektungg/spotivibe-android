@@ -133,6 +133,18 @@ ConnectScreen tap
                                 └─ SpotifyAppRemote.connect(showAuthView=false)
 ```
 
+**Kuirk yang sudah terkonfirmasi di device:** Spotify memantulkan redirect
+dengan garis miring di akhir walaupun yang didaftarkan tanpa itu, dan
+menambahkan parameter `ubi` yang tidak diminta:
+
+```
+didaftarkan  spotivibe://callback
+dipantulkan  spotivibe://callback/?code=…&state=…&ubi=…
+```
+
+Karena itu perbandingan base URI dinormalkan lebih dulu, bukan `String.equals`
+persis. Parameter asing diabaikan.
+
 Semua pembacaan token lewat `authRepository.validAccessToken()`, yang me-refresh
 sendiri 60 detik sebelum expiry di bawah satu mutex, jadi pemanggil bersamaan
 (UI, notification service, overlay, preload antrean) hanya memicu satu request
