@@ -6,6 +6,7 @@ import com.tglabs.spotivibe.data.PlaybackController
 import com.tglabs.spotivibe.data.PreferencesRepository
 import com.tglabs.spotivibe.data.RomanizationService
 import com.tglabs.spotivibe.data.SpotifyConnection
+import com.tglabs.spotivibe.data.SpotifySessionSupervisor
 import com.tglabs.spotivibe.data.WebApiClient
 import com.tglabs.spotivibe.data.auth.SpotifyAuthApi
 import com.tglabs.spotivibe.data.auth.SpotifyAuthRepository
@@ -47,6 +48,15 @@ class SpotivibeApp : Application() {
 
     val spotifyConnection: SpotifyConnection by lazy {
         SpotifyConnection(authRepository, applicationScope)
+    }
+
+    /**
+     * Pemilik siklus hidup koneksi. Hidup di application scope, bukan di
+     * Activity, supaya koneksi yang putus disambung ulang sendiri walaupun
+     * tidak ada layar yang terbuka.
+     */
+    val sessionSupervisor: SpotifySessionSupervisor by lazy {
+        SpotifySessionSupervisor(spotifyConnection, authRepository, applicationScope)
     }
     val lyricsRepository: LyricsRepository by lazy { LyricsRepository(this) }
     val romanizationService: RomanizationService by lazy { RomanizationService() }

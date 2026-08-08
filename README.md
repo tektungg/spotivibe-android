@@ -142,6 +142,38 @@ penolakan permanen (`invalid_grant` dan kawan-kawan) yang memaksa login ulang.
 Token disimpan di DataStore dan direktori `datastore/` dikecualikan dari cloud
 backup maupun device transfer.
 
+### Siklus koneksi
+
+`SpotifySessionSupervisor` hidup di application scope dan menjaga koneksi
+selama masih ada sesi. Activity tidak lagi memilikinya.
+
+Dulu `MainActivity` yang memanggil `tryAutoConnect` DAN yang menghidup-matikan
+foreground service berdasarkan `connectionState`. Dua akibatnya buruk. Spotify
+di-kill sekali berarti state jatuh ke Disconnected, service `stopSelf()`,
+notification hilang, dan tidak ada apapun yang menyambung lagi sampai user
+membuka app ini secara manual. Dan service yang dibangkitkan sistem lewat
+START_STICKY hidup tanpa ada apapun yang menyambungkannya ke Spotify, jadi cuma
+jadi notification kosong.
+
+Yang masih dipegang Activity cuma satu, dan memang wajib: menyalakan foreground
+service, karena Android 12+ melarang menyalakannya dari background.
+
+Backoff reconnect: percobaan pertama langsung, lalu 1, 2, 4, 8 detik dan
+seterusnya sampai batas 5 menit. Batasnya sengaja menit, bukan detik, karena
+kegagalan beruntun biasanya berarti Spotify memang tidak jalan. Tidak ada
+keadaan menyerah: selama sesi masih ada, companion terus mencoba, cuma makin
+jarang. Satu-satunya cara berhenti adalah sesinya hilang lewat logout atau
+otorisasi dicabut Spotify.
+
+Putusnya link dideteksi lewat `Subscription.LifecycleCallback.onStop` dan error
+callback pada subscription player state. Sebelumnya keduanya cuma di-log, jadi
+koneksi bisa jadi zombie: state tetap Connected padahal tidak ada event yang
+masuk lagi selamanya.
+
+Saat sedang menunggu percobaan berikutnya, notification menampilkan
+"Menyambungkan ulang ke Spotify…" supaya user tidak menatap lirik basi tanpa
+tahu kenapa berhenti bergerak.
+
 ### Cache lirik
 
 Tiga lapis: memory LRU 50, file JSON di `cacheDir`, lalu jaringan.

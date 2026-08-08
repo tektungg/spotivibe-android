@@ -23,7 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import com.tglabs.spotivibe.data.SpotifyConnection
+import com.tglabs.spotivibe.data.auth.SpotifyAuthRepository
 import com.tglabs.spotivibe.service.SpotivibeNotificationService
 import com.tglabs.spotivibe.ui.screen.MainScreen
 import com.tglabs.spotivibe.ui.screen.SettingsScreen
@@ -69,34 +69,31 @@ class MainActivity : ComponentActivity() {
 
         val app = application as SpotivibeApp
 
-        // Muat kredensial tersimpan, lalu auto-reconnect kalau sesinya masih
-        // hidup. Sesi dianggap hidup kalau punya refresh token, bukan sekadar
-        // flag "pernah login" seperti dulu -- flag itu tetap true walaupun
-        // token sudah mati dan tidak bisa diperbarui.
+        // Muat kredensial tersimpan. Sesi dianggap hidup kalau punya refresh
+        // token, bukan sekadar flag "pernah login" seperti dulu -- flag itu
+        // tetap true walaupun token sudah mati dan tidak bisa diperbarui.
         lifecycleScope.launch {
             runCatching { app.authRepository.restore() }
-            if (app.spotifyConnection.hasSession()) {
-                app.spotifyConnection.tryAutoConnect(this@MainActivity)
-            }
             // Cold start bisa saja dipicu oleh redirect auth itu sendiri.
             handleAuthRedirect(intent)
         }
 
-        // Service lifecycle: start saat Connected, stop saat Disconnected/Error
+        // Activity TIDAK lagi memiliki siklus koneksi. Yang tersisa di sini cuma
+        // satu hal yang memang wajib dilakukan dari foreground: menyalakan
+        // foreground service, karena Android 12+ melarang menyalakannya dari
+        // background. Keputusan kapan menyambung, kapan menyambung ulang, dan
+        // kapan berhenti sudah pindah ke SpotifySessionSupervisor yang hidup di
+        // application scope.
+        //
+        // Dulu Activity juga yang mematikan service saat state jadi
+        // Disconnected, jadi Spotify di-kill sekali berarti notification hilang
+        // dan tidak ada apapun yang mencoba menyambung lagi.
         lifecycleScope.launch {
-            app.spotifyConnection.connectionState
-                .collect { state ->
-                    when (state) {
-                        SpotifyConnection.ConnectionState.Connected -> {
-                            SpotivibeNotificationService.start(this@MainActivity)
-                        }
-                        SpotifyConnection.ConnectionState.Disconnected,
-                        is SpotifyConnection.ConnectionState.Error -> {
-                            SpotivibeNotificationService.stop(this@MainActivity)
-                        }
-                        else -> Unit
-                    }
+            app.authRepository.authState.collect { state ->
+                if (state is SpotifyAuthRepository.AuthState.SignedIn) {
+                    startCompanion()
                 }
+            }
         }
 
         setContent {
@@ -158,6 +155,16 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleAuthRedirect(intent)
+    }
+
+    /**
+     * Nyalakan supervisor + foreground service. Idempoten, jadi aman dipanggil
+     * tiap kali authState memancarkan SignedIn.
+     */
+    private fun startCompanion() {
+        val app = application as SpotivibeApp
+        app.sessionSupervisor.start(this)
+        SpotivibeNotificationService.start(this)
     }
 
     private fun handleAuthRedirect(intent: Intent?) {

@@ -18,13 +18,14 @@ import androidx.core.content.ContextCompat
 import com.tglabs.spotivibe.MainActivity
 import com.tglabs.spotivibe.R
 import com.tglabs.spotivibe.SpotivibeApp
-import com.tglabs.spotivibe.data.SpotifyConnection
+import com.tglabs.spotivibe.data.SpotifySessionSupervisor
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.NowPlaying
 import com.tglabs.spotivibe.domain.SyncedLine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
@@ -59,6 +60,7 @@ class SpotivibeNotificationService : Service() {
     private var lastLine: SyncedLine? = null
     private var lastPrevLine: SyncedLine? = null
     private var lastNextLine: SyncedLine? = null
+    private var isReconnecting: Boolean = false
 
     private val actionReceiver = ActionReceiver()
 
@@ -101,41 +103,61 @@ class SpotivibeNotificationService : Service() {
             return START_NOT_STICKY
         }
 
+        // Semua collector jadi ANAK dari observeJob. Versi lama memanggil
+        // serviceScope.launch{} dari dalam observeControllerFlows(), jadi
+        // collector itu anak serviceScope, bukan anak observeJob. Akibatnya
+        // observeJob?.cancel() tidak membatalkannya, dan tiap onStartCommand
+        // (termasuk kebangkitan START_STICKY) menambah satu collector permanen.
         observeJob?.cancel()
         observeJob = serviceScope.launch { observeControllerFlows() }
         return START_STICKY
     }
 
-    private suspend fun observeControllerFlows() {
+    private suspend fun observeControllerFlows() = coroutineScope {
         val controller = app.playbackController
 
-        serviceScope.launch {
-            controller.connectionState.collect { state ->
-                if (state is SpotifyConnection.ConnectionState.Disconnected) {
-                    Log.d(TAG, "Connection disconnected — stopSelf()")
+        // Companion berhenti HANYA kalau sesinya hilang. Koneksi putus bukan
+        // alasan berhenti: dulu Disconnected memicu stopSelf(), jadi Spotify
+        // di-kill sekali berarti notification hilang selamanya sampai user
+        // membuka app ini lagi. Sekarang supervisor yang menyambung ulang.
+        launch {
+            app.sessionSupervisor.shouldRun.collect { state ->
+                if (state == SpotifySessionSupervisor.CompanionState.Stopped) {
+                    Log.d(TAG, "Sesi hilang — stopSelf()")
                     stopSelf()
                 }
+            }
+        }
+
+        // Teks notification ikut berubah saat sedang menyambung ulang, supaya
+        // user tidak menatap lirik basi tanpa tahu kenapa berhenti bergerak.
+        launch {
+            app.sessionSupervisor.reconnecting.collect {
+                isReconnecting = it
+                refreshNotification()
             }
         }
 
         // Combine 4: track + bitmap + lyrics + currentLineIndex.
         // Compute prev/next line dari lyrics.synced + index supaya bisa tampil
         // 3-baris karaoke style di expanded notification + lock screen.
-        combine(
-            controller.track,
-            controller.albumBitmap,
-            controller.lyrics,
-            controller.currentLineIndex,
-        ) { track, bitmap, lyrics, idx ->
-            LyricsSnapshot(track, bitmap, lyrics, idx)
-        }.collect { snapshot ->
-            val synced = snapshot.lyrics?.synced
-            lastTrack = snapshot.track
-            lastBitmap = snapshot.bitmap
-            lastLine = synced?.getOrNull(snapshot.idx)
-            lastPrevLine = synced?.getOrNull(snapshot.idx - 1)
-            lastNextLine = synced?.getOrNull(snapshot.idx + 1)
-            refreshNotification()
+        launch {
+            combine(
+                controller.track,
+                controller.albumBitmap,
+                controller.lyrics,
+                controller.currentLineIndex,
+            ) { track, bitmap, lyrics, idx ->
+                LyricsSnapshot(track, bitmap, lyrics, idx)
+            }.collect { snapshot ->
+                val synced = snapshot.lyrics?.synced
+                lastTrack = snapshot.track
+                lastBitmap = snapshot.bitmap
+                lastLine = synced?.getOrNull(snapshot.idx)
+                lastPrevLine = synced?.getOrNull(snapshot.idx - 1)
+                lastNextLine = synced?.getOrNull(snapshot.idx + 1)
+                refreshNotification()
+            }
         }
     }
 
@@ -255,7 +277,11 @@ class SpotivibeNotificationService : Service() {
         val prevText = prev?.text?.takeIf { it.isNotBlank() } ?: ""
         val currText = current?.text?.takeIf { it.isNotBlank() } ?: "♪"
         val nextText = next?.text?.takeIf { it.isNotBlank() } ?: ""
-        val currMarked = "▸ $currText"
+        val currMarked = if (isReconnecting) {
+            "Menyambungkan ulang ke Spotify…"
+        } else {
+            "▸ $currText"
+        }
 
         val prevPi = actionPendingIntent(ActionReceiver.ACTION_PREVIOUS, REQ_PREV)
         val playPausePi = actionPendingIntent(ActionReceiver.ACTION_PLAY_PAUSE, REQ_PLAY_PAUSE)

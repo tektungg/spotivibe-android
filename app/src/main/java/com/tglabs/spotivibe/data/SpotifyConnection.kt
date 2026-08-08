@@ -8,6 +8,7 @@ import android.util.Log
 import com.spotify.android.appremote.api.ConnectionParams
 import com.spotify.android.appremote.api.Connector
 import com.spotify.android.appremote.api.SpotifyAppRemote
+import com.spotify.protocol.client.Subscription
 import com.spotify.protocol.types.Image
 import com.spotify.protocol.types.ImageUri
 import com.spotify.protocol.types.PlayerState
@@ -69,6 +70,14 @@ class SpotifyConnection(
     val controlRejected: StateFlow<Boolean> = _controlRejected.asStateFlow()
 
     private var lastFetchedImageUri: String? = null
+
+    /**
+     * Menandai bahwa kita sendiri yang memutus. Tanpa ini, teardown memicu
+     * callback onStop subscription dan [onRemoteLost] menganggapnya kehilangan
+     * yang tidak disengaja.
+     */
+    @Volatile
+    private var tearingDown: Boolean = false
 
     /** Sudah ada sesi tersimpan yang layak auto-reconnect? */
     fun hasSession(): Boolean = authRepository.hasSession()
@@ -263,6 +272,7 @@ class SpotifyConnection(
 
     fun disconnect() {
         Log.d(TAG, "disconnect()")
+        tearingDown = true
         cancelTimeout()
         appRemote?.let { SpotifyAppRemote.disconnect(it) }
         appRemote = null
@@ -270,6 +280,7 @@ class SpotifyConnection(
         _nowPlaying.value = null
         _albumBitmap.value = null
         lastFetchedImageUri = null
+        tearingDown = false
     }
 
     /** Logout lokal: buang kredensial + putus App Remote. */
@@ -302,9 +313,40 @@ class SpotifyConnection(
                 _nowPlaying.value = state.toNowPlaying()
                 maybeFetchAlbumArt(remote, state.track?.imageUri?.raw)
             }
+            .setLifecycleCallback(object : Subscription.LifecycleCallback {
+                override fun onStart() {
+                    Log.d(TAG, "PlayerState subscription start")
+                }
+
+                override fun onStop() {
+                    // Subscription berhenti berarti link ke app Spotify sudah
+                    // mati: Spotify di-kill, di-swipe dari recents, atau dibunuh
+                    // sistem. Dulu ini cuma di-log dan koneksi diam-diam jadi
+                    // zombie: state tetap Connected, tapi tidak ada event yang
+                    // masuk lagi selamanya.
+                    onRemoteLost("player state subscription stop")
+                }
+            })
             .setErrorCallback { t ->
                 Log.e(TAG, "PlayerState subscription error", t)
+                onRemoteLost(t.message ?: "subscription error")
             }
+    }
+
+    /**
+     * Link ke app Spotify hilang di tengah jalan. Turunkan state ke
+     * Disconnected supaya supervisor tahu harus menyambung ulang. Sesi TIDAK
+     * dibuang: kredensialnya masih sah, cuma app Spotify-nya yang pergi.
+     */
+    private fun onRemoteLost(reason: String) {
+        if (tearingDown) return
+        if (_connectionState.value !is ConnectionState.Connected) return
+        Log.w(TAG, "App Remote hilang ($reason)")
+        appRemote = null
+        _nowPlaying.value = null
+        _albumBitmap.value = null
+        lastFetchedImageUri = null
+        _connectionState.value = ConnectionState.Disconnected
     }
 
     /** Fetch album cover saat track berubah. Cache via lastFetchedImageUri. */
