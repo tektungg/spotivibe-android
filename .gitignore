@@ -48,3 +48,6 @@ keystore.properties
 
 # Sensitive build outputs
 *.unsigned.apk
+
+# Logcat export dari Android Studio (bukan *.log, jadi lolos aturan di atas)
+*.logcat
