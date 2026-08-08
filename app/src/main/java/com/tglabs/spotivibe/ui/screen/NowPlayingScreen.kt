@@ -270,7 +270,10 @@ fun NowPlayingScreen(
                         onCancel = { selectedTimes = emptySet() },
                     )
                 }
-                !state.isPremium -> {
+                // Banner hanya muncul kalau sudah TERBUKTI kontrol ditolak:
+                // /me bilang non-premium, atau App Remote menolak perintah.
+                // Selama masih Unknown, transport tetap tampil.
+                state.capability.showsUpgradeNotice -> {
                     com.tglabs.spotivibe.ui.component.HairlineRule()
                     Box(
                         modifier = Modifier

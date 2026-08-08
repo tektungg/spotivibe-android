@@ -27,7 +27,12 @@ sealed interface UiState {
         val overlayEnabled: Boolean = false,
         val darkMode: Boolean = true,
         val lyricsFontSize: Int = 17,
-        val isPremium: Boolean = false,
+        /**
+         * Kontrol transport ditampilkan optimistis selama masih
+         * [PlaybackCapability.Unknown]. Lihat [PlaybackCapability] untuk alasan
+         * kenapa ini bukan boolean lagi.
+         */
+        val capability: PlaybackCapability = PlaybackCapability.Unknown,
         // Improvement set: lyrics tuning + UX prefs
         val lyricsOffsetMs: Int = 0,
         val lineSpacing: Int = 7,

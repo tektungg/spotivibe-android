@@ -219,7 +219,7 @@ fun NowPlayingTabletScreen(
                         onShare = handleShareSelected,
                         onCancel = { selectedTimes = emptySet() },
                     )
-                    !state.isPremium -> {
+                    state.capability.showsUpgradeNotice -> {
                         HairlineRule(soft = true)
                         Box(
                             modifier = Modifier

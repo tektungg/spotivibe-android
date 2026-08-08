@@ -10,14 +10,16 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Minimal Spotify Web API wrapper untuk fitur yang App Remote tidak handle:
- * - GET /v1/me — product field untuk Premium detection
+ * - GET /v1/me — product field untuk deteksi kemampuan kontrol
  * - GET /v1/me/player/queue — next tracks untuk lyrics preload
  *
- * Pakai access token dari AuthorizationClient TOKEN response, dipegang oleh
- * SpotifyConnection. Kalau token expired, endpoint return 401 — kita propagate
- * sebagai null/empty result, caller fallback gracefully.
+ * [tokenProvider] sengaja `suspend`: token diambil lewat
+ * [com.tglabs.spotivibe.data.auth.SpotifyAuthRepository.validAccessToken],
+ * yang me-refresh sendiri saat sudah dekat expiry. Versi lama pakai getter
+ * sinkron ke token implicit-grant yang tidak bisa diperbarui, jadi setelah
+ * satu jam semua panggilan di sini return 401 selamanya.
  */
-class WebApiClient(private val tokenProvider: () -> String?) {
+class WebApiClient(private val tokenProvider: suspend () -> String?) {
 
     private val httpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)

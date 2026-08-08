@@ -6,7 +6,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.palette.graphics.Palette
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.NowPlaying
+import com.tglabs.spotivibe.domain.PlaybackCapability
 import com.tglabs.spotivibe.domain.SyncedLine
+import com.tglabs.spotivibe.domain.resolveCapability
 import com.tglabs.spotivibe.ui.theme.AccentLock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -73,10 +75,25 @@ class PlaybackController(
     private val _accent = MutableStateFlow<Color?>(null)
     val accent: StateFlow<Color?> = _accent.asStateFlow()
 
-    // ── Premium detection (Web API /me) — cached per session ─────
-    private val _isPremium = MutableStateFlow(false)
-    val isPremium: StateFlow<Boolean> = _isPremium.asStateFlow()
-    @Volatile private var premiumChecked = false
+    // ── Kemampuan kontrol playback ───────────────────────────────
+    //
+    // Dua sumber bukti, digabung lewat resolveCapability():
+    //   1. field `product` dari Web API /me (null = belum tahu)
+    //   2. penolakan nyata dari App Remote saat kita kirim perintah
+    //
+    // Selama keduanya belum bicara, hasilnya Unknown dan UI menampilkan kontrol
+    // secara optimistis. Ini yang memperbaiki bug lama: `isPremium` boolean
+    // memulai hidup sebagai `false`, dan karena token implicit-grant tidak bisa
+    // di-refresh, pengecekan /me tidak pernah berhasil setelah satu jam,
+    // sehingga user Premium permanen dianggap bukan Premium.
+    private val _product = MutableStateFlow<String?>(null)
+
+    val capability: StateFlow<PlaybackCapability> = combine(
+        _product,
+        connection.controlRejected,
+    ) { product, rejected ->
+        resolveCapability(product, rejected)
+    }.stateIn(scope, SharingStarted.Eagerly, PlaybackCapability.Unknown)
 
     private var accentJob: Job? = null
     private var lastAccentBitmap: Bitmap? = null  // ref equality cache
@@ -108,18 +125,17 @@ class PlaybackController(
                     if (connection.nowPlaying.value?.id == trackId) {
                         _lyrics.value = fetched
                     }
-                    // Premium detection — retry per track change sampai dapat hasil valid.
-                    // Awalnya bisa fail kalau access token belum loaded dari DataStore
-                    // (race condition saat cold start + auto-reconnect).
-                    if (!premiumChecked) {
+                    // Cek /me sampai dapat jawaban. Gagal di sini tidak lagi
+                    // menyembunyikan kontrol: capability tetap Unknown, dan
+                    // Unknown menampilkan transport.
+                    if (_product.value == null) {
                         scope.launch {
                             val product = webApiClient.getProduct()
                             if (product != null) {
-                                premiumChecked = true
-                                _isPremium.value = (product == "premium")
-                                Log.d(TAG, "Premium check: product=$product, isPremium=${_isPremium.value}")
+                                _product.value = product
+                                Log.d(TAG, "Product check: $product -> ${capability.value}")
                             } else {
-                                Log.d(TAG, "Premium check returned null — will retry next track change")
+                                Log.d(TAG, "Product check null — retry saat track berikutnya")
                             }
                         }
                     }

@@ -1,10 +1,7 @@
 package com.tglabs.spotivibe.ui.vm
 
-import android.app.Activity
 import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
-import androidx.activity.result.ActivityResultLauncher
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -40,7 +37,7 @@ class SpotivibeViewModel(
             controller.lyrics,
             controller.romaji,
             controller.accent,
-            controller.isPremium,
+            controller.capability,
             preferencesRepository.romanizationEnabled,
             preferencesRepository.overlayEnabled,
             preferencesRepository.darkMode,
@@ -59,7 +56,7 @@ class SpotivibeViewModel(
         val lyrics = values[3] as LyricsResult?
         val romaji = values[4] as Map<Long, String?>
         val accent = values[5] as Color?
-        val isPremium = values[6] as Boolean
+        val capability = values[6] as com.tglabs.spotivibe.domain.PlaybackCapability
         val romaEnabled = values[7] as Boolean
         val overlayEnabled = values[8] as Boolean
         val darkMode = values[9] as Boolean
@@ -86,7 +83,7 @@ class SpotivibeViewModel(
                     overlayEnabled = overlayEnabled,
                     darkMode = darkMode,
                     lyricsFontSize = fontSize,
-                    isPremium = isPremium,
+                    capability = capability,
                     lyricsOffsetMs = offsetMs,
                     lineSpacing = lineSpacing,
                     highContrast = highContrast,
@@ -102,28 +99,40 @@ class SpotivibeViewModel(
         initialValue = UiState.Disconnected,
     )
 
-    fun startAuth(activity: Activity, launcher: ActivityResultLauncher<Intent>) {
-        connection.startAuth(activity, launcher)
+    /**
+     * Mulai Authorization Code + PKCE. [openUrl] menerima URL `/authorize` yang
+     * harus dibuka di Custom Tab; dipanggil di Main thread.
+     *
+     * Tidak lagi memakai `AuthorizationClient` SDK: jalur native-nya membuang
+     * `code_challenge`, jadi PKCE tidak mungkin lewat sana.
+     */
+    fun beginAuth(openUrl: (String) -> Unit) {
+        viewModelScope.launch {
+            val url = connection.authorizeUrl() ?: return@launch
+            openUrl(url)
+        }
     }
 
-    fun handleAuthResult(context: Context, resultCode: Int, data: Intent?) {
-        connection.handleAuthResult(context, resultCode, data)
+    /** Teruskan URI intent yang masuk. URI asing diabaikan tanpa efek samping. */
+    fun handleRedirect(context: Context, uri: String?) {
+        viewModelScope.launch { connection.handleRedirect(context, uri) }
     }
+
+    /** Sudah ada sesi tersimpan yang layak auto-reconnect? */
+    fun hasSession(): Boolean = connection.hasSession()
 
     fun disconnect() = connection.disconnect()
 
     /**
-     * Local logout — clear authorized flag + access token + disconnect AppRemote.
-     * NOTE: Tidak revoke authorization di Spotify side. Spotify masih simpan
-     * grant untuk Client ID + signing key — next Connect = silent re-auth.
+     * Logout lokal: buang access + refresh token, putus App Remote.
+     * NOTE: Tidak revoke authorization di sisi Spotify. Grant untuk Client ID
+     * masih tersimpan, jadi Connect berikutnya biasanya silent re-auth.
      * Untuk benar-benar revoke: spotify.com → Account → Apps → Remove Access.
      */
     fun logout() {
         viewModelScope.launch {
-            preferencesRepository.setSpotifyAuthorized(false)
-            preferencesRepository.clearSpotifyAccessToken()
             preferencesRepository.setOverlayEnabled(false)
-            connection.disconnect()
+            connection.signOut()
         }
     }
 

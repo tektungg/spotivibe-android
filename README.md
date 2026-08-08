@@ -8,7 +8,7 @@ Android native companion untuk Spotify — synced lyrics dengan romanization (JP
 
 ## Fitur
 
-- **Now Playing** dengan album cover, judul, artist, slider seek (Premium-only)
+- **Now Playing** dengan album cover, judul, artist, slider seek (butuh Premium untuk kontrol)
 - **Synced lyrics** dari [LRCLIB](https://lrclib.net) — auto-highlight baris aktif yang ter-sync ke playback. Tap baris untuk seek.
 - **Romanization** otomatis per bahasa (toggle on/off):
   - Jepang (kana + kanji) → Romaji Hepburn via [kuromoji-ipadic](https://github.com/atilika/kuromoji)
@@ -18,14 +18,15 @@ Android native companion untuk Spotify — synced lyrics dengan romanization (JP
 - **Notification dengan synced lyrics** — baris prev/current/next karaoke-style di pull-down + lock screen
 - **Floating overlay** full-width, draggable Y, di atas app lain — mini bar (collapsed) ↔ expanded card (tap-to-expand)
 - **Dynamic accent color** — Palette API extract dari album cover (clamped HSV agar readable di dark theme)
-- **Auth persistence** — connect sekali, auto-reconnect di session berikutnya
+- **Auth OAuth 2.0 Authorization Code + PKCE** — connect sekali, sesi hidup terus lewat refresh token. Tidak ada client secret di APK
 - **Disk-based lyrics cache** — 30 hari positive / 1 hari negative TTL, LRU memory cache bounded 50 entries
 - **Glassmorphism Tokyo** theme — dark navy gradient + frosted surface
 
 ## Stack
 
 - Kotlin + Jetpack Compose (Material 3)
-- Spotify App Remote SDK + Auth SDK (distribusi AAR di `app/libs/`)
+- Spotify App Remote SDK (distribusi AAR di `app/libs/`)
+- OAuth Authorization Code + PKCE via Custom Tabs (`androidx.browser`)
 - LRCLIB API via Retrofit + Moshi
 - Room (gak dipakai — JSON file cache lebih simple)
 - DataStore Preferences untuk persist toggle
@@ -104,11 +105,51 @@ $keytool = "C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe"
 
 ## Architecture
 
+### Auth
+
+Login memakai **Authorization Code + PKCE** lewat Custom Tab ke
+`accounts.spotify.com`, bukan `AuthorizationClient` dari Auth SDK.
+
+Alasannya struktural, bukan preferensi. Auth SDK cuma bisa memberi implicit
+grant (`Type.TOKEN`) di jalur native, dan implicit grant tidak punya refresh
+token, jadi sesi mati setelah satu jam. Jalur `Type.CODE` +
+`setCustomParam("code_challenge", …)` juga tidak jalan: `toUri()` (jalur
+browser) memang meneruskan custom param, tapi
+`SpotifyNativeAuthUtil.startAuthActivity()` cuma mengirim
+`VERSION, CLIENT_ID, REDIRECT_URI, RESPONSE_TYPE, SCOPES, STATE` ke intent dan
+membuang sisanya. Karena app ini mensyaratkan Spotify terpasang, jalur native
+selalu menang dan `code_challenge` tidak pernah sampai.
+
+Alurnya:
+
+```
+ConnectScreen tap
+  └─ authRepository.beginAuthorization()   generate verifier + challenge + state, persist
+       └─ Custom Tab → accounts.spotify.com/authorize?...&code_challenge=…
+            └─ redirect spotivibe://callback?code=…&state=…
+                 └─ MainActivity.onNewIntent (launchMode=singleTask)
+                      └─ POST /api/token (code + code_verifier, tanpa client secret)
+                           └─ access + refresh token → DataStore
+                                └─ SpotifyAppRemote.connect(showAuthView=false)
+```
+
+Semua pembacaan token lewat `authRepository.validAccessToken()`, yang me-refresh
+sendiri 60 detik sebelum expiry di bawah satu mutex, jadi pemanggil bersamaan
+(UI, notification service, overlay, preload antrean) hanya memicu satu request
+refresh. Kegagalan sementara (jaringan) mempertahankan kredensial; hanya
+penolakan permanen (`invalid_grant` dan kawan-kawan) yang memaksa login ulang.
+
+Token disimpan di DataStore dan direktori `datastore/` dikecualikan dari cloud
+backup maupun device transfer.
+
+### Container
+
 ```
 SpotivibeApp (Application)
 ├── applicationScope (SupervisorJob + Main.immediate)
-├── preferencesRepository (DataStore)
-├── spotifyConnection ─ AppRemote IPC + Auth
+├── preferencesRepository (DataStore, sekaligus AuthStorage)
+├── authRepository ─ PKCE + token refresh (single-flight)
+├── spotifyConnection ─ AppRemote IPC
 ├── lyricsRepository ─ LRCLIB + 3-layer cache (mem LRU 50, disk JSON, network)
 ├── romanizationService ─ JA/KR/ZH lazy-init
 └── playbackController ─ orchestrator
@@ -138,7 +179,11 @@ ViewModel + UI      NotificationService    OverlayManager
 
 ## Compatibility caveats
 
-- **Spotify Premium required** untuk play/pause/seek/next/prev via App Remote API
+- **Spotify Premium required** untuk play/pause/seek/next/prev via App Remote API.
+  Kontrol ditampilkan optimistis selama tipe akun belum terkonfirmasi, dan baru
+  disembunyikan setelah ada bukti nyata: `/me` bilang non-premium, atau App
+  Remote menolak perintah. Panggilan Web API yang gagal TIDAK menyembunyikan
+  kontrol, karena kontrolnya sendiri jalan lewat App Remote
 - **Min SDK 26** (Android 8) — covers ~95% device global
 - **HyperOS Dynamic Island** tidak di-hijack karena pakai `foregroundServiceType=specialUse` (bukan `mediaPlayback`)
 - **MIUI Autostart + Battery No Restrictions** untuk Spotivibe + Spotify wajib dinyalakan biar service stabil

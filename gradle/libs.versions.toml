@@ -17,6 +17,8 @@ kuromoji = "0.9.0"
 pinyin4j = "2.5.1"
 datastore = "1.1.1"
 androidxMedia = "1.7.0"
+androidxBrowser = "1.8.0"
+coroutinesTest = "1.10.2"
 # Spotify SDK distributed via AAR (see app/libs/) — not from Maven repo
 
 [libraries]
@@ -61,6 +63,13 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 
 # MediaStyle notification + MediaSessionCompat untuk lock screen integration
 androidx-media = { group = "androidx.media", name = "media", version.ref = "androidxMedia" }
+
+# Custom Tabs — layar consent Authorization Code + PKCE. Jalur native SDK
+# tidak bisa dipakai karena membuang param code_challenge.
+androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "androidxBrowser" }
+
+# Test coroutine (runTest, TestScope) untuk unit test single-flight refresh
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

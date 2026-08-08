@@ -7,6 +7,8 @@ import com.tglabs.spotivibe.data.PreferencesRepository
 import com.tglabs.spotivibe.data.RomanizationService
 import com.tglabs.spotivibe.data.SpotifyConnection
 import com.tglabs.spotivibe.data.WebApiClient
+import com.tglabs.spotivibe.data.auth.SpotifyAuthApi
+import com.tglabs.spotivibe.data.auth.SpotifyAuthRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,13 +28,30 @@ class SpotivibeApp : Application() {
     )
 
     val preferencesRepository: PreferencesRepository by lazy { PreferencesRepository(this) }
+
+    /**
+     * Sumber kebenaran tunggal untuk kredensial Spotify. Semua pembacaan token
+     * lewat sini supaya refresh terjadi sekali, bukan per pemanggil.
+     */
+    val authRepository: SpotifyAuthRepository by lazy {
+        SpotifyAuthRepository(
+            clientId = BuildConfig.SPOTIFY_CLIENT_ID,
+            redirectUri = BuildConfig.SPOTIFY_REDIRECT_URI,
+            storage = preferencesRepository,
+            api = SpotifyAuthApi(
+                clientId = BuildConfig.SPOTIFY_CLIENT_ID,
+                redirectUri = BuildConfig.SPOTIFY_REDIRECT_URI,
+            ),
+        )
+    }
+
     val spotifyConnection: SpotifyConnection by lazy {
-        SpotifyConnection(preferencesRepository, applicationScope)
+        SpotifyConnection(authRepository, applicationScope)
     }
     val lyricsRepository: LyricsRepository by lazy { LyricsRepository(this) }
     val romanizationService: RomanizationService by lazy { RomanizationService() }
     val webApiClient: WebApiClient by lazy {
-        WebApiClient(tokenProvider = { spotifyConnection.currentAccessToken() })
+        WebApiClient(tokenProvider = { authRepository.validAccessToken() })
     }
 
     val playbackController: PlaybackController by lazy {
@@ -45,4 +64,5 @@ class SpotivibeApp : Application() {
             scope = applicationScope,
         )
     }
+
 }

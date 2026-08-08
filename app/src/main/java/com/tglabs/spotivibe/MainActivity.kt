@@ -13,6 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.content.ContextCompat
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,7 +29,6 @@ import com.tglabs.spotivibe.ui.screen.MainScreen
 import com.tglabs.spotivibe.ui.screen.SettingsScreen
 import com.tglabs.spotivibe.ui.theme.SpotivibeTheme
 import com.tglabs.spotivibe.ui.vm.SpotivibeViewModel
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -40,12 +40,6 @@ class MainActivity : ComponentActivity() {
             connection = app.spotifyConnection,
             preferencesRepository = app.preferencesRepository,
         )
-    }
-
-    private val spotifyAuthLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        viewModel.handleAuthResult(this, result.resultCode, result.data)
     }
 
     private val notificationPermissionLauncher = registerForActivityResult(
@@ -75,13 +69,17 @@ class MainActivity : ComponentActivity() {
 
         val app = application as SpotivibeApp
 
-        // Auto-reconnect kalau user sudah pernah authorize di session sebelumnya.
-        // Skip Connect button, langsung bind ke Spotify app service.
+        // Muat kredensial tersimpan, lalu auto-reconnect kalau sesinya masih
+        // hidup. Sesi dianggap hidup kalau punya refresh token, bukan sekadar
+        // flag "pernah login" seperti dulu -- flag itu tetap true walaupun
+        // token sudah mati dan tidak bisa diperbarui.
         lifecycleScope.launch {
-            val authorized = app.preferencesRepository.spotifyAuthorized.first()
-            if (authorized) {
+            runCatching { app.authRepository.restore() }
+            if (app.spotifyConnection.hasSession()) {
                 app.spotifyConnection.tryAutoConnect(this@MainActivity)
             }
+            // Cold start bisa saja dipicu oleh redirect auth itu sendiri.
+            handleAuthRedirect(intent)
         }
 
         // Service lifecycle: start saat Connected, stop saat Disconnected/Error
@@ -134,7 +132,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     MainScreen(
                         state = state,
-                        onConnect = { viewModel.startAuth(this, spotifyAuthLauncher) },
+                        onConnect = { startSpotifyAuthorization() },
                         onTogglePlayPause = { viewModel.togglePlayPause() },
                         onNext = { viewModel.next() },
                         onPrevious = { viewModel.previous() },
@@ -147,6 +145,61 @@ class MainActivity : ComponentActivity() {
                         onOpenSettings = { showSettings = true },
                     )
                 }
+            }
+        }
+    }
+
+    /**
+     * Redirect `spotivibe://callback` mendarat di sini. Activity ini
+     * `launchMode="singleTask"` supaya redirect masuk lewat [onNewIntent] ke
+     * instance yang sudah ada, bukan menumpuk instance kedua di atas yang lama.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleAuthRedirect(intent)
+    }
+
+    private fun handleAuthRedirect(intent: Intent?) {
+        val uri = intent?.data?.toString() ?: return
+        viewModel.handleRedirect(this, uri)
+    }
+
+    /**
+     * Buka layar consent Spotify di Custom Tab.
+     *
+     * Kenapa browser, bukan dialog native SDK: PKCE butuh `code_challenge`
+     * ikut di request authorize, dan jalur native SDK membuang custom param.
+     * Tanpa PKCE tidak ada refresh token, dan tanpa refresh token sesi mati
+     * setelah satu jam.
+     */
+    private fun startSpotifyAuthorization() {
+        viewModel.beginAuth { url ->
+            val launched = runCatching {
+                CustomTabsIntent.Builder()
+                    .setShowTitle(true)
+                    .build()
+                    .launchUrl(this, Uri.parse(url))
+                true
+            }.getOrElse { t ->
+                Log.w(TAG, "Custom Tab gagal dibuka: ${t.message}")
+                false
+            }
+            if (launched) return@beginAuth
+
+            // Tidak ada penyedia Custom Tabs. Jatuh ke browser biasa; redirect
+            // tetap balik lewat intent filter yang sama.
+            val fallback = runCatching {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                true
+            }.getOrElse { t ->
+                Log.e(TAG, "Tidak ada browser untuk membuka login", t)
+                false
+            }
+            if (!fallback) {
+                (application as SpotivibeApp).spotifyConnection.onAuthorizeLaunchFailed(
+                    "Tidak ada browser di device untuk membuka login Spotify."
+                )
             }
         }
     }

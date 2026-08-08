@@ -7,6 +7,9 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.tglabs.spotivibe.data.auth.AuthStorage
+import com.tglabs.spotivibe.data.auth.PendingAuth
+import com.tglabs.spotivibe.data.auth.SpotifyTokens
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -15,16 +18,27 @@ private val Context.dataStore by preferencesDataStore(name = "spotivibe_prefs")
 
 /**
  * Persist user preferences + overlay position. Survive app restart.
+ *
+ * Juga jadi implementasi [AuthStorage] untuk kredensial Spotify. File ini
+ * di-exclude dari cloud backup lewat `res/xml/backup_rules.xml` +
+ * `data_extraction_rules.xml` -- refresh token tidak boleh ikut terangkut ke
+ * backup Google.
  */
-class PreferencesRepository(private val context: Context) {
+class PreferencesRepository(private val context: Context) : AuthStorage {
 
     private val romanizationKey = booleanPreferencesKey("romanization_enabled")
     private val overlayEnabledKey = booleanPreferencesKey("overlay_enabled")
     private val overlayXKey = intPreferencesKey("overlay_x")
     private val overlayYKey = intPreferencesKey("overlay_y")
-    private val spotifyAuthorizedKey = booleanPreferencesKey("spotify_authorized")
     private val spotifyTokenKey = stringPreferencesKey("spotify_access_token")
+    private val spotifyRefreshTokenKey = stringPreferencesKey("spotify_refresh_token")
     private val spotifyTokenExpiresAtKey = longPreferencesKey("spotify_token_expires_at_ms")
+    private val pkceVerifierKey = stringPreferencesKey("spotify_pkce_verifier")
+    private val pkceStateKey = stringPreferencesKey("spotify_pkce_state")
+
+    // Legacy: flag dari era implicit grant. Dihapus saat clearTokens() supaya
+    // tidak ada dua sumber kebenaran soal "apakah user sudah login".
+    private val legacyAuthorizedKey = booleanPreferencesKey("spotify_authorized")
     private val darkModeKey = booleanPreferencesKey("dark_mode")
     private val lyricsFontSizeKey = intPreferencesKey("lyrics_font_size")
     // Improvement set: per-user fine-tuning lyrics behavior
@@ -46,40 +60,63 @@ class PreferencesRepository(private val context: Context) {
             (prefs[overlayXKey] ?: 0) to (prefs[overlayYKey] ?: 0)
         }
 
-    /**
-     * Apakah user sudah pernah authorize Spotify di session sebelumnya.
-     * Kalau true, app start auto-reconnect tanpa show "Connect Spotify" prompt.
-     */
-    val spotifyAuthorized: Flow<Boolean> = context.dataStore.data
-        .map { prefs -> prefs[spotifyAuthorizedKey] ?: false }
+    // ── AuthStorage ──────────────────────────────────────────────
+    //
+    // Token lama dari era implicit grant tidak punya refresh token. Saat
+    // di-load, refreshToken-nya null, jadi SpotifyAuthRepository.restore()
+    // menganggapnya SignedOut dan user login sekali lewat PKCE. Itu migrasi
+    // yang diinginkan: sesi yang tidak bisa diperbarui memang tidak berguna.
 
-    /**
-     * Persisted access token + epoch ms expiry. Token reused di sesi berikutnya
-     * untuk Spotify Web API (Premium check, queue fetch) tanpa harus prompt
-     * AuthorizationClient lagi. Token expires ~1 jam — kalau lewat, getter
-     * return null dan caller fallback gracefully.
-     */
-    suspend fun getValidAccessToken(): String? {
-        val prefs = context.dataStore.data
-            .map { it[spotifyTokenKey] to (it[spotifyTokenExpiresAtKey] ?: 0L) }
-            .first()
-        val (token, expiresAt) = prefs
-        return if (!token.isNullOrBlank() && expiresAt > System.currentTimeMillis()) {
-            token
-        } else null
+    override suspend fun loadTokens(): SpotifyTokens? {
+        val prefs = context.dataStore.data.first()
+        val access = prefs[spotifyTokenKey]?.takeIf { it.isNotBlank() } ?: return null
+        return SpotifyTokens(
+            accessToken = access,
+            refreshToken = prefs[spotifyRefreshTokenKey]?.takeIf { it.isNotBlank() },
+            expiresAtMs = prefs[spotifyTokenExpiresAtKey] ?: 0L,
+        )
     }
 
-    suspend fun setSpotifyAccessToken(token: String, expiresAtMs: Long) {
+    override suspend fun saveTokens(tokens: SpotifyTokens) {
         context.dataStore.edit { prefs ->
-            prefs[spotifyTokenKey] = token
-            prefs[spotifyTokenExpiresAtKey] = expiresAtMs
+            prefs[spotifyTokenKey] = tokens.accessToken
+            prefs[spotifyTokenExpiresAtKey] = tokens.expiresAtMs
+            val refresh = tokens.refreshToken
+            if (refresh.isNullOrBlank()) {
+                prefs.remove(spotifyRefreshTokenKey)
+            } else {
+                prefs[spotifyRefreshTokenKey] = refresh
+            }
         }
     }
 
-    suspend fun clearSpotifyAccessToken() {
+    override suspend fun clearTokens() {
         context.dataStore.edit { prefs ->
             prefs.remove(spotifyTokenKey)
+            prefs.remove(spotifyRefreshTokenKey)
             prefs.remove(spotifyTokenExpiresAtKey)
+            prefs.remove(legacyAuthorizedKey)
+        }
+    }
+
+    override suspend fun savePendingAuth(pending: PendingAuth) {
+        context.dataStore.edit { prefs ->
+            prefs[pkceVerifierKey] = pending.verifier
+            prefs[pkceStateKey] = pending.state
+        }
+    }
+
+    override suspend fun loadPendingAuth(): PendingAuth? {
+        val prefs = context.dataStore.data.first()
+        val verifier = prefs[pkceVerifierKey]?.takeIf { it.isNotBlank() } ?: return null
+        val state = prefs[pkceStateKey]?.takeIf { it.isNotBlank() } ?: return null
+        return PendingAuth(verifier = verifier, state = state)
+    }
+
+    override suspend fun clearPendingAuth() {
+        context.dataStore.edit { prefs ->
+            prefs.remove(pkceVerifierKey)
+            prefs.remove(pkceStateKey)
         }
     }
 
@@ -130,10 +167,6 @@ class PreferencesRepository(private val context: Context) {
             prefs[overlayXKey] = x
             prefs[overlayYKey] = y
         }
-    }
-
-    suspend fun setSpotifyAuthorized(authorized: Boolean) {
-        context.dataStore.edit { it[spotifyAuthorizedKey] = authorized }
     }
 
     suspend fun setDarkMode(dark: Boolean) {

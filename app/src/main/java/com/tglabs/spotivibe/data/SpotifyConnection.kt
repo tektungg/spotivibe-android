@@ -1,23 +1,18 @@
 package com.tglabs.spotivibe.data
 
-import android.app.Activity
 import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import androidx.activity.result.ActivityResultLauncher
 import com.spotify.android.appremote.api.ConnectionParams
 import com.spotify.android.appremote.api.Connector
 import com.spotify.android.appremote.api.SpotifyAppRemote
 import com.spotify.protocol.types.Image
 import com.spotify.protocol.types.ImageUri
 import com.spotify.protocol.types.PlayerState
-import com.spotify.sdk.android.auth.AuthorizationClient
-import com.spotify.sdk.android.auth.AuthorizationRequest
-import com.spotify.sdk.android.auth.AuthorizationResponse
 import com.tglabs.spotivibe.BuildConfig
+import com.tglabs.spotivibe.data.auth.SpotifyAuthRepository
 import com.tglabs.spotivibe.domain.NowPlaying
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,18 +21,22 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Manage Spotify connection — 2-step flow karena Android 14+ BAL restriction:
+ * Mengelola koneksi Spotify. Dua langkah, terpisah dan berbeda sifat:
  *
- * 1. AuthorizationClient.createLoginActivityIntent() launched dari Activity
- *    (foreground context) → user approve auth dialog
- * 2. Setelah token received, SpotifyAppRemote.connect(showAuthView=false)
- *    untuk bind ke Spotify app service
+ * 1. **Authorization** lewat Authorization Code + PKCE di Custom Tab
+ *    ([SpotifyAuthRepository]). Menghasilkan access token yang bisa di-refresh.
+ * 2. **App Remote** bind ke service app Spotify, `showAuthView=false` karena
+ *    grant dari langkah 1 sudah mencakup scope `app-remote-control`.
  *
- * Step 1 wajib launched dari Activity supaya Background Activity Launch tidak
- * memblok. Step 2 bisa pakai Context biasa karena tidak start activity baru.
+ * Kenapa bukan `AuthorizationClient` bawaan SDK lagi: SDK cuma bisa memberi
+ * implicit grant (`Type.TOKEN`) di jalur native, dan implicit grant tidak
+ * punya refresh token. Jalur `Type.CODE` + `setCustomParam("code_challenge")`
+ * juga tidak jalan, karena `SpotifyNativeAuthUtil.startAuthActivity()` cuma
+ * meneruskan VERSION/CLIENT_ID/REDIRECT_URI/RESPONSE_TYPE/SCOPES/STATE ke
+ * intent dan membuang custom param. Lihat catatan di [PkceCodes].
  */
 class SpotifyConnection(
-    private val preferencesRepository: PreferencesRepository,
+    private val authRepository: SpotifyAuthRepository,
     private val applicationScope: CoroutineScope,
 ) {
 
@@ -51,25 +50,6 @@ class SpotifyConnection(
     private var appRemote: SpotifyAppRemote? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var timeoutRunnable: Runnable? = null
-    @Volatile
-    private var accessToken: String? = null
-
-    /** Public getter — WebApiClient pakai lambda ke method ini untuk Bearer header */
-    fun currentAccessToken(): String? = accessToken
-
-    init {
-        // Load persisted token saat startup — supaya Web API calls (Premium check,
-        // queue preload) jalan walaupun user pakai auto-reconnect (skip auth dialog).
-        applicationScope.launch {
-            val token = preferencesRepository.getValidAccessToken()
-            if (!token.isNullOrBlank()) {
-                accessToken = token
-                Log.d(TAG, "Loaded persisted access token (length=${token.length})")
-            } else {
-                Log.d(TAG, "No valid persisted token — Web API features will be limited until auth")
-            }
-        }
-    }
 
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
@@ -80,102 +60,94 @@ class SpotifyConnection(
     private val _albumBitmap = MutableStateFlow<Bitmap?>(null)
     val albumBitmap: StateFlow<Bitmap?> = _albumBitmap.asStateFlow()
 
+    /**
+     * Menyala kalau App Remote pernah menolak perintah kontrol kita. Ini bukti
+     * paling langsung bahwa akunnya tidak boleh mengontrol playback, jauh lebih
+     * dapat dipercaya daripada menebak dari field `product` Web API.
+     */
+    private val _controlRejected = MutableStateFlow(false)
+    val controlRejected: StateFlow<Boolean> = _controlRejected.asStateFlow()
+
     private var lastFetchedImageUri: String? = null
 
+    /** Sudah ada sesi tersimpan yang layak auto-reconnect? */
+    fun hasSession(): Boolean = authRepository.hasSession()
+
     /**
-     * STEP 1: Launch Spotify auth dialog dari Activity (foreground context).
-     * Hasil di-handle via handleAuthResult() — caller harus register
-     * ActivityResultLauncher<Intent> dan call handleAuthResult dari callback.
+     * LANGKAH 1: URL yang harus dibuka di Custom Tab untuk authorize.
+     * Return null kalau Client ID belum diset.
      */
-    fun startAuth(activity: Activity, launcher: ActivityResultLauncher<Intent>) {
-        if (_connectionState.value is ConnectionState.Connected ||
-            _connectionState.value is ConnectionState.Connecting
-        ) {
-            Log.d(TAG, "startAuth() ignored — already ${_connectionState.value}")
-            return
-        }
+    suspend fun authorizeUrl(): String? {
         if (BuildConfig.SPOTIFY_CLIENT_ID.isEmpty()) {
             _connectionState.value = ConnectionState.Error(
                 "Spotify Client ID belum diset di local.properties"
             )
-            return
+            return null
         }
-
-        Log.d(TAG, "startAuth() — launching AuthorizationClient")
         _connectionState.value = ConnectionState.Connecting
-        SpotifyAppRemote.setDebugMode(true)
-
-        val request = AuthorizationRequest.Builder(
-            BuildConfig.SPOTIFY_CLIENT_ID,
-            AuthorizationResponse.Type.TOKEN,
-            BuildConfig.SPOTIFY_REDIRECT_URI,
-        )
-            .setScopes(
-                arrayOf(
-                    "app-remote-control",
-                    "user-read-currently-playing",
-                    "user-read-playback-state",
-                    "user-modify-playback-state",
-                    "user-read-private",
+        return runCatching { authRepository.beginAuthorization() }
+            .onFailure {
+                Log.e(TAG, "beginAuthorization gagal", it)
+                _connectionState.value = ConnectionState.Error(
+                    "Gagal memulai login: ${it.message ?: "unknown"}"
                 )
-            )
-            .build()
-
-        val intent = AuthorizationClient.createLoginActivityIntent(activity, request)
-        launcher.launch(intent)
+            }
+            .getOrNull()
     }
 
-    /** Called dari Activity onActivityResult / ActivityResultLauncher callback */
-    fun handleAuthResult(context: Context, resultCode: Int, data: Intent?) {
-        val response = AuthorizationClient.getResponse(resultCode, data)
-        Log.d(TAG, "handleAuthResult — type=${response.type}, error=${response.error}")
+    /** Dipanggil saat browser gagal dibuka, supaya UI tidak tertinggal di Connecting. */
+    fun onAuthorizeLaunchFailed(reason: String) {
+        _connectionState.value = ConnectionState.Error(reason)
+    }
 
-        when (response.type) {
-            AuthorizationResponse.Type.TOKEN -> {
-                accessToken = response.accessToken
-                val expiresInSec = response.expiresIn.coerceAtLeast(0)
-                val expiresAt = System.currentTimeMillis() + expiresInSec * 1000L - 30_000L
-                Log.d(TAG, "Got access token (length=${response.accessToken?.length ?: 0}, expiresInSec=$expiresInSec)")
-                // Persist authorized flag + token + expiry — next cold start, skip
-                // auth dialog AND tetap punya token untuk Web API calls.
-                applicationScope.launch {
-                    runCatching {
-                        preferencesRepository.setSpotifyAuthorized(true)
-                        response.accessToken?.let {
-                            preferencesRepository.setSpotifyAccessToken(it, expiresAt)
-                        }
+    /**
+     * Proses URI redirect `spotivibe://callback`. Aman dipanggil untuk intent
+     * apapun: URI yang bukan milik kita diabaikan tanpa efek samping.
+     *
+     * @return true kalau URI ini memang redirect auth kita.
+     */
+    suspend fun handleRedirect(context: Context, uri: String?): Boolean {
+        return when (val result = authRepository.completeRedirect(uri)) {
+            SpotifyAuthRepository.CompleteResult.Ignored -> false
+
+            SpotifyAuthRepository.CompleteResult.Success -> {
+                Log.d(TAG, "Authorization sukses -- bind App Remote")
+                // allowAuthView: kita ada di Activity foreground di sini, jadi
+                // kalau App Remote tetap menganggap belum ter-authorize, dialog
+                // milik app Spotify boleh muncul tanpa kena batasan Background
+                // Activity Launch.
+                connectAppRemote(context, allowAuthView = true)
+                true
+            }
+
+            is SpotifyAuthRepository.CompleteResult.Denied -> {
+                _connectionState.value = ConnectionState.Disconnected
+                Log.d(TAG, "User menolak authorization: ${result.error}")
+                true
+            }
+
+            is SpotifyAuthRepository.CompleteResult.Failed -> {
+                _connectionState.value = ConnectionState.Error(
+                    if (result.permanent) {
+                        "Login ditolak Spotify (${result.reason}). Coba lagi."
+                    } else {
+                        "Gagal menyelesaikan login: ${result.reason}. Cek koneksi lalu coba lagi."
                     }
-                }
-                connectAppRemote(context)
-            }
-            AuthorizationResponse.Type.ERROR -> {
-                _connectionState.value = ConnectionState.Error(
-                    "Auth error: ${response.error ?: "unknown"}"
                 )
-            }
-            AuthorizationResponse.Type.EMPTY -> {
-                _connectionState.value = ConnectionState.Error(
-                    "Auth dibatalkan / dialog ditutup"
-                )
-            }
-            else -> {
-                _connectionState.value = ConnectionState.Error(
-                    "Auth result tidak terduga: ${response.type}"
-                )
+                true
             }
         }
     }
 
     /**
-     * Auto-reconnect — dipanggil di MainActivity.onCreate kalau user sudah pernah
-     * authorize sebelumnya (preferencesRepository.spotifyAuthorized = true).
-     * Skip auth dialog, langsung bind ke App Remote.
+     * Auto-reconnect saat startup kalau sudah ada sesi tersimpan. Lewati layar
+     * Connect, langsung bind App Remote.
      */
     fun tryAutoConnect(context: Context) {
         if (_connectionState.value is ConnectionState.Connected ||
             _connectionState.value is ConnectionState.Connecting
         ) {
-            Log.d(TAG, "tryAutoConnect() ignored — already ${_connectionState.value}")
+            Log.d(TAG, "tryAutoConnect() diabaikan -- sudah ${_connectionState.value}")
             return
         }
         if (BuildConfig.SPOTIFY_CLIENT_ID.isEmpty()) {
@@ -184,58 +156,109 @@ class SpotifyConnection(
             )
             return
         }
-        Log.d(TAG, "tryAutoConnect() — skipping auth dialog (previously authorized)")
         _connectionState.value = ConnectionState.Connecting
-        SpotifyAppRemote.setDebugMode(true)
-        connectAppRemote(context)
+        connectAppRemote(context, allowAuthView = false)
     }
 
-    /** STEP 2: Bind ke Spotify app service. Tidak butuh Activity karena tidak launch UI. */
-    private fun connectAppRemote(context: Context) {
-        Log.d(TAG, "connectAppRemote() — binding to Spotify service")
+    /** LANGKAH 2: bind ke service app Spotify. */
+    private fun connectAppRemote(context: Context, allowAuthView: Boolean) {
+        Log.d(TAG, "connectAppRemote(allowAuthView=$allowAuthView)")
+        if (BuildConfig.DEBUG) SpotifyAppRemote.setDebugMode(true)
         scheduleTimeout()
 
         val params = ConnectionParams.Builder(BuildConfig.SPOTIFY_CLIENT_ID)
             .setRedirectUri(BuildConfig.SPOTIFY_REDIRECT_URI)
-            .showAuthView(false) // user sudah authorized via AuthorizationClient di Step 1
+            .showAuthView(false)
             .build()
 
-        SpotifyAppRemote.connect(context.applicationContext, params, object : Connector.ConnectionListener {
+        // showAuthView=false dipakai lebih dulu supaya jalur normal tidak pernah
+        // memunculkan dialog kedua. Kalau App Remote tetap bilang belum
+        // ter-authorize DAN kita sedang di konteks foreground, baru sekali retry
+        // dengan dialog milik app Spotify.
+        SpotifyAppRemote.connect(
+            context.applicationContext,
+            params,
+            object : Connector.ConnectionListener {
+                override fun onConnected(remote: SpotifyAppRemote) {
+                    Log.d(TAG, "onConnected -- App Remote tersambung")
+                    cancelTimeout()
+                    appRemote = remote
+                    _controlRejected.value = false
+                    _connectionState.value = ConnectionState.Connected
+                    subscribePlayerState(remote)
+                }
+
+                override fun onFailure(throwable: Throwable) {
+                    Log.e(
+                        TAG,
+                        "onFailure: ${throwable.javaClass.simpleName} -- ${throwable.message}",
+                        throwable,
+                    )
+                    cancelTimeout()
+                    if (isAuthIssue(throwable)) {
+                        if (allowAuthView) {
+                            Log.d(TAG, "Auth issue -- retry sekali dengan auth view Spotify")
+                            retryWithAuthView(context)
+                        } else {
+                            onAuthorizationLost()
+                        }
+                    } else {
+                        _connectionState.value = ConnectionState.Error(
+                            "${throwable.javaClass.simpleName}: " +
+                                (throwable.message ?: "").ifBlank { "unknown" }
+                        )
+                    }
+                }
+            },
+        )
+    }
+
+    private fun retryWithAuthView(context: Context) {
+        scheduleTimeout()
+        val params = ConnectionParams.Builder(BuildConfig.SPOTIFY_CLIENT_ID)
+            .setRedirectUri(BuildConfig.SPOTIFY_REDIRECT_URI)
+            .showAuthView(true)
+            .build()
+
+        SpotifyAppRemote.connect(context, params, object : Connector.ConnectionListener {
             override fun onConnected(remote: SpotifyAppRemote) {
-                Log.d(TAG, "onConnected — App Remote linked")
+                Log.d(TAG, "onConnected lewat auth view")
                 cancelTimeout()
                 appRemote = remote
+                _controlRejected.value = false
                 _connectionState.value = ConnectionState.Connected
                 subscribePlayerState(remote)
             }
 
             override fun onFailure(throwable: Throwable) {
-                Log.e(TAG, "onFailure: ${throwable.javaClass.simpleName} — ${throwable.message}", throwable)
+                Log.e(TAG, "Retry auth view gagal: ${throwable.message}", throwable)
                 cancelTimeout()
-                // Kalau error karena user revoke / not authorized di Spotify side,
-                // clear flag biar user lihat Connect button lagi (fresh auth flow).
-                val name = throwable.javaClass.simpleName
-                val msg = throwable.message ?: ""
-                val isAuthIssue = "NotAuthorized" in name ||
-                    "NotLoggedIn" in name ||
-                    "authorization" in msg.lowercase()
-                if (isAuthIssue) {
-                    accessToken = null
-                    applicationScope.launch {
-                        runCatching {
-                            preferencesRepository.setSpotifyAuthorized(false)
-                            preferencesRepository.clearSpotifyAccessToken()
-                        }
-                    }
-                    // Set Disconnected (bukan Error) supaya ConnectScreen muncul normal
-                    _connectionState.value = ConnectionState.Disconnected
+                if (isAuthIssue(throwable)) {
+                    onAuthorizationLost()
                 } else {
                     _connectionState.value = ConnectionState.Error(
-                        "$name: ${msg.ifBlank { "unknown" }}"
+                        "${throwable.javaClass.simpleName}: " +
+                            (throwable.message ?: "").ifBlank { "unknown" }
                     )
                 }
             }
         })
+    }
+
+    private fun isAuthIssue(throwable: Throwable): Boolean {
+        val name = throwable.javaClass.simpleName
+        val msg = throwable.message.orEmpty().lowercase()
+        return "NotAuthorized" in name || "NotLoggedIn" in name || "authorization" in msg
+    }
+
+    /**
+     * Grant sudah tidak berlaku (user cabut akses di spotify.com, atau
+     * kredensial rusak). Buang sesi lokal supaya UI kembali ke layar Connect
+     * dengan flow login yang bersih, bukan macet di layar error.
+     */
+    private fun onAuthorizationLost() {
+        applicationScope.launch { runCatching { authRepository.signOut() } }
+        _connectionState.value = ConnectionState.Disconnected
     }
 
     fun disconnect() {
@@ -249,11 +272,18 @@ class SpotifyConnection(
         lastFetchedImageUri = null
     }
 
+    /** Logout lokal: buang kredensial + putus App Remote. */
+    suspend fun signOut() {
+        authRepository.signOut()
+        _controlRejected.value = false
+        disconnect()
+    }
+
     private fun scheduleTimeout() {
         cancelTimeout()
         timeoutRunnable = Runnable {
             if (_connectionState.value is ConnectionState.Connecting) {
-                Log.w(TAG, "Connection timeout — no callback fired in 15s")
+                Log.w(TAG, "Connection timeout -- tidak ada callback dalam 15 detik")
                 _connectionState.value = ConnectionState.Error(
                     "Timeout. Pastikan Spotify app running, lalu coba lagi."
                 )
@@ -269,7 +299,6 @@ class SpotifyConnection(
     private fun subscribePlayerState(remote: SpotifyAppRemote) {
         remote.playerApi.subscribeToPlayerState()
             .setEventCallback { state ->
-                Log.d(TAG, "PlayerState — track=${state.track?.name}, paused=${state.isPaused}")
                 _nowPlaying.value = state.toNowPlaying()
                 maybeFetchAlbumArt(remote, state.track?.imageUri?.raw)
             }
@@ -278,7 +307,7 @@ class SpotifyConnection(
             }
     }
 
-    /** Fetch album cover bitmap saat track berubah. Cache via lastFetchedImageUri. */
+    /** Fetch album cover saat track berubah. Cache via lastFetchedImageUri. */
     private fun maybeFetchAlbumArt(remote: SpotifyAppRemote, imageUriRaw: String?) {
         if (imageUriRaw == lastFetchedImageUri) return
         lastFetchedImageUri = imageUriRaw
@@ -286,21 +315,36 @@ class SpotifyConnection(
         if (imageUriRaw.isNullOrBlank()) return
 
         remote.imagesApi.getImage(ImageUri(imageUriRaw), Image.Dimension.LARGE)
-            .setResultCallback { bitmap ->
-                Log.d(TAG, "Album art fetched: ${bitmap.width}x${bitmap.height}")
-                _albumBitmap.value = bitmap
-            }
-            .setErrorCallback { t ->
-                Log.w(TAG, "Album art fetch failed: ${t.message}")
-            }
+            .setResultCallback { bitmap -> _albumBitmap.value = bitmap }
+            .setErrorCallback { t -> Log.w(TAG, "Album art fetch gagal: ${t.message}") }
     }
 
-    fun play() { appRemote?.playerApi?.resume() }
-    fun pause() { appRemote?.playerApi?.pause() }
-    fun skipNext() { appRemote?.playerApi?.skipNext() }
-    fun skipPrevious() { appRemote?.playerApi?.skipPrevious() }
-    fun seekTo(positionMs: Long) {
-        appRemote?.playerApi?.seekTo(positionMs.coerceAtLeast(0))
+    // ── Kontrol playback ─────────────────────────────────────────
+    //
+    // Setiap perintah memasang error callback. Penolakan dicatat di
+    // [controlRejected], dan itulah yang menurunkan capability jadi Restricted.
+    // Sebelumnya kontrol disembunyikan berdasarkan tebakan dari Web API,
+    // padahal jalur kontrolnya sendiri App Remote.
+
+    fun play() = runControl("resume") { it.playerApi.resume() }
+    fun pause() = runControl("pause") { it.playerApi.pause() }
+    fun skipNext() = runControl("skipNext") { it.playerApi.skipNext() }
+    fun skipPrevious() = runControl("skipPrevious") { it.playerApi.skipPrevious() }
+    fun seekTo(positionMs: Long) = runControl("seekTo") {
+        it.playerApi.seekTo(positionMs.coerceAtLeast(0))
+    }
+
+    private fun runControl(
+        label: String,
+        block: (SpotifyAppRemote) -> com.spotify.protocol.client.PendingResult<*>,
+    ) {
+        val remote = appRemote ?: return
+        runCatching {
+            block(remote).setErrorCallback { t ->
+                Log.w(TAG, "Kontrol '$label' ditolak: ${t.message}")
+                _controlRejected.value = true
+            }
+        }.onFailure { Log.w(TAG, "Kontrol '$label' throw: ${it.message}") }
     }
 
     private fun PlayerState.toNowPlaying(): NowPlaying? {

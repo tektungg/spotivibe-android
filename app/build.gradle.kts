@@ -84,6 +84,14 @@ android {
         buildConfig = true
     }
 
+    // android.util.Log punya implementasi stub di JVM yang melempar exception.
+    // Gate test kita murni logika (PKCE, parsing redirect, expiry token,
+    // capability) tapi kelas yang diuji ikut menulis log, jadi stub-nya
+    // dibikin mengembalikan default alih-alih melempar.
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     // Resolve duplicate META-INF files dari multiple JARs (kuromoji-ipadic +
     // kuromoji-core sama-sama include CONTRIBUTORS.md, dll). Files ini hanya
     // metadata docs, tidak dibutuhkan saat runtime.
@@ -144,6 +152,9 @@ dependencies {
     // MediaStyle notification — lock screen + pull-down dengan synced lyric line
     implementation(libs.androidx.media)
 
+    // Custom Tabs — layar consent OAuth (Authorization Code + PKCE)
+    implementation(libs.androidx.browser)
+
     // Spotify Android SDK (distributed via AAR files in libs/, not Maven Central)
     implementation(files("libs/spotify-app-remote-release-0.8.0.aar"))
     implementation(files("libs/spotify-auth-release-2.1.0.aar"))
@@ -152,6 +163,7 @@ dependencies {
 
     // Tests
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

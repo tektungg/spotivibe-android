@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import com.tglabs.spotivibe.domain.PlaybackCapability
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tglabs.spotivibe.BuildConfig
@@ -221,37 +222,44 @@ fun SettingsScreen(
                             .size(8.dp)
                             .clip(CircleShape)
                             .background(
-                                when {
-                                    playing == null     -> sv.ink4
-                                    playing.isPremium   -> sv.accent
-                                    else                -> sv.ink3
+                                when (playing?.capability) {
+                                    null -> sv.ink4
+                                    PlaybackCapability.Full -> sv.accent
+                                    PlaybackCapability.Unknown -> sv.ink2
+                                    PlaybackCapability.Restricted -> sv.ink3
                                 }
                             ),
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = when {
-                                playing == null     -> "Tidak terhubung"
-                                playing.isPremium   -> "Premium · Terhubung"
-                                else                -> "Free tier · Terhubung"
+                            text = when (playing?.capability) {
+                                null -> "Tidak terhubung"
+                                PlaybackCapability.Full -> "Premium · Terhubung"
+                                PlaybackCapability.Unknown -> "Terhubung"
+                                PlaybackCapability.Restricted -> "Terhubung · kontrol dibatasi"
                             },
                             style = SvType.Body,
                             color = sv.ink1,
                         )
                         Text(
-                            text = when {
-                                playing == null     -> "tap Connect untuk mulai"
-                                playing.isPremium   -> "full playback control"
-                                else                -> "view-only · upgrade untuk control"
+                            text = when (playing?.capability) {
+                                null -> "tap Connect untuk mulai"
+                                PlaybackCapability.Full -> "full playback control"
+                                // Unknown bukan kegagalan: kontrol tetap jalan
+                                // lewat App Remote, hanya label akunnya yang
+                                // belum terkonfirmasi lewat Web API.
+                                PlaybackCapability.Unknown -> "tipe akun belum terkonfirmasi"
+                                PlaybackCapability.Restricted -> "view-only · butuh Premium untuk control"
                             },
                             style = SvType.BodyItalic.copy(fontSize = 13.sp),
                             color = sv.ink3,
                         )
                     }
                     if (playing != null) {
+                        val restricted = playing.capability.showsUpgradeNotice
                         MonoEyebrow(
-                            text = if (playing.isPremium) "● ACTIVE" else "● VIEW",
-                            color = if (playing.isPremium) sv.accent else sv.ink3,
+                            text = if (restricted) "● VIEW" else "● ACTIVE",
+                            color = if (restricted) sv.ink3 else sv.accent,
                         )
                     }
                 }

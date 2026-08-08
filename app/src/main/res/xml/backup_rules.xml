@@ -1,13 +1,15 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Aturan backup untuk device di bawah API 31.
+
+   DataStore Preferences kita (spotivibe_prefs) menyimpan access + refresh
+   token Spotify dalam bentuk plaintext. Refresh token itu kredensial jangka
+   panjang, jadi TIDAK boleh ikut terangkut ke cloud backup Google.
+
+   Preference lain (tema, ukuran font, posisi overlay) memang tidak dibackup
+   sekalian: nilainya sepele dan mengecualikan seluruh file jauh lebih aman
+   daripada berharap file dipecah dengan benar.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="file" path="datastore/" />
 </full-backup-content>

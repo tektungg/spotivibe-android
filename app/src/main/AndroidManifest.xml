@@ -27,10 +27,15 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Spotivibe">
 
+        <!-- launchMode=singleTask wajib untuk redirect OAuth: tanpa ini,
+             spotivibe://callback membuat instance MainActivity KEDUA di atas
+             yang lama, bukan masuk lewat onNewIntent ke instance yang sudah
+             memegang state auth. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.Spotivibe"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode">
             <intent-filter>
@@ -38,8 +43,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Spotify OAuth redirect: spotivibe://callback -->
-            <!-- Used in Phase 2 saat tambah AuthorizationClient -->
+            <!-- Redirect Authorization Code + PKCE: spotivibe://callback -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
