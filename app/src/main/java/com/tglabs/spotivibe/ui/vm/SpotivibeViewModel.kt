@@ -56,7 +56,7 @@ class SpotivibeViewModel(
         val bitmap = values[2] as Bitmap?
         val lyricsState = values[3] as com.tglabs.spotivibe.domain.LyricsState
         val currentLineIndex = values[4] as Int
-        val romaji = values[5] as Map<Long, String?>
+        val romaji = values[5] as Map<Int, String?>
         val accent = values[6] as Color?
         val capability = values[7] as com.tglabs.spotivibe.domain.PlaybackCapability
         val romaEnabled = values[8] as Boolean

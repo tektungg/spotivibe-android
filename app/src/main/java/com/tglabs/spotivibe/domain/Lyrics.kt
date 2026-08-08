@@ -10,13 +10,24 @@ data class SyncedWord(
 )
 
 /**
- * Satu baris synced lyric — timeMs adalah millisecond dari start lagu.
- * Kalau LRCLIB punya enhanced format (`[mm:ss.xx]<mm:ss.xx>word<mm:ss.xx>word`),
- * field `words` populated dengan timing per-kata. Else empty list → fallback
- * highlight per-baris seperti biasa.
+ * Satu baris synced lyric.
+ *
+ * [id] adalah identitas baris di dalam satu lagu: posisinya setelah diurutkan.
+ * Ini ADA karena `timeMs` bukan identitas. File LRC boleh, dan sering, punya
+ * beberapa baris dengan timestamp identik (reff yang ditandai berulang, baris
+ * kosong penanda jeda). Dulu `timeMs` dipakai sebagai key di `LazyColumn`, dan
+ * Compose melempar `IllegalArgumentException: Key was already used` begitu
+ * ketemu lagu seperti itu. `timeMs` juga dipakai sebagai key map romaji dan set
+ * seleksi, jadi dua baris berbeda saling menimpa romaji satu sama lain, dan
+ * memilih satu baris ikut memilih kembarannya.
+ *
+ * [words] terisi kalau LRCLIB punya format enhanced
+ * (`[mm:ss.xx]<mm:ss.xx>kata<mm:ss.xx>kata`). Kalau kosong, highlight jatuh
+ * balik ke per-baris.
  */
 @Immutable
 data class SyncedLine(
+    val id: Int,
     val timeMs: Long,
     val text: String,
     val words: List<SyncedWord> = emptyList(),
@@ -51,51 +62,94 @@ fun detectScript(text: String): Script {
 fun hasRomanizableText(lines: List<String>): Boolean =
     lines.any { detectScript(it) != Script.LATIN }
 
+/** Tag metadata LRC yang bukan lirik: `[ar:...]`, `[ti:...]`, dan kawan-kawan. */
+private val METADATA_TAG = Regex(
+    """^\s*\[(ar|ti|al|au|by|length|re|ve|tool|offset|#)\s*:""",
+    RegexOption.IGNORE_CASE,
+)
+
+/** `[mm:ss.xx]` atau `[mm:ss:xx]`. Menit boleh lebih dari 99 untuk lagu panjang. */
+private val TIME_TAG = Regex("""\[(\d{1,3}):([0-5]?\d)(?:[.:](\d{1,3}))?]""")
+
+/** `<mm:ss.xx>kata` untuk enhanced LRC. */
+private val WORD_TAG = Regex("""<(\d{1,3}):([0-5]?\d)(?:[.:](\d{1,3}))?>([^<]*)""")
+
 /**
- * Parse LRC format `[mm:ss.xx]text` → list of SyncedLine.
+ * Parse format LRC jadi daftar [SyncedLine], terurut naik dan ber-[SyncedLine.id]
+ * unik.
  *
- * Support 2 format:
- * - Standard: `[01:23.45]Hello world`
- * - Enhanced (per-word): `[01:23.45]<01:23.45>Hello <01:23.70>world`
- *   → parsing kata-kata dengan timestamp masing-masing untuk karaoke per-kata
+ * Yang didukung:
  *
- * Returns sorted by timeMs ascending. Lines tanpa timestamp di-skip.
+ * - Standar: `[01:23.45]Halo dunia`
+ * - **Multi-timestamp**: `[00:12.00][01:30.00]Reff`. Satu baris teks yang
+ *   dipakai di beberapa waktu, dan ini format LRC yang sah. Versi lama memakai
+ *   `Regex.find` yang cuma mengambil kecocokan PERTAMA, jadi timestamp kedua
+ *   hilang (reff tidak menyala lagi) DAN literal `[01:30.00]` ikut terbawa ke
+ *   teks yang ditampilkan ke user.
+ * - Enhanced per-kata: `[01:23.45]<01:23.45>Halo <01:23.70>dunia`
+ * - Tag metadata (`[ar:]`, `[ti:]`, dan lain-lain) dilewati, tidak jadi lirik.
+ *
+ * Yang TIDAK didukung: tag `[offset:...]`. Tag itu dikenali dan dilewati supaya
+ * tidak bocor ke teks, tapi nilainya tidak diterapkan. Arah tandanya berbeda
+ * antar pemutar (sebagian menganggap positif mempercepat, sebagian
+ * memperlambat), dan menebak salah membuat sync lebih buruk daripada tidak
+ * mendukung sama sekali. Koreksi manual user di Settings sudah menutupi
+ * kebutuhan ini dan berlaku di semua permukaan.
+ *
+ * Baris tanpa timestamp dilewati. Urutan file dipertahankan untuk timestamp
+ * yang kembar, karena `sortedBy` di Kotlin stabil.
  */
 fun parseLrc(raw: String): List<SyncedLine> {
-    val linePattern = Regex("""\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?]\s*(.*)""")
-    val wordPattern = Regex("""<(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?>([^<]*)""")
-    val lines = mutableListOf<SyncedLine>()
+    val collected = mutableListOf<Pair<Long, SyncedLine>>()
 
-    raw.lineSequence().forEach { line ->
-        val m = linePattern.find(line) ?: return@forEach
-        val lineMs = parseTimestamp(m.groupValues[1], m.groupValues[2], m.groupValues[3])
-        val rawText = m.groupValues[4]
+    raw.lineSequence().forEach { rawLine ->
+        if (rawLine.isBlank()) return@forEach
+        if (METADATA_TAG.containsMatchIn(rawLine)) return@forEach
 
-        // Cek apakah ada word-level timestamps
-        val wordMatches = wordPattern.findAll(rawText).toList()
+        // Kumpulkan SEMUA timestamp di awal baris, bukan cuma yang pertama.
+        val times = mutableListOf<Long>()
+        var cursor = 0
+        while (cursor < rawLine.length) {
+            while (cursor < rawLine.length && rawLine[cursor].isWhitespace()) cursor++
+            val m = TIME_TAG.matchAt(rawLine, cursor) ?: break
+            times += parseTimestamp(m.groupValues[1], m.groupValues[2], m.groupValues[3])
+            cursor = m.range.last + 1
+        }
+        if (times.isEmpty()) return@forEach
+
+        val content = rawLine.substring(cursor)
+        val wordMatches = WORD_TAG.findAll(content).toList()
+
+        val text: String
+        val words: List<SyncedWord>
         if (wordMatches.isEmpty()) {
-            // Standard LRC, no per-word timing
-            lines.add(SyncedLine(timeMs = lineMs, text = rawText.trim()))
-            return@forEach
+            text = content.trim()
+            words = emptyList()
+        } else {
+            val parsed = wordMatches.mapNotNull { w ->
+                val wText = w.groupValues[4]
+                if (wText.isBlank()) null else SyncedWord(
+                    timeMs = parseTimestamp(w.groupValues[1], w.groupValues[2], w.groupValues[3]),
+                    text = wText,
+                )
+            }
+            text = parsed.joinToString("") { it.text }.trim()
+            // Timing per-kata itu absolut, jadi tidak bisa benar untuk lebih
+            // dari satu kemunculan. Kalau barisnya multi-timestamp, turunkan ke
+            // highlight per-baris daripada menyala di waktu yang salah.
+            words = if (times.size == 1) parsed else emptyList()
         }
 
-        // Enhanced LRC — extract words
-        val words = wordMatches.mapNotNull { w ->
-            val wTime = parseTimestamp(w.groupValues[1], w.groupValues[2], w.groupValues[3])
-            val wText = w.groupValues[4]
-            if (wText.isBlank()) null else SyncedWord(timeMs = wTime, text = wText)
+        times.forEach { t ->
+            collected += t to SyncedLine(id = 0, timeMs = t, text = text, words = words)
         }
-        // Reconstruct line text dari join words (trim whitespace)
-        val joinedText = words.joinToString("") { it.text }.trim()
-        lines.add(
-            SyncedLine(
-                timeMs = lineMs,
-                text = joinedText,
-                words = words,
-            )
-        )
     }
-    return lines.sortedBy { it.timeMs }
+
+    // id ditetapkan SETELAH pengurutan, jadi nilainya stabil dan unik walaupun
+    // timeMs kembar.
+    return collected
+        .sortedBy { it.first }
+        .mapIndexed { index, (_, line) -> line.copy(id = index) }
 }
 
 private fun parseTimestamp(minStr: String, secStr: String, fracStr: String): Long {
@@ -104,3 +158,10 @@ private fun parseTimestamp(minStr: String, secStr: String, fracStr: String): Lon
     val frac = fracStr.ifBlank { "0" }.padEnd(3, '0').take(3).toIntOrNull() ?: 0
     return (min * 60L + sec) * 1000L + frac
 }
+
+/**
+ * Tetapkan ulang [SyncedLine.id] berdasarkan posisi. Dipakai saat memuat dari
+ * cache disk, yang tidak menyimpan id karena nilainya memang turunan posisi.
+ */
+fun List<SyncedLine>.withPositionalIds(): List<SyncedLine> =
+    mapIndexed { index, line -> if (line.id == index) line else line.copy(id = index) }

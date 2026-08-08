@@ -13,7 +13,7 @@ class LyricsSyncEngineTest {
     }
 
     private fun lines(vararg timesMs: Long): List<SyncedLine> =
-        timesMs.mapIndexed { i, t -> SyncedLine(timeMs = t, text = "baris $i") }
+        timesMs.mapIndexed { i, t -> SyncedLine(id = i, timeMs = t, text = "baris $i") }
 
     private fun engine(clock: Clock) = LyricsSyncEngine(nowMs = { clock.nowMs })
 

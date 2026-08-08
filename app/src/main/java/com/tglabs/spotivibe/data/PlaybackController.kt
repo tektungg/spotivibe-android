@@ -76,9 +76,13 @@ class PlaybackController(
         lyrics?.synced?.getOrNull(idx)
     }.stateIn(scope, SharingStarted.Eagerly, null)
 
-    // ── Romaji state (key = SyncedLine.timeMs) ───────────────────
-    private val _romaji = MutableStateFlow<Map<Long, String?>>(emptyMap())
-    val romaji: StateFlow<Map<Long, String?>> = _romaji.asStateFlow()
+    // ── Romaji state (key = SyncedLine.id) ───────────────────────
+    //
+    // Dulu key-nya timeMs, dan dua baris dengan timestamp identik saling
+    // menimpa: satu baris kehilangan romaji-nya, atau lebih buruk, memakai
+    // romaji milik baris lain yang teksnya berbeda.
+    private val _romaji = MutableStateFlow<Map<Int, String?>>(emptyMap())
+    val romaji: StateFlow<Map<Int, String?>> = _romaji.asStateFlow()
 
     private var romajiJob: Job? = null
 
@@ -265,7 +269,7 @@ class PlaybackController(
                         val texts = lines.map { it.text }
                         val results = romanizationService.romanizeLines(texts)
                         _romaji.value = lines.mapIndexed { idx, line ->
-                            line.timeMs to results[idx]
+                            line.id to results[idx]
                         }.toMap()
                     }
                 }

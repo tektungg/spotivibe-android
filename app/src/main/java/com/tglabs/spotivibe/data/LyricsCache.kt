@@ -7,6 +7,8 @@ import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.SyncedLine
+import com.tglabs.spotivibe.domain.SyncedWord
+import com.tglabs.spotivibe.domain.withPositionalIds
 import java.io.File
 
 /**
@@ -59,7 +61,15 @@ class LyricsCache(context: Context) {
     fun put(result: LyricsResult) {
         try {
             val entry = CachedEntry(
-                synced = result.synced?.map { SyncedLineDto(it.timeMs, it.text) },
+                synced = result.synced?.map { line ->
+                    SyncedLineDto(
+                        timeMs = line.timeMs,
+                        text = line.text,
+                        words = line.words
+                            .takeIf { it.isNotEmpty() }
+                            ?.map { SyncedWordDto(it.timeMs, it.text) },
+                    )
+                },
                 plain = result.plain,
                 hasContent = result.hasContent,
                 cachedAt = System.currentTimeMillis(),
@@ -77,9 +87,23 @@ class LyricsCache(context: Context) {
     }
 
     @JsonClass(generateAdapter = false)
+    internal data class SyncedWordDto(
+        val timeMs: Long,
+        val text: String,
+    )
+
+    /**
+     * [words] punya default null supaya file cache lama yang belum punya field
+     * ini tetap bisa dibaca, bukannya gagal parse lalu dibuang.
+     *
+     * `id` sengaja TIDAK disimpan: nilainya murni turunan posisi, jadi
+     * dihitung ulang saat load lewat [withPositionalIds].
+     */
+    @JsonClass(generateAdapter = false)
     internal data class SyncedLineDto(
         val timeMs: Long,
         val text: String,
+        val words: List<SyncedWordDto>? = null,
     )
 
     @JsonClass(generateAdapter = false)
@@ -91,7 +115,16 @@ class LyricsCache(context: Context) {
     ) {
         fun toLyricsResult(trackId: String): LyricsResult = LyricsResult(
             trackId = trackId,
-            synced = synced?.map { SyncedLine(it.timeMs, it.text) },
+            synced = synced
+                ?.map { dto ->
+                    SyncedLine(
+                        id = 0,
+                        timeMs = dto.timeMs,
+                        text = dto.text,
+                        words = dto.words.orEmpty().map { SyncedWord(it.timeMs, it.text) },
+                    )
+                }
+                ?.withPositionalIds(),
             plain = plain,
         )
     }

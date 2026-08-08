@@ -34,7 +34,8 @@ sealed interface UiState {
         val currentLineIndex: Int = -1,
         val canRomanize: Boolean = false,
         val romanizationEnabled: Boolean = false,
-        val romaji: Map<Long, String?> = emptyMap(),
+        /** Key = [SyncedLine.id], bukan timeMs. Lihat [SyncedLine] soal kenapa. */
+        val romaji: Map<Int, String?> = emptyMap(),
         val overlayEnabled: Boolean = false,
         val darkMode: Boolean = true,
         val lyricsFontSize: Int = 17,

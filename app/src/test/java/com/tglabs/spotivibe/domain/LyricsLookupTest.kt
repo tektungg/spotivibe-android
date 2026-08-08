@@ -10,7 +10,7 @@ class LyricsLookupTest {
 
     private val synced = LyricsResult(
         trackId = "spotify:track:abc",
-        synced = listOf(SyncedLine(0, "halo")),
+        synced = listOf(SyncedLine(id = 0, timeMs = 0, text = "halo")),
         plain = null,
     )
     private val plainOnly = LyricsResult(

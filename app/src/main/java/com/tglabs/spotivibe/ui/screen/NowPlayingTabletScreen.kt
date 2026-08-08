@@ -111,22 +111,22 @@ fun NowPlayingTabletScreen(
 
     // Selection state (sama dengan portrait)
     val context = androidx.compose.ui.platform.LocalContext.current
-    var selectedTimes by remember(track.id) { mutableStateOf<Set<Long>>(emptySet()) }
-    val isSelecting = selectedTimes.isNotEmpty()
-    BackHandler(enabled = isSelecting) { selectedTimes = emptySet() }
-    val toggleSelect: (Long) -> Unit = { ms ->
-        selectedTimes = if (selectedTimes.contains(ms)) selectedTimes - ms
-            else if (selectedTimes.size < 5) selectedTimes + ms else selectedTimes
+    var selectedIds by remember(track.id) { mutableStateOf<Set<Int>>(emptySet()) }
+    val isSelecting = selectedIds.isNotEmpty()
+    BackHandler(enabled = isSelecting) { selectedIds = emptySet() }
+    val toggleSelect: (Int) -> Unit = { id ->
+        selectedIds = if (selectedIds.contains(id)) selectedIds - id
+            else if (selectedIds.size < 5) selectedIds + id else selectedIds
     }
     val handleShareSelected: () -> Unit = handleShare@{
         val synced = state.lyrics?.synced ?: return@handleShare
         val ordered = synced
-            .filter { it.timeMs in selectedTimes }
-            .sortedBy { it.timeMs }
+            .filter { it.id in selectedIds }
+            .sortedBy { it.id }
             .map { line ->
                 com.tglabs.spotivibe.util.LyricShareCard.Entry(
                     text = line.text,
-                    romaji = state.romaji[line.timeMs],
+                    romaji = state.romaji[line.id],
                 )
             }
         if (ordered.isEmpty()) return@handleShare
@@ -137,7 +137,7 @@ fun NowPlayingTabletScreen(
             artist = track.artist,
             accentArgb = (state.accentColor ?: com.tglabs.spotivibe.ui.theme.AccentDefault).toArgb(),
         )
-        selectedTimes = emptySet()
+        selectedIds = emptySet()
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -219,9 +219,9 @@ fun NowPlayingTabletScreen(
                 // Transport / Premium banner / Selection action bar
                 when {
                     isSelecting -> SelectionActionBar(
-                        count = selectedTimes.size,
+                        count = selectedIds.size,
                         onShare = handleShareSelected,
-                        onCancel = { selectedTimes = emptySet() },
+                        onCancel = { selectedIds = emptySet() },
                     )
                     state.capability.showsUpgradeNotice -> {
                         HairlineRule(soft = true)
@@ -327,17 +327,19 @@ fun NowPlayingTabletScreen(
                         highContrast = state.highContrast,
                         smoothScroll = state.smoothScroll,
                         hapticEnabled = state.hapticEnabled,
-                        onSeekToLine = { ms ->
-                            if (isSelecting) toggleSelect(ms)
+                        onSeekToLine = { line ->
+                            if (isSelecting) toggleSelect(line.id)
                             else onSeek(
-                                com.tglabs.spotivibe.domain.seekTargetMs(ms, state.lyricsOffsetMs)
+                                com.tglabs.spotivibe.domain.seekTargetMs(
+                                    line.timeMs, state.lyricsOffsetMs,
+                                )
                             )
                         },
                         onLongPressShare = { line ->
-                            if (isSelecting) toggleSelect(line.timeMs)
-                            else selectedTimes = setOf(line.timeMs)
+                            if (isSelecting) toggleSelect(line.id)
+                            else selectedIds = setOf(line.id)
                         },
-                        selectedTimes = selectedTimes,
+                        selectedIds = selectedIds,
                         isSelecting = isSelecting,
                     )
                 }

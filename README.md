@@ -142,6 +142,36 @@ penolakan permanen (`invalid_grant` dan kawan-kawan) yang memaksa login ulang.
 Token disimpan di DataStore dan direktori `datastore/` dikecualikan dari cloud
 backup maupun device transfer.
 
+### Parsing LRC dan identitas baris
+
+`SyncedLine` punya `id` (posisinya setelah diurutkan) yang terpisah dari
+`timeMs`. Ini ada karena `timeMs` bukan identitas: file LRC boleh, dan sering,
+punya beberapa baris dengan timestamp identik. Dulu `timeMs` dipakai sebagai
+key `LazyColumn`, key map romaji, dan set seleksi sekaligus. Akibatnya Compose
+melempar `IllegalArgumentException: Key was already used` pada lagu seperti itu,
+dua baris saling menimpa romaji, dan memilih satu baris ikut memilih
+kembarannya.
+
+Format yang didukung:
+
+- Standar `[01:23.45]teks`
+- **Multi-timestamp** `[00:12.00][01:30.00]Reff`, satu teks di beberapa waktu.
+  Versi lama memakai `Regex.find` yang cuma mengambil kecocokan pertama, jadi
+  timestamp kedua hilang DAN literal `[01:30.00]` ikut terbawa ke layar.
+- Enhanced per-kata `<mm:ss.xx>`. Kalau barisnya multi-timestamp, timing
+  per-kata dibuang: nilainya absolut jadi tidak bisa benar untuk lebih dari
+  satu kemunculan.
+- Tag metadata (`[ar:]`, `[ti:]`, dan lain-lain) dilewati.
+
+`[offset:...]` dikenali dan dilewati supaya tidak bocor ke layar, tapi nilainya
+sengaja **tidak** diterapkan. Arah tandanya berbeda antar pemutar, dan menebak
+salah membuat sync lebih buruk daripada tidak mendukung sama sekali. Koreksi
+manual di Settings sudah menutupi kebutuhan ini dan berlaku di semua permukaan.
+
+Cache disk sekarang ikut menyimpan timing per-kata. Sebelumnya field itu hilang
+saat round-trip, jadi karaoke per-kata jalan di pemutaran pertama lalu
+diam-diam turun ke per-baris begitu cache dipakai.
+
 ### Siklus koneksi
 
 `SpotifySessionSupervisor` hidup di application scope dan menjaga koneksi

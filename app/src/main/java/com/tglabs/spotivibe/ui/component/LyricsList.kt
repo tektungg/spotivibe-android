@@ -82,15 +82,16 @@ fun LyricsList(
      * LRC enhanced. Bukan untuk menentukan baris aktif.
      */
     progressMs: Long,
-    romaji: Map<Long, String?> = emptyMap(),
+    /** Key = [SyncedLine.id]. Bukan timeMs: timestamp bisa kembar. */
+    romaji: Map<Int, String?> = emptyMap(),
     fontSize: Int = 30,
     lineSpacing: Int = 22,
     highContrast: Boolean = false,
     smoothScroll: Boolean = true,
     hapticEnabled: Boolean = true,
-    onSeekToLine: ((Long) -> Unit)? = null,
+    onSeekToLine: ((SyncedLine) -> Unit)? = null,
     onLongPressShare: ((SyncedLine) -> Unit)? = null,
-    selectedTimes: Set<Long> = emptySet(),
+    selectedIds: Set<Int> = emptySet(),
     isSelecting: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
@@ -114,7 +115,7 @@ fun LyricsList(
                     hapticEnabled = hapticEnabled,
                     onSeekToLine = onSeekToLine,
                     onLongPressShare = onLongPressShare,
-                    selectedTimes = selectedTimes,
+                    selectedIds = selectedIds,
                     isSelecting = isSelecting,
                 )
 
@@ -146,15 +147,15 @@ private fun SyncedView(
     lines: List<SyncedLine>,
     activeIndex: Int,
     progressMs: Long,
-    romaji: Map<Long, String?>,
+    romaji: Map<Int, String?>,
     fontSize: Int,
     lineSpacing: Int,
     highContrast: Boolean,
     smoothScroll: Boolean,
     hapticEnabled: Boolean,
-    onSeekToLine: ((Long) -> Unit)?,
+    onSeekToLine: ((SyncedLine) -> Unit)?,
     onLongPressShare: ((SyncedLine) -> Unit)?,
-    selectedTimes: Set<Long>,
+    selectedIds: Set<Int>,
     isSelecting: Boolean,
 ) {
     val listState = rememberLazyListState()
@@ -197,17 +198,20 @@ private fun SyncedView(
     ) {
         item { Spacer(modifier = Modifier.height(80.dp)) }
 
-        itemsIndexed(lines, key = { _, line -> line.timeMs }) { idx, line ->
+        // key = line.id, BUKAN line.timeMs. File LRC boleh punya beberapa baris
+        // dengan timestamp identik, dan key duplikat membuat Compose melempar
+        // IllegalArgumentException: Key was already used.
+        itemsIndexed(lines, key = { _, line -> line.id }) { idx, line ->
             LyricLineItem(
                 line = line,
-                romaji = romaji[line.timeMs],
+                romaji = romaji[line.id],
                 state = lyricState(idx, activeIndex),
                 progressMs = progressMs,
                 fontSize = fontSize,
                 highContrast = highContrast,
-                isSelected = selectedTimes.contains(line.timeMs),
+                isSelected = selectedIds.contains(line.id),
                 isSelecting = isSelecting,
-                onTap = onSeekToLine?.let { { it(line.timeMs) } },
+                onTap = onSeekToLine?.let { { it(line) } },
                 onLongPress = onLongPressShare?.let { { it(line) } },
             )
         }

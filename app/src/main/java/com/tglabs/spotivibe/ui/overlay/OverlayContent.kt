@@ -60,7 +60,7 @@ fun OverlayContent(
     bitmapFlow: StateFlow<Bitmap?>,
     lyricsFlow: StateFlow<LyricsResult?>,
     currentLineIndexFlow: StateFlow<Int>,
-    romajiFlow: StateFlow<Map<Long, String?>>,
+    romajiFlow: StateFlow<Map<Int, String?>>,
     onDrag: (dx: Int, dy: Int) -> Unit,
     onDragEnd: () -> Unit,
     onPlayPause: () -> Unit,
@@ -147,7 +147,7 @@ private fun MiniBar(
     bitmap: Bitmap?,
     lyrics: LyricsResult?,
     idx: Int,
-    romaji: Map<Long, String?>,
+    romaji: Map<Int, String?>,
     onDrag: (Int, Int) -> Unit,
     onDragEnd: () -> Unit,
     onExpand: () -> Unit,
@@ -159,7 +159,7 @@ private fun MiniBar(
     val activeText = activeLine?.text
         ?: lyrics?.plain?.lineSequence()?.firstOrNull { it.isNotBlank() }
         ?: track?.title.orEmpty()
-    val activeRomaji = activeLine?.let { romaji[it.timeMs] }?.takeIf { it.isNotBlank() }
+    val activeRomaji = activeLine?.let { romaji[it.id] }?.takeIf { it.isNotBlank() }
 
     Box(
         modifier = Modifier
@@ -244,7 +244,7 @@ private fun ExpandedCard(
     bitmap: Bitmap?,
     lyrics: LyricsResult?,
     idx: Int,
-    romaji: Map<Long, String?>,
+    romaji: Map<Int, String?>,
     onDrag: (Int, Int) -> Unit,
     onDragEnd: () -> Unit,
     onCollapse: () -> Unit,
@@ -264,9 +264,9 @@ private fun ExpandedCard(
         ?: lyrics?.plain?.lineSequence()?.firstOrNull { it.isNotBlank() }.orEmpty()
     val nextLine = nextEntry?.text.orEmpty()
 
-    val prevRomaji = prevEntry?.let { romaji[it.timeMs] }?.takeIf { it.isNotBlank() }
-    val curRomaji = curEntry?.let { romaji[it.timeMs] }?.takeIf { it.isNotBlank() }
-    val nextRomaji = nextEntry?.let { romaji[it.timeMs] }?.takeIf { it.isNotBlank() }
+    val prevRomaji = prevEntry?.let { romaji[it.id] }?.takeIf { it.isNotBlank() }
+    val curRomaji = curEntry?.let { romaji[it.id] }?.takeIf { it.isNotBlank() }
+    val nextRomaji = nextEntry?.let { romaji[it.id] }?.takeIf { it.isNotBlank() }
 
     Box(
         modifier = Modifier

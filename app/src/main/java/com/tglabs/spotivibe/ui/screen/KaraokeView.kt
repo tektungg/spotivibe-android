@@ -54,7 +54,7 @@ fun KaraokeView(
     activeIndex: Int,
     progressMs: Long,
     accent: Color,
-    romaji: Map<Long, String?>,
+    romaji: Map<Int, String?>,
     fontSize: Int,
     onExit: () -> Unit,
     durationMs: Long = 0L,

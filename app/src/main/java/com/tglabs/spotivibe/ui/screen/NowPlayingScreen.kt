@@ -130,38 +130,41 @@ fun NowPlayingScreen(
     }
 
     // ── Selection mode state ──
-    var selectedTimes by remember(track.id) { mutableStateOf<Set<Long>>(emptySet()) }
-    val isSelecting = selectedTimes.isNotEmpty()
+    // Diidentifikasi lewat SyncedLine.id, bukan timeMs. Dengan timeMs, memilih
+    // satu baris ikut memilih kembarannya yang timestamp-nya sama.
+    var selectedIds by remember(track.id) { mutableStateOf<Set<Int>>(emptySet()) }
+    val isSelecting = selectedIds.isNotEmpty()
     val maxSelect = 5
-    BackHandler(enabled = isSelecting) { selectedTimes = emptySet() }
+    BackHandler(enabled = isSelecting) { selectedIds = emptySet() }
 
-    val toggleSelect: (Long) -> Unit = { timeMs ->
-        selectedTimes = when {
-            selectedTimes.contains(timeMs)    -> selectedTimes - timeMs
-            selectedTimes.size < maxSelect    -> selectedTimes + timeMs
-            else                              -> selectedTimes
+    val toggleSelect: (Int) -> Unit = { id ->
+        selectedIds = when {
+            selectedIds.contains(id)     -> selectedIds - id
+            selectedIds.size < maxSelect -> selectedIds + id
+            else                         -> selectedIds
         }
     }
-    val handleLineTap: (Long) -> Unit = { ms ->
+    val handleLineTap: (com.tglabs.spotivibe.domain.SyncedLine) -> Unit = { line ->
         // Seek dikompensasi offset. Tanpa ini, dengan offset non-nol tap baris
         // mendarat di posisi yang justru membuat baris BERIKUTNYA yang aktif,
         // karena progress lirik = posisi + offset.
-        if (isSelecting) toggleSelect(ms) else onSeek(seekTargetMs(ms, state.lyricsOffsetMs))
+        if (isSelecting) toggleSelect(line.id)
+        else onSeek(seekTargetMs(line.timeMs, state.lyricsOffsetMs))
     }
     val handleLineLongPress: (com.tglabs.spotivibe.domain.SyncedLine) -> Unit = { line ->
-        if (isSelecting) toggleSelect(line.timeMs)
-        else selectedTimes = setOf(line.timeMs)
+        if (isSelecting) toggleSelect(line.id)
+        else selectedIds = setOf(line.id)
     }
 
     val handleShareSelected: () -> Unit = handleShare@{
         val synced = state.lyrics?.synced ?: return@handleShare
         val ordered = synced
-            .filter { it.timeMs in selectedTimes }
-            .sortedBy { it.timeMs }
+            .filter { it.id in selectedIds }
+            .sortedBy { it.id }
             .map { line ->
                 LyricShareCard.Entry(
                     text = line.text,
-                    romaji = state.romaji[line.timeMs],
+                    romaji = state.romaji[line.id],
                 )
             }
         if (ordered.isEmpty()) return@handleShare
@@ -172,7 +175,7 @@ fun NowPlayingScreen(
             artist = track.artist,
             accentArgb = (state.accentColor ?: AccentDefault).toArgb(),
         )
-        selectedTimes = emptySet()
+        selectedIds = emptySet()
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -231,9 +234,9 @@ fun NowPlayingScreen(
             // Header: switches to selection mode header when selecting
             if (isSelecting) {
                 SelectionHeader(
-                    count = selectedTimes.size,
+                    count = selectedIds.size,
                     max = maxSelect,
-                    onCancel = { selectedTimes = emptySet() },
+                    onCancel = { selectedIds = emptySet() },
                 )
             } else {
                 NPHeader(
@@ -267,7 +270,7 @@ fun NowPlayingScreen(
                     hapticEnabled = state.hapticEnabled,
                     onSeekToLine = handleLineTap,
                     onLongPressShare = handleLineLongPress,
-                    selectedTimes = selectedTimes,
+                    selectedIds = selectedIds,
                     isSelecting = isSelecting,
                 )
             }
@@ -276,9 +279,9 @@ fun NowPlayingScreen(
             when {
                 isSelecting -> {
                     SelectionActionBar(
-                        count = selectedTimes.size,
+                        count = selectedIds.size,
                         onShare = handleShareSelected,
-                        onCancel = { selectedTimes = emptySet() },
+                        onCancel = { selectedIds = emptySet() },
                     )
                 }
                 // Banner hanya muncul kalau sudah TERBUKTI kontrol ditolak:
