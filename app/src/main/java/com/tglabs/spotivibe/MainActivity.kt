@@ -33,6 +33,12 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
+    /**
+     * Menandai bahwa kita sedang menunggu redirect auth balik dari Custom Tab.
+     * Dipakai [onResume] untuk mendeteksi user yang membatalkan.
+     */
+    private var awaitingAuthRedirect = false
+
     private val viewModel: SpotivibeViewModel by viewModels {
         val app = application as SpotivibeApp
         SpotivibeViewModel.Factory(
@@ -158,6 +164,24 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
+     * Kalau kita kembali ke layar ini setelah membuka Custom Tab TANPA redirect
+     * yang masuk, artinya user membatalkan: menekan back di layar consent, atau
+     * menutup tab-nya. Kembalikan state supaya tombol Connect muncul lagi.
+     * Tanpa ini UI terkunci di Connecting selamanya dan satu-satunya jalan
+     * keluar adalah menutup paksa app.
+     *
+     * onNewIntent selalu dipanggil sebelum onResume, jadi redirect yang sah
+     * sudah menurunkan flag ini lebih dulu.
+     */
+    override fun onResume() {
+        super.onResume()
+        if (awaitingAuthRedirect) {
+            awaitingAuthRedirect = false
+            (application as SpotivibeApp).spotifyConnection.abandonPendingAuthorization()
+        }
+    }
+
+    /**
      * Nyalakan supervisor + foreground service. Idempoten, jadi aman dipanggil
      * tiap kali authState memancarkan SignedIn.
      */
@@ -169,6 +193,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handleAuthRedirect(intent: Intent?) {
         val uri = intent?.data?.toString() ?: return
+        awaitingAuthRedirect = false
         viewModel.handleRedirect(this, uri)
     }
 
@@ -192,7 +217,10 @@ class MainActivity : ComponentActivity() {
                 Log.w(TAG, "Custom Tab gagal dibuka: ${t.message}")
                 false
             }
-            if (launched) return@beginAuth
+            if (launched) {
+                awaitingAuthRedirect = true
+                return@beginAuth
+            }
 
             // Tidak ada penyedia Custom Tabs. Jatuh ke browser biasa; redirect
             // tetap balik lewat intent filter yang sama.
@@ -203,7 +231,9 @@ class MainActivity : ComponentActivity() {
                 Log.e(TAG, "Tidak ada browser untuk membuka login", t)
                 false
             }
-            if (!fallback) {
+            if (fallback) {
+                awaitingAuthRedirect = true
+            } else {
                 (application as SpotivibeApp).spotifyConnection.onAuthorizeLaunchFailed(
                     "Tidak ada browser di device untuk membuka login Spotify."
                 )

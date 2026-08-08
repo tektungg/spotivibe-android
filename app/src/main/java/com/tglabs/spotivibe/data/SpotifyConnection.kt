@@ -110,6 +110,26 @@ class SpotifyConnection(
     }
 
     /**
+     * User kembali ke app tanpa membawa redirect: menekan back di layar consent,
+     * menutup tab, atau redirect ditelan komponen lain.
+     *
+     * Tanpa ini UI tertinggal di [ConnectionState.Connecting] selamanya, karena
+     * [authorizeUrl] yang menaikkan state ke Connecting dan hanya
+     * [handleRedirect] yang bisa menurunkannya. Tombol Connect pun ikut hilang,
+     * jadi user tidak punya jalan untuk mencoba lagi selain menutup paksa app.
+     *
+     * Kredensial PKCE yang tertunda sengaja TIDAK dihapus: kalau redirect-nya
+     * ternyata datang terlambat, penukaran code masih bisa berhasil, dan
+     * percobaan berikutnya toh menimpanya.
+     */
+    fun abandonPendingAuthorization() {
+        if (_connectionState.value is ConnectionState.Connecting) {
+            Log.d(TAG, "Kembali tanpa redirect — kembalikan ke Disconnected")
+            _connectionState.value = ConnectionState.Disconnected
+        }
+    }
+
+    /**
      * Proses URI redirect `spotivibe://callback`. Aman dipanggil untuk intent
      * apapun: URI yang bukan milik kita diabaikan tanpa efek samping.
      *

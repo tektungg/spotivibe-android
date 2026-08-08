@@ -54,6 +54,22 @@
             </intent-filter>
         </activity>
 
+        <!-- Buang LoginActivity milik Spotify Auth SDK dari manifest hasil merge.
+             AAR-nya mendeklarasikan activity itu dengan intent-filter
+             spotivibe://callback yang PERSIS SAMA dengan milik MainActivity,
+             memakai manifest placeholder redirectSchemeName/redirectHostName
+             yang kita isi sendiri. Akibatnya redirect auth memunculkan dialog
+             pilihan berisi dua entri yang sama-sama berlabel "Spotivibe", dan
+             kalau user memilih yang milik SDK, redirect-nya ditelan activity
+             translucent yang langsung finish. onNewIntent kita tidak pernah
+             jalan, jadi UI tertinggal di Connecting selamanya.
+
+             Aman dihapus: sejak pindah ke Authorization Code + PKCE, tidak ada
+             satu pun kode kita yang memakai AuthorizationClient. -->
+        <activity
+            android:name="com.spotify.sdk.android.auth.LoginActivity"
+            tools:node="remove" />
+
         <!-- FileProvider untuk share lyric-card sebagai PNG ke other apps.
              Authority pakai BuildConfig.APPLICATION_ID supaya unik per build. -->
         <provider
