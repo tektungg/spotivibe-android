@@ -58,7 +58,12 @@ class SpotivibeApp : Application() {
     val sessionSupervisor: SpotifySessionSupervisor by lazy {
         SpotifySessionSupervisor(spotifyConnection, authRepository, applicationScope)
     }
-    val lyricsRepository: LyricsRepository by lazy { LyricsRepository(this) }
+    val lyricsRepository: LyricsRepository by lazy {
+        LyricsRepository(
+            context = this,
+            statsRecorder = { event -> preferencesRepository.recordLyricsLookup(event) },
+        )
+    }
     val romanizationService: RomanizationService by lazy { RomanizationService() }
     val webApiClient: WebApiClient by lazy {
         WebApiClient(tokenProvider = { authRepository.validAccessToken() })

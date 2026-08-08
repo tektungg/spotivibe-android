@@ -207,6 +207,18 @@ class SpotivibeViewModel(
         }
     }
 
+    /** Statistik lirik untuk ditampilkan di Settings. */
+    val lyricsStats: StateFlow<com.tglabs.spotivibe.domain.LyricsStats> =
+        preferencesRepository.lyricsStats.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000L),
+            initialValue = com.tglabs.spotivibe.domain.LyricsStats(),
+        )
+
+    fun resetLyricsStats() {
+        viewModelScope.launch { preferencesRepository.resetLyricsStats() }
+    }
+
     fun toggleHaptic() {
         viewModelScope.launch {
             val current = (uiState.value as? UiState.Playing)?.hapticEnabled ?: true

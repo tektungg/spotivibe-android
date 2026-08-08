@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import com.tglabs.spotivibe.domain.LyricsStats
 import com.tglabs.spotivibe.domain.PlaybackCapability
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -70,6 +71,8 @@ fun SettingsScreen(
     onToggleHighContrast: () -> Unit = {},
     onToggleSmoothScroll: () -> Unit = {},
     onToggleHaptic: () -> Unit = {},
+    lyricsStats: LyricsStats = LyricsStats(),
+    onResetLyricsStats: () -> Unit = {},
 ) {
     val sv = LocalSvColors.current
     val context = LocalContext.current
@@ -288,8 +291,70 @@ fun SettingsScreen(
                 }
             }
 
-            // ── 04 COLOPHON ──
-            SectionHeader(number = "04", title = "Colophon", hint = "About this app")
+            // ── 04 STATISTIK LIRIK ──
+            // Metrik inti produk ini. Ditampilkan, bukan cuma dicatat, karena
+            // angka yang tidak bisa dilihat sama saja tidak ada.
+            SectionHeader(number = "04", title = "Lyrics stats", hint = "Coverage")
+            Column(modifier = Modifier.padding(horizontal = SvSpace.s5, vertical = SvSpace.s3)) {
+                if (lyricsStats.total == 0) {
+                    Text(
+                        text = "Belum ada data. Putar beberapa lagu dulu.",
+                        style = SvType.BodyItalic.copy(fontSize = 13.sp),
+                        color = sv.ink3,
+                    )
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(SvSpace.s8)) {
+                        MetricColumn(
+                            label = "SYNCED",
+                            value = lyricsStats.syncedRate.asPercent(),
+                        )
+                        MetricColumn(
+                            label = "ANY LYRICS",
+                            value = lyricsStats.anyLyricsRate.asPercent(),
+                        )
+                        MetricColumn(
+                            label = "LOOKUPS",
+                            value = lyricsStats.total.toString(),
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(SvSpace.s3))
+                    Row(horizontalArrangement = Arrangement.spacedBy(SvSpace.s8)) {
+                        MetricColumn(
+                            label = "FROM CACHE",
+                            value = lyricsStats.cacheRate.asPercent(),
+                        )
+                        MetricColumn(
+                            label = "REACHED",
+                            value = lyricsStats.reachRate.asPercent(),
+                        )
+                        MetricColumn(
+                            label = "SEARCH ONLY",
+                            value = lyricsStats.searchOnlyRate.asPercent(),
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(SvSpace.s3))
+                    Text(
+                        // "Terjawab" sengaja dipisah dari total: lookup yang gagal
+                        // dijangkau bukan lubang di database LRCLIB, jadi tidak
+                        // ikut jadi penyebut coverage.
+                        text = "${lyricsStats.synced} ter-sync · " +
+                            "${lyricsStats.plainOnly} teks polos · " +
+                            "${lyricsStats.notFound} tidak ada · " +
+                            "${lyricsStats.unavailable} gagal dijangkau",
+                        style = SvType.BodyItalic.copy(fontSize = 13.sp),
+                        color = sv.ink3,
+                    )
+                    Spacer(modifier = Modifier.height(SvSpace.s4))
+                    OutlinedActionButton(
+                        label = "RESET STATS",
+                        icon = SvIcons.Close,
+                        onClick = onResetLyricsStats,
+                    )
+                }
+            }
+
+            // ── 05 COLOPHON ──
+            SectionHeader(number = "05", title = "Colophon", hint = "About this app")
             Column(modifier = Modifier.padding(horizontal = SvSpace.s5, vertical = SvSpace.s3)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(SvSpace.s8)) {
                     MetricColumn(label = "VERSION", value = BuildConfig.VERSION_NAME)
@@ -353,6 +418,14 @@ fun SettingsScreen(
         }
     }
 }
+
+/**
+ * Persen untuk ditampilkan. null berarti belum ada data, dan itu ditulis
+ * sebagai tanda hubung, bukan 0%, supaya "belum tahu" tidak tersamar jadi
+ * "buruk".
+ */
+private fun Float?.asPercent(): String =
+    if (this == null) "—" else "${(this * 100).toInt()}%"
 
 @Composable
 private fun SectionHeader(number: String, title: String, hint: String? = null) {

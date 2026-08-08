@@ -27,19 +27,36 @@ class LyricsLookupTest {
     @Test
     fun `get berisi konten dipakai lebih dulu`() {
         val hasil = combineProbes(content(synced), content(plainOnly))
-        assertEquals(LyricsLookup.Found(synced), hasil)
+        assertEquals(LyricsLookup.Found(synced, ProbeSource.Get), hasil)
     }
 
     @Test
     fun `search dipakai kalau get tidak punya`() {
         val hasil = combineProbes(LrclibProbe.Absent, content(plainOnly))
-        assertEquals(LyricsLookup.Found(plainOnly), hasil)
+        assertEquals(LyricsLookup.Found(plainOnly, ProbeSource.Search), hasil)
     }
 
     @Test
     fun `search dipakai walau get gagal`() {
         val hasil = combineProbes(failed(), content(synced))
-        assertEquals(LyricsLookup.Found(synced), hasil)
+        assertEquals(LyricsLookup.Found(synced, ProbeSource.Search), hasil)
+    }
+
+    /**
+     * Probe pemenang dibawa di dalam Found, bukan disimpulkan ulang di call
+     * site, supaya aturan presedensi cuma hidup di satu tempat dan statistik
+     * tidak bisa mencatat endpoint yang berbeda dari yang benar-benar dipakai.
+     */
+    @Test
+    fun `probe pemenang dicatat sesuai presedensi`() {
+        assertEquals(
+            ProbeSource.Get,
+            (combineProbes(content(synced), content(plainOnly)) as LyricsLookup.Found).probe,
+        )
+        assertEquals(
+            ProbeSource.Search,
+            (combineProbes(LrclibProbe.Absent, content(synced)) as LyricsLookup.Found).probe,
+        )
     }
 
     /** Dua-duanya berhasil dan sama-sama bilang tidak ada. Ini jawaban asli. */
@@ -138,7 +155,7 @@ class LyricsLookupTest {
 
     @Test
     fun `lirik yang ketemu ditulis apa adanya`() {
-        assertEquals(synced, cacheEntryFor(trackId, LyricsLookup.Found(synced)))
+        assertEquals(synced, cacheEntryFor(trackId, LyricsLookup.Found(synced, ProbeSource.Get)))
     }
 
     @Test

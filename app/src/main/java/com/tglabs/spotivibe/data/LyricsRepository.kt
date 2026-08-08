@@ -6,9 +6,14 @@ import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import com.tglabs.spotivibe.domain.LrclibProbe
 import com.tglabs.spotivibe.domain.LyricsLookup
+import com.tglabs.spotivibe.domain.LyricsLookupEvent
 import com.tglabs.spotivibe.domain.LyricsResult
+import com.tglabs.spotivibe.domain.LyricsSource
 import com.tglabs.spotivibe.domain.LyricsState
+import com.tglabs.spotivibe.domain.LyricsStatsRecorder
+import com.tglabs.spotivibe.domain.ProbeSource
 import com.tglabs.spotivibe.domain.cacheEntryFor
+import com.tglabs.spotivibe.domain.outcomeOf
 import com.tglabs.spotivibe.domain.combineProbes
 import com.tglabs.spotivibe.domain.parseLrc
 import com.tglabs.spotivibe.domain.probeFromHttpFailure
@@ -39,7 +44,14 @@ import java.util.concurrent.TimeUnit
  * Semua exception ditelan — return [LyricsResult] kosong (hasContent=false)
  * kalau gagal. Caller cukup cek [LyricsResult.hasContent].
  */
-class LyricsRepository(private val context: Context) {
+class LyricsRepository(
+    private val context: Context,
+    /**
+     * Pencatat statistik lookup. Default no-op supaya konstruksi tanpa
+     * pencatat tetap sah, misalnya di test.
+     */
+    private val statsRecorder: LyricsStatsRecorder = LyricsStatsRecorder.NoOp,
+) {
 
     // LRU bounded — max 50 tracks. Eviction otomatis dengan LinkedHashMap accessOrder.
     // Thread-safe via synchronized block (low contention, single Activity scope).
@@ -109,7 +121,7 @@ class LyricsRepository(private val context: Context) {
         // Layer 1: in-memory (LRU bounded)
         memCacheGet(trackId)?.let {
             Log.d(TAG, "mem-cache hit: $trackId")
-            return@withContext it.toState()
+            return@withContext it.toState().also { s -> record(LyricsSource.MemCache, s, null) }
         }
 
         // Layer 2: disk
@@ -117,6 +129,7 @@ class LyricsRepository(private val context: Context) {
             Log.d(TAG, "disk-cache hit: $trackId (hasContent=${cached.hasContent})")
             memCachePut(trackId, cached)
             return@withContext cached.toState()
+                .also { s -> record(LyricsSource.DiskCache, s, null) }
         }
 
         // Layer 3: network — /get + /search, dengan retry untuk gangguan sesaat
@@ -139,7 +152,7 @@ class LyricsRepository(private val context: Context) {
             diskCache.put(entry)
         }
 
-        when (val l = lookup) {
+        val state = when (val l = lookup) {
             is LyricsLookup.Found -> LyricsState.Ready(l.result)
             LyricsLookup.NotFound -> LyricsState.NotFound
             is LyricsLookup.Unavailable -> {
@@ -147,6 +160,20 @@ class LyricsRepository(private val context: Context) {
                 LyricsState.Unavailable(l.reason)
             }
         }
+        record(LyricsSource.Network, state, (lookup as? LyricsLookup.Found)?.probe)
+        state
+    }
+
+    /**
+     * Catat satu lookup. Kegagalan pencatatan tidak boleh menjatuhkan fetch
+     * lirik: statistik itu pengamatan, bukan fitur.
+     */
+    private suspend fun record(source: LyricsSource, state: LyricsState, probe: ProbeSource?) {
+        runCatching {
+            statsRecorder.record(
+                LyricsLookupEvent(source = source, outcome = outcomeOf(state), probe = probe)
+            )
+        }.onFailure { Log.w(TAG, "Gagal mencatat statistik lirik: ${it.message}") }
     }
 
     private fun LyricsResult.toState(): LyricsState =
@@ -177,7 +204,7 @@ class LyricsRepository(private val context: Context) {
             Log.d(TAG, "/get menang (jalur cepat) untuk $trackId")
             // Biarkan /search selesai supaya tidak menggantung, hasilnya dibuang.
             runCatching { searchDeferred.await() }
-            return@coroutineScope LyricsLookup.Found(getQuick.result)
+            return@coroutineScope LyricsLookup.Found(getQuick.result, ProbeSource.Get)
         }
 
         val getProbe = getQuick ?: runCatching { getDeferred.await() }

@@ -10,6 +10,11 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.tglabs.spotivibe.data.auth.AuthStorage
 import com.tglabs.spotivibe.data.auth.PendingAuth
 import com.tglabs.spotivibe.data.auth.SpotifyTokens
+import com.tglabs.spotivibe.domain.LyricsLookupEvent
+import com.tglabs.spotivibe.domain.LyricsOutcome
+import com.tglabs.spotivibe.domain.LyricsSource
+import com.tglabs.spotivibe.domain.LyricsStats
+import com.tglabs.spotivibe.domain.ProbeSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -39,6 +44,17 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
     // Legacy: flag dari era implicit grant. Dihapus saat clearTokens() supaya
     // tidak ada dua sumber kebenaran soal "apakah user sudah login".
     private val legacyAuthorizedKey = booleanPreferencesKey("spotify_authorized")
+
+    // Penghitung statistik lirik. Monoton naik sampai di-reset user.
+    private val statSyncedKey = intPreferencesKey("stat_lyrics_synced")
+    private val statPlainKey = intPreferencesKey("stat_lyrics_plain")
+    private val statNotFoundKey = intPreferencesKey("stat_lyrics_not_found")
+    private val statUnavailableKey = intPreferencesKey("stat_lyrics_unavailable")
+    private val statMemKey = intPreferencesKey("stat_lyrics_from_mem")
+    private val statDiskKey = intPreferencesKey("stat_lyrics_from_disk")
+    private val statNetworkKey = intPreferencesKey("stat_lyrics_from_network")
+    private val statGetWonKey = intPreferencesKey("stat_lyrics_get_won")
+    private val statSearchWonKey = intPreferencesKey("stat_lyrics_search_won")
     private val darkModeKey = booleanPreferencesKey("dark_mode")
     private val lyricsFontSizeKey = intPreferencesKey("lyrics_font_size")
     // Improvement set: per-user fine-tuning lyrics behavior
@@ -59,6 +75,63 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
         .map { prefs ->
             (prefs[overlayXKey] ?: 0) to (prefs[overlayYKey] ?: 0)
         }
+
+    // ── Statistik lirik ──────────────────────────────────────────
+
+    val lyricsStats: Flow<LyricsStats> = context.dataStore.data.map { prefs ->
+        LyricsStats(
+            synced = prefs[statSyncedKey] ?: 0,
+            plainOnly = prefs[statPlainKey] ?: 0,
+            notFound = prefs[statNotFoundKey] ?: 0,
+            unavailable = prefs[statUnavailableKey] ?: 0,
+            fromMem = prefs[statMemKey] ?: 0,
+            fromDisk = prefs[statDiskKey] ?: 0,
+            fromNetwork = prefs[statNetworkKey] ?: 0,
+            getWon = prefs[statGetWonKey] ?: 0,
+            searchWon = prefs[statSearchWonKey] ?: 0,
+        )
+    }
+
+    /**
+     * Naikkan penghitung untuk satu lookup.
+     *
+     * Baca-ubah-tulis dilakukan di dalam SATU blok `edit`, yang atomik di
+     * DataStore. Kalau dipecah jadi baca lalu tulis terpisah, dua lookup yang
+     * berdekatan (fetch normal dan preload antrean berjalan bersamaan) bisa
+     * saling menimpa dan angkanya hilang.
+     */
+    suspend fun recordLyricsLookup(event: LyricsLookupEvent) {
+        context.dataStore.edit { prefs ->
+            fun bump(key: androidx.datastore.preferences.core.Preferences.Key<Int>) {
+                prefs[key] = (prefs[key] ?: 0) + 1
+            }
+            when (event.outcome) {
+                LyricsOutcome.Synced -> bump(statSyncedKey)
+                LyricsOutcome.PlainOnly -> bump(statPlainKey)
+                LyricsOutcome.NotFound -> bump(statNotFoundKey)
+                LyricsOutcome.Unavailable -> bump(statUnavailableKey)
+            }
+            when (event.source) {
+                LyricsSource.MemCache -> bump(statMemKey)
+                LyricsSource.DiskCache -> bump(statDiskKey)
+                LyricsSource.Network -> bump(statNetworkKey)
+            }
+            when (event.probe) {
+                ProbeSource.Get -> bump(statGetWonKey)
+                ProbeSource.Search -> bump(statSearchWonKey)
+                null -> Unit
+            }
+        }
+    }
+
+    suspend fun resetLyricsStats() {
+        context.dataStore.edit { prefs ->
+            listOf(
+                statSyncedKey, statPlainKey, statNotFoundKey, statUnavailableKey,
+                statMemKey, statDiskKey, statNetworkKey, statGetWonKey, statSearchWonKey,
+            ).forEach { prefs.remove(it) }
+        }
+    }
 
     // ── AuthStorage ──────────────────────────────────────────────
     //

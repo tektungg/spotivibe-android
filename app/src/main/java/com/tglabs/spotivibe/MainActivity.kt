@@ -131,6 +131,9 @@ class MainActivity : ComponentActivity() {
                         onToggleHighContrast = { viewModel.toggleHighContrast() },
                         onToggleSmoothScroll = { viewModel.toggleSmoothScroll() },
                         onToggleHaptic = { viewModel.toggleHaptic() },
+                        lyricsStats = viewModel.lyricsStats
+                            .collectAsStateWithLifecycle().value,
+                        onResetLyricsStats = { viewModel.resetLyricsStats() },
                     )
                 } else {
                     MainScreen(

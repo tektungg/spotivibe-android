@@ -249,6 +249,34 @@ dengan lagu yang sedang diputar.
 UI membedakan keduanya: "Lirik tidak ditemukan untuk track ini" versus "Gagal
 memuat lirik. Cek koneksi, lalu putar ulang lagunya."
 
+### Statistik lirik
+
+Metrik inti produk ini: **berapa persen lagu yang diputar dapat lirik ter-sync.**
+Terlihat di Settings, bukan cuma tercatat, karena angka yang tidak bisa dilihat
+sama saja tidak ada.
+
+Keputusan yang menentukan ada di penyebutnya. Lookup yang **gagal dijangkau**
+dikeluarkan dari penyebut coverage, karena jaringan mati itu kegagalan kita
+menjangkau, bukan lubang di database LRCLIB. Kalau ikut dihitung, angka coverage
+turun setiap kali sinyal jelek dan kita akan menyimpulkan kualitas pencarian
+memburuk padahal yang terjadi cuma masuk lift.
+
+| Angka | Artinya |
+|---|---|
+| `SYNCED` | dari yang terjawab, berapa persen dapat lirik ter-sync |
+| `ANY LYRICS` | termasuk yang cuma teks polos |
+| `REACHED` | seberapa sering LRCLIB berhasil dijangkau sama sekali |
+| `FROM CACHE` | seberapa sering jawaban datang tanpa menyentuh jaringan |
+| `SEARCH ONLY` | dari lookup jaringan yang berhasil, berapa yang cuma bisa dijawab `/search` |
+
+`SEARCH ONLY` adalah angka yang menentukan pekerjaan berikutnya. Sekarang
+`/get` dan `/search` selalu ditembak paralel, yang menggandakan beban ke API
+komunitas gratis. Kalau angka itu ternyata rendah, `/search` bisa diturunkan
+jadi fallback saat `/get` meleset.
+
+Rate yang belum punya data ditulis sebagai tanda hubung, bukan 0%, supaya
+"belum tahu" tidak tersamar jadi "buruk".
+
 ### Sync lirik
 
 Baris aktif dihitung di SATU tempat: `LyricsSyncEngine`, dipegang oleh

@@ -29,7 +29,13 @@ sealed interface LyricsState {
 
 /** Hasil satu kali lookup, sebelum diputuskan mau di-cache atau tidak. */
 sealed interface LyricsLookup {
-    data class Found(val result: LyricsResult) : LyricsLookup
+    /**
+     * [probe] mencatat endpoint mana yang benar-benar menyediakan liriknya.
+     * Dibawa di sini, bukan disimpulkan ulang di call site, supaya aturan
+     * presedensi cuma hidup di satu tempat ([combineProbes]) dan tidak bisa
+     * melenceng dari yang dicatat statistik.
+     */
+    data class Found(val result: LyricsResult, val probe: ProbeSource) : LyricsLookup
 
     /** Boleh di-cache negatif: jawabannya stabil untuk beberapa waktu. */
     data object NotFound : LyricsLookup
@@ -64,8 +70,8 @@ sealed interface LrclibProbe {
  * - Sisanya [LyricsLookup.Unavailable], dan itu tidak boleh di-cache.
  */
 fun combineProbes(get: LrclibProbe, search: LrclibProbe): LyricsLookup = when {
-    get is LrclibProbe.Content -> LyricsLookup.Found(get.result)
-    search is LrclibProbe.Content -> LyricsLookup.Found(search.result)
+    get is LrclibProbe.Content -> LyricsLookup.Found(get.result, ProbeSource.Get)
+    search is LrclibProbe.Content -> LyricsLookup.Found(search.result, ProbeSource.Search)
     get is LrclibProbe.Absent && search is LrclibProbe.Absent -> LyricsLookup.NotFound
     else -> {
         val reason = (get as? LrclibProbe.Failed)?.reason
