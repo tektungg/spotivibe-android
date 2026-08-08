@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 64" width="300" height="64" role="img" aria-label="Spotivibe">
+  <title>Spotivibe wordmark</title>
+  <!--
+    Lockup horizontal: mark + wordmark, dipisah hairline rule vertikal.
+    Hairline itu elemen paling khas dari bahasa editorial-magazine yang
+    dipakai app ini (lihat HairlineRule di ui/component).
+
+    CATATAN PENTING: teks di bawah masih berupa elemen <text> dengan
+    font-family Instrument Serif. Font itu ADA di repo
+    (app/src/main/res/font/instrument_serif_regular.ttf) tapi TIDAK ter-embed
+    di SVG ini, jadi di mesin yang belum memasangnya akan jatuh ke Georgia
+    atau serif bawaan sistem dan bentuknya berbeda.
+
+    Untuk pemakaian final (README GitHub, store listing, apa pun yang dilihat
+    orang lain), teksnya harus dikonversi jadi path. Bilang saja kalau perlu,
+    nanti saya buatkan versi ter-outline.
+  -->
+
+  <!-- Mark, diskalakan ke tinggi 44 -->
+  <g transform="translate(8, 10) scale(0.83)">
+    <rect x="14" y="0"    width="30" height="5" rx="2.5" fill="#8A877F" opacity="0.55"/>
+    <rect x="6"  y="11.5" width="46" height="6" rx="3"   fill="#C2BFB6" opacity="0.85"/>
+    <rect x="0"  y="22.5" width="58" height="8" rx="4"   fill="#EC6A5C"/>
+    <rect x="8"  y="35.5" width="42" height="6" rx="3"   fill="#C2BFB6" opacity="0.85"/>
+    <rect x="16" y="48"   width="26" height="5" rx="2.5" fill="#8A877F" opacity="0.55"/>
+  </g>
+
+  <!-- Hairline rule pemisah -->
+  <rect x="72" y="12" width="1" height="40" fill="#3C3D44"/>
+
+  <!-- Wordmark -->
+  <text x="90" y="40"
+        font-family="Instrument Serif, Georgia, 'Times New Roman', serif"
+        font-size="38"
+        fill="#F4F1EA">Spotivibe</text>
+
+  <!-- Eyebrow mono, mengikuti MonoUp di SvType -->
+  <text x="92" y="54"
+        font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace"
+        font-size="9"
+        letter-spacing="2.4"
+        fill="#8A877F">CODE · VIBE · SING</text>
+</svg>

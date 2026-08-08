@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="Spotivibe">
+  <title>Spotivibe notification</title>
+  <!--
+    Ikon notification / status bar. Android MEMBUANG warna di sini dan cuma
+    memakai kanal alpha, lalu mewarnai ulang seluruh bentuk. Jadi semuanya
+    putih, dan identitasnya dijaga lewat proporsi saja.
+
+    Lima baris tidak terbaca di ~18 px, jadi turun ke tiga. Baris tengah tetap
+    yang paling lebar dan paling tinggi, persis seperti di ikon penuh, supaya
+    tetap terbaca sebagai "lirik dengan satu baris aktif" dan bukan sekadar
+    ikon daftar.
+  -->
+  <rect x="7"   y="5"    width="10" height="2.5" rx="1.25" fill="#FFFFFF" opacity="0.6"/>
+  <rect x="2.5" y="10.5" width="19" height="3.5" rx="1.75" fill="#FFFFFF"/>
+  <rect x="8"   y="17"   width="8"  height="2.5" rx="1.25" fill="#FFFFFF" opacity="0.6"/>
+</svg>
