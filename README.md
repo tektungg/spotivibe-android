@@ -15,6 +15,10 @@ Android native companion untuk Spotify — synced lyrics dengan romanization (JP
   - Korea (Hangul) → Revised Romanization (port internal dari rules pemerintah)
   - Mandarin (Hanzi) → Pinyin dengan tone marks via [pinyin4j](https://github.com/belerweb/pinyin4j)
   - Tombol toggle cuma muncul saat lirik mengandung script non-Latin
+  - Script ditentukan **sekali per lagu**, bukan per baris. Kana eksklusif milik
+    Jepang dan hangul eksklusif milik Korea, tapi kanji dipakai bersama Jepang
+    dan Mandarin. Kalau diputuskan per baris, baris Jepang yang isinya kanji saja
+    keluar sebagai pinyin di tengah lagu yang selebihnya romaji
 - **Notification dengan synced lyrics** — baris prev/current/next karaoke-style di pull-down + lock screen
 - **Floating overlay** full-width, draggable Y, di atas app lain — mini bar (collapsed) ↔ expanded card (tap-to-expand)
 - **Dynamic accent color** — Palette API extract dari album cover (clamped HSV agar readable di dark theme)

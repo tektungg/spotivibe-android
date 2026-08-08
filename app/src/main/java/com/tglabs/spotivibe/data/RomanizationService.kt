@@ -3,6 +3,7 @@ package com.tglabs.spotivibe.data
 import android.util.Log
 import com.atilika.kuromoji.ipadic.Tokenizer
 import com.tglabs.spotivibe.domain.Script
+import com.tglabs.spotivibe.domain.detectDocumentScript
 import com.tglabs.spotivibe.domain.detectScript
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -59,16 +60,24 @@ class RomanizationService {
     }
 
     /**
-     * Romanize satu baris. Returns null kalau text kosong/blank, sudah Latin,
-     * atau ada exception saat romanisasi.
+     * Romanize satu baris memakai [script] yang sudah ditentukan untuk seluruh
+     * lagu. Returns null kalau text kosong, barisnya murni Latin, atau ada
+     * exception.
+     *
+     * [script] WAJIB datang dari [detectDocumentScript], bukan dari
+     * `detectScript(text)` per baris. Baris Jepang yang isinya kanji saja akan
+     * dinilai Mandarin kalau diputuskan per baris, dan keluar sebagai pinyin di
+     * tengah lagu yang selebihnya romaji.
      *
      * Aman dipanggil dari main thread — internal sudah `withContext(IO)`.
      * Init kuromoji pertama kali bisa ~1-2 detik.
      */
-    suspend fun romanize(text: String): String? = withContext(Dispatchers.IO) {
+    suspend fun romanize(text: String, script: Script): String? = withContext(Dispatchers.IO) {
         if (text.isBlank()) return@withContext null
+        // Baris yang murni Latin tidak perlu diromanisasi, apa pun script lagunya.
+        if (detectScript(text) == Script.LATIN) return@withContext null
         try {
-            when (detectScript(text)) {
+            when (script) {
                 Script.JA -> romanizeJapanese(text).takeIf { it.isNotBlank() }
                 Script.KO -> romanizeKorean(text).takeIf { it.isNotBlank() }
                 Script.ZH -> romanizeChinese(text).takeIf { it.isNotBlank() }
@@ -81,13 +90,19 @@ class RomanizationService {
     }
 
     /**
-     * Batch romanize — process multiple lines secara paralel via `async`.
+     * Batch romanize satu lagu. Script ditentukan SEKALI dari seluruh baris,
+     * lalu dipakai konsisten untuk semuanya, supaya satu lagu tidak pernah
+     * bercampur romaji dan pinyin.
+     *
      * Hasil list size sama persis dengan input (1:1 mapping, null untuk yang
-     * gagal / latin / blank).
+     * gagal / Latin / blank).
      */
     suspend fun romanizeLines(texts: List<String>): List<String?> = coroutineScope {
+        val script = detectDocumentScript(texts)
+        Log.d(TAG, "Script lagu: $script (${texts.size} baris)")
+        if (script == Script.LATIN) return@coroutineScope texts.map { null }
         texts.map { line ->
-            async(Dispatchers.IO) { romanize(line) }
+            async(Dispatchers.IO) { romanize(line, script) }
         }.awaitAll()
     }
 

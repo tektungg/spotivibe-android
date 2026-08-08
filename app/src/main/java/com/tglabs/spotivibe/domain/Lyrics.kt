@@ -46,16 +46,70 @@ data class LyricsResult(
 /** Script detection result */
 enum class Script { JA, KO, ZH, LATIN }
 
+/** Hiragana U+3040..U+309F atau katakana U+30A0..U+30FF. Eksklusif milik Jepang. */
+private fun String.hasKana(): Boolean = any { it in '぀'..'ゟ' || it in '゠'..'ヿ' }
+
 /**
- * Detect script per baris. Priority: kana (JA), hangul (KO), CJK (ZH), else LATIN.
- * Catatan: kanji standalone tanpa kana terbaca sebagai ZH karena ambiguous.
- * Untuk lagu Jepang biasanya ada hiragana/katakana yang trigger JA dengan benar.
+ * Suku kata Hangul U+AC00..U+D7A3. Eksklusif milik Korea.
+ *
+ * Blok jamo terpisah (U+1100.., U+3130..) SENGAJA tidak dihitung, karena
+ * [romanizeKorean] cuma bisa memecah suku kata prakomposisi. Mendeteksi jamo di
+ * sini akan melabeli lagu sebagai KO padahal romanisasinya tidak bisa
+ * mengerjakannya.
  */
-fun detectScript(text: String): Script {
-    if (text.any { it in '぀'..'ゟ' || it in '゠'..'ヿ' }) return Script.JA
-    if (text.any { it in '가'..'힯' }) return Script.KO
-    if (text.any { it in '一'..'鿿' }) return Script.ZH
-    return Script.LATIN
+private fun String.hasHangul(): Boolean = any { it in '가'..'힯' }
+
+/** Ideograf CJK U+4E00..U+9FFF. AMBIGU: dipakai Jepang (kanji) maupun Mandarin. */
+private fun String.hasHan(): Boolean = any { it in '一'..'鿿' }
+
+/**
+ * Deteksi script satu BARIS.
+ *
+ * Hati-hati memakai ini untuk memilih mesin romanisasi. Baris yang isinya kanji
+ * saja tanpa kana akan terbaca [Script.ZH], padahal di lagu Jepang itu tetap
+ * kanji. Untuk memilih mesin, pakai [detectDocumentScript] yang melihat seluruh
+ * lagu. Fungsi ini cocoknya cuma untuk pertanyaan yang tidak ambigu, misalnya
+ * "apakah baris ini murni Latin".
+ */
+fun detectScript(text: String): Script = when {
+    text.hasKana() -> Script.JA
+    text.hasHangul() -> Script.KO
+    text.hasHan() -> Script.ZH
+    else -> Script.LATIN
+}
+
+/**
+ * Deteksi script untuk SATU LAGU, dari seluruh barisnya.
+ *
+ * Ini ada karena keputusan per baris salah untuk lagu Jepang. Kana itu eksklusif
+ * milik Jepang dan hangul eksklusif milik Korea, tapi kanji dipakai bersama
+ * Jepang dan Mandarin. Jadi baris Jepang yang kebetulan isinya kanji saja akan
+ * dinilai Mandarin dan keluar sebagai pinyin, di tengah lagu yang baris-baris
+ * lainnya keluar sebagai romaji. Satu lagu bisa bercampur dua sistem.
+ *
+ * Keputusannya: kehadiran kana atau hangul DI MANA PUN dalam lagu itu
+ * menentukan, karena keduanya tidak mungkin muncul di bahasa lain. Kanji baru
+ * berarti Mandarin kalau di seluruh lagu tidak ada kana maupun hangul.
+ *
+ * Kalau kana dan hangul sama-sama muncul (lagu campuran, sangat jarang), yang
+ * barisnya lebih banyak menang. Seri dimenangkan kana. Sewenang-wenang, tapi
+ * deterministik.
+ */
+fun detectDocumentScript(lines: List<String>): Script {
+    var kanaLines = 0
+    var hangulLines = 0
+    var hanLines = 0
+    for (line in lines) {
+        if (line.hasKana()) kanaLines++
+        if (line.hasHangul()) hangulLines++
+        if (line.hasHan()) hanLines++
+    }
+    return when {
+        kanaLines == 0 && hangulLines == 0 && hanLines == 0 -> Script.LATIN
+        kanaLines > 0 && kanaLines >= hangulLines -> Script.JA
+        hangulLines > 0 -> Script.KO
+        else -> Script.ZH
+    }
 }
 
 /** Cek apakah ada minimal 1 baris yang non-Latin → bisa di-romanize */
