@@ -32,6 +32,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.tglabs.spotivibe.domain.UiState
+import com.tglabs.spotivibe.domain.lyricsProgressMs
+import com.tglabs.spotivibe.domain.seekTargetMs
 import com.tglabs.spotivibe.ui.component.AmbientBg
 import com.tglabs.spotivibe.ui.component.LyricsList
 import com.tglabs.spotivibe.ui.component.NPHeader
@@ -103,14 +105,19 @@ fun NowPlayingScreen(
         }
     }
     var draggingValue by remember(track.id) { mutableLongStateOf(-1L) }
+    // rawProgressMs = posisi playback sebenarnya, untuk slider transport.
+    // effectiveProgressMs = posisi setelah koreksi offset, untuk highlight
+    // per-kata. Baris aktif TIDAK dihitung di sini lagi; datang dari
+    // state.currentLineIndex supaya sama persis dengan notification + overlay.
     val rawProgressMs = if (draggingValue >= 0L) draggingValue else displayProgressMs
-    val effectiveProgressMs = (rawProgressMs + state.lyricsOffsetMs).coerceAtLeast(0L)
+    val effectiveProgressMs = lyricsProgressMs(rawProgressMs, state.lyricsOffsetMs)
 
     // ── Karaoke fullscreen state ──
     var karaokeMode by remember { mutableStateOf(false) }
     if (karaokeMode) {
         KaraokeView(
             lyrics = state.lyrics,
+            activeIndex = state.currentLineIndex,
             progressMs = effectiveProgressMs,
             accent = state.accentColor ?: sv.accent,
             romaji = state.romaji,
@@ -136,7 +143,10 @@ fun NowPlayingScreen(
         }
     }
     val handleLineTap: (Long) -> Unit = { ms ->
-        if (isSelecting) toggleSelect(ms) else onSeek(ms)
+        // Seek dikompensasi offset. Tanpa ini, dengan offset non-nol tap baris
+        // mendarat di posisi yang justru membuat baris BERIKUTNYA yang aktif,
+        // karena progress lirik = posisi + offset.
+        if (isSelecting) toggleSelect(ms) else onSeek(seekTargetMs(ms, state.lyricsOffsetMs))
     }
     val handleLineLongPress: (com.tglabs.spotivibe.domain.SyncedLine) -> Unit = { line ->
         if (isSelecting) toggleSelect(line.timeMs)
@@ -247,6 +257,7 @@ fun NowPlayingScreen(
             Box(modifier = Modifier.weight(1f, fill = true).fillMaxWidth()) {
                 LyricsList(
                     lyrics = state.lyrics,
+                    activeIndex = state.currentLineIndex,
                     progressMs = effectiveProgressMs,
                     romaji = state.romaji,
                     fontSize = state.lyricsFontSize,

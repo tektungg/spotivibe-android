@@ -51,6 +51,7 @@ import com.tglabs.spotivibe.ui.theme.SvType
 @Composable
 fun KaraokeView(
     lyrics: LyricsResult?,
+    activeIndex: Int,
     progressMs: Long,
     accent: Color,
     romaji: Map<Long, String?>,
@@ -88,6 +89,7 @@ fun KaraokeView(
         // Lyrics fill the whole screen
         LyricsList(
             lyrics = lyrics,
+            activeIndex = activeIndex,
             progressMs = progressMs,
             romaji = romaji,
             fontSize = karaokeFontSize,

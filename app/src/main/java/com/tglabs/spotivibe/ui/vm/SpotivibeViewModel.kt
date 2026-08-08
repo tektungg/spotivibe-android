@@ -35,6 +35,7 @@ class SpotivibeViewModel(
             controller.track,
             controller.albumBitmap,
             controller.lyrics,
+            controller.currentLineIndex,
             controller.romaji,
             controller.accent,
             controller.capability,
@@ -54,18 +55,19 @@ class SpotivibeViewModel(
         val track = values[1] as com.tglabs.spotivibe.domain.NowPlaying?
         val bitmap = values[2] as Bitmap?
         val lyrics = values[3] as LyricsResult?
-        val romaji = values[4] as Map<Long, String?>
-        val accent = values[5] as Color?
-        val capability = values[6] as com.tglabs.spotivibe.domain.PlaybackCapability
-        val romaEnabled = values[7] as Boolean
-        val overlayEnabled = values[8] as Boolean
-        val darkMode = values[9] as Boolean
-        val fontSize = values[10] as Int
-        val offsetMs = values[11] as Int
-        val lineSpacing = values[12] as Int
-        val highContrast = values[13] as Boolean
-        val smoothScroll = values[14] as Boolean
-        val haptic = values[15] as Boolean
+        val currentLineIndex = values[4] as Int
+        val romaji = values[5] as Map<Long, String?>
+        val accent = values[6] as Color?
+        val capability = values[7] as com.tglabs.spotivibe.domain.PlaybackCapability
+        val romaEnabled = values[8] as Boolean
+        val overlayEnabled = values[9] as Boolean
+        val darkMode = values[10] as Boolean
+        val fontSize = values[11] as Int
+        val offsetMs = values[12] as Int
+        val lineSpacing = values[13] as Int
+        val highContrast = values[14] as Boolean
+        val smoothScroll = values[15] as Boolean
+        val haptic = values[16] as Boolean
 
         when (connState) {
             ConnectionState.Disconnected -> UiState.Disconnected
@@ -77,6 +79,7 @@ class SpotivibeViewModel(
                     albumBitmap = bitmap,
                     accentColor = accent,
                     lyrics = lyrics,
+                    currentLineIndex = currentLineIndex,
                     canRomanize = canRoma,
                     romanizationEnabled = romaEnabled,
                     romaji = romaji,

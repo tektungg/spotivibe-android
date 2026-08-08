@@ -103,7 +103,11 @@ fun NowPlayingTabletScreen(
     }
     var draggingValue by remember(track.id) { mutableLongStateOf(-1L) }
     val rawProgressMs = if (draggingValue >= 0L) draggingValue else displayProgressMs
-    val effectiveProgressMs = (rawProgressMs + state.lyricsOffsetMs).coerceAtLeast(0L)
+    // Sama dengan portrait: raw untuk slider, effective untuk highlight
+    // per-kata. Baris aktif datang dari state.currentLineIndex.
+    val effectiveProgressMs = com.tglabs.spotivibe.domain.lyricsProgressMs(
+        rawProgressMs, state.lyricsOffsetMs,
+    )
 
     // Selection state (sama dengan portrait)
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -315,6 +319,7 @@ fun NowPlayingTabletScreen(
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     LyricsList(
                         lyrics = state.lyrics,
+                        activeIndex = state.currentLineIndex,
                         progressMs = effectiveProgressMs,
                         romaji = state.romaji,
                         fontSize = (state.lyricsFontSize + 8).coerceAtMost(56),
@@ -323,7 +328,10 @@ fun NowPlayingTabletScreen(
                         smoothScroll = state.smoothScroll,
                         hapticEnabled = state.hapticEnabled,
                         onSeekToLine = { ms ->
-                            if (isSelecting) toggleSelect(ms) else onSeek(ms)
+                            if (isSelecting) toggleSelect(ms)
+                            else onSeek(
+                                com.tglabs.spotivibe.domain.seekTargetMs(ms, state.lyricsOffsetMs)
+                            )
                         },
                         onLongPressShare = { line ->
                             if (isSelecting) toggleSelect(line.timeMs)

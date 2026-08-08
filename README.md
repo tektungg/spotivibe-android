@@ -142,6 +142,33 @@ penolakan permanen (`invalid_grant` dan kawan-kawan) yang memaksa login ulang.
 Token disimpan di DataStore dan direktori `datastore/` dikecualikan dari cloud
 backup maupun device transfer.
 
+### Sync lirik
+
+Baris aktif dihitung di SATU tempat: `LyricsSyncEngine`, dipegang oleh
+`PlaybackController` dan diterbitkan sebagai `currentLineIndex`. Layar utama,
+notification, dan overlay semuanya membaca angka itu. UI tidak boleh
+menghitungnya lagi dari progress.
+
+Dulu logika ini ada dua salinan identik, di `PlaybackController` (tick 500 ms,
+dipakai notification + overlay) dan di `LyricsList` (tick 200 ms, dipakai
+layar). Akibatnya dua clock berbeda, dan yang lebih buruk: `lyricsOffsetMs`
+hanya diterapkan di salinan milik UI, jadi setting offset yang dikira global
+sebenarnya cuma menggeser satu dari tiga permukaan.
+
+Yang masih dihitung lokal di UI cuma dua hal, dan keduanya memang murni
+tampilan: posisi slider transport (pakai posisi playback ASLI, tanpa offset)
+dan highlight per-kata untuk LRC enhanced.
+
+Ticker-nya adaptif, bukan interval tetap. Engine menghitung jarak tepat ke
+batas baris berikutnya lalu tidur selama itu, dipotong ke rentang 16 sampai
+250 ms. Interval tetap salah di dua arah sekaligus: terlalu jarang saat lagu
+jalan sehingga baris telat menyala, dan terlalu sering saat pause atau saat
+lagu tidak punya lirik sehingga membangunkan CPU tanpa hasil.
+
+Tap baris untuk seek mengompensasi offset (`seekTargetMs`). Tanpa itu, dengan
+offset non-nol tap baris mendarat di posisi yang justru membuat baris
+berikutnya yang menyala.
+
 ### Container
 
 ```
@@ -155,7 +182,7 @@ SpotivibeApp (Application)
 └── playbackController ─ orchestrator
         ├── observe nowPlaying (Spotify event stream)
         ├── fetch lyrics on track change
-        ├── 500ms tick → extrapolate currentLine
+        ├── lyricsSyncEngine → currentLineIndex (tick adaptif, offset-aware)
         ├── compute romaji reactive (off main)
         └── compute accent (Palette, off main)
                 ↓

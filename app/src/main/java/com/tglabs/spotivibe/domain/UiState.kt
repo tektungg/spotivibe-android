@@ -21,6 +21,13 @@ sealed interface UiState {
         val albumBitmap: Bitmap? = null,
         val accentColor: Color? = null,
         val lyrics: LyricsResult? = null,
+        /**
+         * Baris aktif, dihitung sekali di PlaybackController dan dipakai
+         * bersama oleh layar, notification, dan overlay. UI TIDAK boleh
+         * menghitung ulang dari progress: itu yang dulu bikin tiga permukaan
+         * bisa menampilkan baris berbeda.
+         */
+        val currentLineIndex: Int = -1,
         val canRomanize: Boolean = false,
         val romanizationEnabled: Boolean = false,
         val romaji: Map<Long, String?> = emptyMap(),

@@ -8,6 +8,7 @@ import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.NowPlaying
 import com.tglabs.spotivibe.domain.PlaybackCapability
 import com.tglabs.spotivibe.domain.SyncedLine
+import com.tglabs.spotivibe.domain.LyricsSyncEngine
 import com.tglabs.spotivibe.domain.resolveCapability
 import com.tglabs.spotivibe.ui.theme.AccentLock
 import kotlinx.coroutines.CoroutineScope
@@ -98,10 +99,16 @@ class PlaybackController(
     private var accentJob: Job? = null
     private var lastAccentBitmap: Bitmap? = null  // ref equality cache
 
-    // ── Baseline untuk extrapolation progress ────────────────────
-    @Volatile private var baselineProgressMs: Long = 0L
-    @Volatile private var baselineTimestampMs: Long = 0L
-    @Volatile private var baselinePaused: Boolean = true
+    /**
+     * Satu-satunya penentu baris aktif untuk SEMUA permukaan: layar utama,
+     * notification, dan overlay. Offset user diterapkan di dalam engine ini,
+     * bukan di layer UI. Sebelumnya offset hanya dipakai di dua Composable
+     * layar, jadi notification dan overlay diam-diam memakai timing berbeda.
+     *
+     * Semua akses terjadi di [scope] (Main.immediate), jadi aman walau engine
+     * sendiri tidak thread-safe.
+     */
+    private val syncEngine = LyricsSyncEngine()
 
     init {
         // 1. Fetch lyrics tiap track ID berubah + preload queue
@@ -111,6 +118,10 @@ class PlaybackController(
                 .distinctUntilChanged()
                 .collect { trackId ->
                     _lyrics.value = null
+                    // Engine WAJIB dikosongkan bareng _lyrics. Kalau tidak,
+                    // ticker masih memegang baris lagu SEBELUMNYA selama fetch
+                    // berjalan dan sempat menerbitkan index dari lagu yang salah.
+                    syncEngine.onLyrics(null)
                     _currentLineIndex.value = -1
                     if (trackId.isNullOrBlank()) return@collect
                     val t = connection.nowPlaying.value ?: return@collect
@@ -124,6 +135,10 @@ class PlaybackController(
                     )
                     if (connection.nowPlaying.value?.id == trackId) {
                         _lyrics.value = fetched
+                        // Jangan tunggu tick berikutnya: kalau lirik datang dari
+                        // cache, baris aktif harus langsung benar.
+                        syncEngine.onLyrics(fetched.synced)
+                        publishLineIndex()
                     }
                     // Cek /me sampai dapat jawaban. Gagal di sini tidak lagi
                     // menyembunyikan kontrol: capability tetap Unknown, dan
@@ -166,26 +181,35 @@ class PlaybackController(
         scope.launch {
             connection.nowPlaying.collect { t ->
                 if (t == null) return@collect
-                baselineProgressMs = t.progressMs
-                baselineTimestampMs = t.capturedAtMs
-                baselinePaused = t.isPaused
+                syncEngine.onPlayerState(
+                    progressMs = t.progressMs,
+                    capturedAtMs = t.capturedAtMs,
+                    isPaused = t.isPaused,
+                )
+                // Seek dan play/pause harus terasa seketika, bukan menunggu
+                // tick berikutnya.
+                publishLineIndex()
             }
         }
 
-        // 3. Ticker 500ms — recompute current line index dari extrapolated progress
+        // 2b. Offset sync manual — sumbernya preference, dipakai semua permukaan.
+        scope.launch {
+            preferencesRepository.lyricsOffsetMs
+                .distinctUntilChanged()
+                .collect { offset ->
+                    syncEngine.onOffset(offset)
+                    publishLineIndex()
+                }
+        }
+
+        // 3. Ticker adaptif — tidur tepat sampai batas baris berikutnya.
+        //    Interval tetap salah di dua arah: terlalu jarang saat lagu jalan
+        //    (baris telat menyala sampai setengah detik), terlalu sering saat
+        //    pause atau saat lagu tidak punya lirik (bangun tanpa hasil).
         scope.launch {
             while (isActive) {
-                delay(500)
-                val synced = _lyrics.value?.synced
-                if (synced.isNullOrEmpty()) {
-                    if (_currentLineIndex.value != -1) _currentLineIndex.value = -1
-                    continue
-                }
-                val now = computeExtrapolatedProgressMs()
-                val idx = findActiveIndex(synced, now)
-                if (idx != _currentLineIndex.value) {
-                    _currentLineIndex.value = idx
-                }
+                publishLineIndex()
+                delay(syncEngine.nextDelayMs(idleMs = IDLE_TICK_MS))
             }
         }
 
@@ -235,27 +259,10 @@ class PlaybackController(
         }
     }
 
-    private fun computeExtrapolatedProgressMs(): Long {
-        if (baselinePaused) return baselineProgressMs
-        val elapsed = System.currentTimeMillis() - baselineTimestampMs
-        return baselineProgressMs + elapsed
-    }
-
-    private fun findActiveIndex(lines: List<SyncedLine>, ms: Long): Int {
-        if (lines.isEmpty()) return -1
-        var lo = 0
-        var hi = lines.size - 1
-        var ans = -1
-        while (lo <= hi) {
-            val mid = (lo + hi) ushr 1
-            if (lines[mid].timeMs <= ms) {
-                ans = mid
-                lo = mid + 1
-            } else {
-                hi = mid - 1
-            }
-        }
-        return ans
+    /** Tanya engine, publikasikan kalau berubah. */
+    private fun publishLineIndex() {
+        val idx = syncEngine.activeIndex()
+        if (idx != _currentLineIndex.value) _currentLineIndex.value = idx
     }
 
     /**
@@ -287,5 +294,8 @@ class PlaybackController(
 
     companion object {
         private const val TAG = "PlaybackController"
+
+        /** Jeda saat tidak ada lirik synced untuk diikuti. */
+        private const val IDLE_TICK_MS = 500L
     }
 }

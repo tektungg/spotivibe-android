@@ -65,6 +65,17 @@ import com.tglabs.spotivibe.util.Haptics
 @Composable
 fun LyricsList(
     lyrics: LyricsResult?,
+    /**
+     * Baris aktif, sudah dihitung di PlaybackController dengan offset user
+     * ikut diperhitungkan. Komponen ini SENGAJA tidak menghitungnya sendiri:
+     * salinan kedua dari logika itu dulu bikin layar dan notification bisa
+     * menunjuk baris berbeda, dan cuma salinan milik UI yang menerapkan offset.
+     */
+    activeIndex: Int,
+    /**
+     * Posisi lirik (sudah termasuk offset), hanya untuk highlight per-kata di
+     * LRC enhanced. Bukan untuk menentukan baris aktif.
+     */
     progressMs: Long,
     romaji: Map<Long, String?> = emptyMap(),
     fontSize: Int = 30,
@@ -85,6 +96,7 @@ fun LyricsList(
             lyrics.synced != null && lyrics.synced.isNotEmpty() ->
                 SyncedView(
                     lines = lyrics.synced,
+                    activeIndex = activeIndex,
                     progressMs = progressMs,
                     romaji = romaji,
                     fontSize = fontSize,
@@ -119,6 +131,7 @@ private fun StatusText(text: String) {
 @Composable
 private fun SyncedView(
     lines: List<SyncedLine>,
+    activeIndex: Int,
     progressMs: Long,
     romaji: Map<Long, String?>,
     fontSize: Int,
@@ -132,7 +145,6 @@ private fun SyncedView(
     isSelecting: Boolean,
 ) {
     val listState = rememberLazyListState()
-    val activeIndex = findActiveIndex(lines, progressMs)
     val context = LocalContext.current
 
     // Reset scroll ke atas saat KONTEN lirik berubah (ganti lagu). Tanpa ini,
@@ -142,7 +154,7 @@ private fun SyncedView(
     // Hanya reset kalau belum ada active line (intro) — kalau sudah ada,
     // biarkan efek activeIndex di bawah yang handle supaya tidak double-jump.
     LaunchedEffect(lines) {
-        if (findActiveIndex(lines, progressMs) < 0) {
+        if (activeIndex < 0) {
             listState.scrollToItem(0)
         }
     }
@@ -389,19 +401,6 @@ private fun PlainView(plain: String, fontSize: Int, color: Color) {
     }
 }
 
-private fun findActiveIndex(lines: List<SyncedLine>, ms: Long): Int {
-    if (lines.isEmpty()) return -1
-    var lo = 0
-    var hi = lines.size - 1
-    var ans = -1
-    while (lo <= hi) {
-        val mid = (lo + hi) ushr 1
-        if (lines[mid].timeMs <= ms) {
-            ans = mid
-            lo = mid + 1
-        } else {
-            hi = mid - 1
-        }
-    }
-    return ans
-}
+// findActiveIndex dulu ada di sini sebagai salinan kedua dari yang di
+// PlaybackController. Sekarang satu-satunya implementasi ada di
+// domain/LyricsSync.kt dan hasilnya masuk lewat parameter activeIndex.
