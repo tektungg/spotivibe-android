@@ -11,8 +11,14 @@ package com.tglabs.spotivibe.domain
  * pencariannya tidak ikut turun.
  */
 
-/** Lapisan mana yang menjawab lookup. */
-enum class LyricsSource { MemCache, DiskCache, Network }
+/**
+ * Lapisan mana yang menjawab lookup.
+ *
+ * [Override] dipisah supaya angka coverage tidak terdistorsi oleh lagu yang
+ * sudah diperbaiki manual: lagu itu memang pasti dapat lirik, tapi bukan karena
+ * pencarian otomatisnya membaik.
+ */
+enum class LyricsSource { Override, MemCache, DiskCache, Network }
 
 /** Endpoint LRCLIB mana yang menyediakan lirik saat lookup jaringan berhasil. */
 enum class ProbeSource { Get, Search }
@@ -46,6 +52,8 @@ data class LyricsStats(
     val fromMem: Int = 0,
     val fromDisk: Int = 0,
     val fromNetwork: Int = 0,
+    /** Lagu yang dijawab oleh lirik pilihan user, bukan oleh auto-match. */
+    val fromOverride: Int = 0,
     val getWon: Int = 0,
     val searchWon: Int = 0,
 ) {
@@ -94,17 +102,32 @@ data class LyricsStats(
     val searchOnlyRate: Float?
         get() = (getWon + searchWon).let { if (it == 0) null else searchWon.toFloat() / it }
 
-    operator fun plus(event: LyricsLookupEvent): LyricsStats = copy(
-        synced = synced + if (event.outcome == LyricsOutcome.Synced) 1 else 0,
-        plainOnly = plainOnly + if (event.outcome == LyricsOutcome.PlainOnly) 1 else 0,
-        notFound = notFound + if (event.outcome == LyricsOutcome.NotFound) 1 else 0,
-        unavailable = unavailable + if (event.outcome == LyricsOutcome.Unavailable) 1 else 0,
-        fromMem = fromMem + if (event.source == LyricsSource.MemCache) 1 else 0,
-        fromDisk = fromDisk + if (event.source == LyricsSource.DiskCache) 1 else 0,
-        fromNetwork = fromNetwork + if (event.source == LyricsSource.Network) 1 else 0,
-        getWon = getWon + if (event.probe == ProbeSource.Get) 1 else 0,
-        searchWon = searchWon + if (event.probe == ProbeSource.Search) 1 else 0,
-    )
+    /**
+     * Lookup yang dijawab override SENGAJA tidak menaikkan penghitung outcome
+     * apa pun, cuma [fromOverride].
+     *
+     * Kalau ikut dihitung, angka coverage naik setiap kali user memperbaiki
+     * lirik secara manual, dan kita akan menyimpulkan pencarian otomatisnya
+     * membaik padahal justru sebaliknya: makin banyak override berarti
+     * auto-match makin sering gagal. [fromOverride] sendiri yang jadi sinyal
+     * itu, terpisah dan tidak mengotori metrik utama.
+     */
+    operator fun plus(event: LyricsLookupEvent): LyricsStats {
+        if (event.source == LyricsSource.Override) {
+            return copy(fromOverride = fromOverride + 1)
+        }
+        return copy(
+            synced = synced + if (event.outcome == LyricsOutcome.Synced) 1 else 0,
+            plainOnly = plainOnly + if (event.outcome == LyricsOutcome.PlainOnly) 1 else 0,
+            notFound = notFound + if (event.outcome == LyricsOutcome.NotFound) 1 else 0,
+            unavailable = unavailable + if (event.outcome == LyricsOutcome.Unavailable) 1 else 0,
+            fromMem = fromMem + if (event.source == LyricsSource.MemCache) 1 else 0,
+            fromDisk = fromDisk + if (event.source == LyricsSource.DiskCache) 1 else 0,
+            fromNetwork = fromNetwork + if (event.source == LyricsSource.Network) 1 else 0,
+            getWon = getWon + if (event.probe == ProbeSource.Get) 1 else 0,
+            searchWon = searchWon + if (event.probe == ProbeSource.Search) 1 else 0,
+        )
+    }
 }
 
 /** Sink untuk peristiwa lookup. Diabstraksi supaya repository bisa diuji. */

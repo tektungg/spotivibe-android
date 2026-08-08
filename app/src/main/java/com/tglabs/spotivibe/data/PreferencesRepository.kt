@@ -53,6 +53,7 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
     private val statMemKey = intPreferencesKey("stat_lyrics_from_mem")
     private val statDiskKey = intPreferencesKey("stat_lyrics_from_disk")
     private val statNetworkKey = intPreferencesKey("stat_lyrics_from_network")
+    private val statOverrideKey = intPreferencesKey("stat_lyrics_from_override")
     private val statGetWonKey = intPreferencesKey("stat_lyrics_get_won")
     private val statSearchWonKey = intPreferencesKey("stat_lyrics_search_won")
     private val darkModeKey = booleanPreferencesKey("dark_mode")
@@ -87,6 +88,7 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
             fromMem = prefs[statMemKey] ?: 0,
             fromDisk = prefs[statDiskKey] ?: 0,
             fromNetwork = prefs[statNetworkKey] ?: 0,
+            fromOverride = prefs[statOverrideKey] ?: 0,
             getWon = prefs[statGetWonKey] ?: 0,
             searchWon = prefs[statSearchWonKey] ?: 0,
         )
@@ -112,6 +114,7 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
                 LyricsOutcome.Unavailable -> bump(statUnavailableKey)
             }
             when (event.source) {
+                LyricsSource.Override -> bump(statOverrideKey)
                 LyricsSource.MemCache -> bump(statMemKey)
                 LyricsSource.DiskCache -> bump(statDiskKey)
                 LyricsSource.Network -> bump(statNetworkKey)
@@ -128,7 +131,8 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
         context.dataStore.edit { prefs ->
             listOf(
                 statSyncedKey, statPlainKey, statNotFoundKey, statUnavailableKey,
-                statMemKey, statDiskKey, statNetworkKey, statGetWonKey, statSearchWonKey,
+                statMemKey, statDiskKey, statNetworkKey, statOverrideKey,
+                statGetWonKey, statSearchWonKey,
             ).forEach { prefs.remove(it) }
         }
     }

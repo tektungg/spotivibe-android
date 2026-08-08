@@ -29,6 +29,9 @@ fun MainScreen(
     onBumpFontSize: (Int) -> Unit,
     onLogout: () -> Unit,
     onOpenSettings: () -> Unit,
+    onSearchLyrics: () -> Unit = {},
+    hasRememberedOverride: Boolean = false,
+    onForgetOverride: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val sv = LocalSvColors.current
@@ -81,6 +84,11 @@ fun MainScreen(
                         onBumpFontSize = onBumpFontSize,
                         onLogout = onLogout,
                         onOpenSettings = onOpenSettings,
+                        // Hanya portrait untuk sekarang. Layar tablet tidak
+                        // memakai NPHeader; tombolnya sendiri dan belum jadi menu.
+                        onSearchLyrics = onSearchLyrics,
+                        hasRememberedOverride = hasRememberedOverride,
+                        onForgetOverride = onForgetOverride,
                     )
                 }
             }

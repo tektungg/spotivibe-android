@@ -83,6 +83,9 @@ fun NowPlayingScreen(
     onBumpFontSize: (Int) -> Unit,
     onLogout: () -> Unit,
     onOpenSettings: () -> Unit,
+    onSearchLyrics: () -> Unit = {},
+    hasRememberedOverride: Boolean = false,
+    onForgetOverride: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // Theme wrapping dipindahkan ke MainActivity — di sini cukup baca SvColors
@@ -251,6 +254,9 @@ fun NowPlayingScreen(
                     onOverlayClick = onToggleOverlay,
                     onEnterKaraoke = { karaokeMode = true },
                     onMoreClick = onOpenSettings,
+                    onSearchLyrics = onSearchLyrics,
+                    showForgetOverride = hasRememberedOverride,
+                    onForgetOverride = onForgetOverride,
                 )
             }
 

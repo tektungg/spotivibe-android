@@ -25,6 +25,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.tglabs.spotivibe.data.auth.SpotifyAuthRepository
 import com.tglabs.spotivibe.service.SpotivibeNotificationService
+import com.tglabs.spotivibe.ui.screen.LyricsSearchScreen
 import com.tglabs.spotivibe.ui.screen.MainScreen
 import com.tglabs.spotivibe.ui.screen.SettingsScreen
 import com.tglabs.spotivibe.ui.theme.SpotivibeTheme
@@ -45,6 +46,8 @@ class MainActivity : ComponentActivity() {
             controller = app.playbackController,
             connection = app.spotifyConnection,
             preferencesRepository = app.preferencesRepository,
+            lyricsRepository = app.lyricsRepository,
+            overrideRepository = app.lyricsOverrideRepository,
         )
     }
 
@@ -115,8 +118,34 @@ class MainActivity : ComponentActivity() {
             val accent = (state as? com.tglabs.spotivibe.domain.UiState.Playing)?.accentColor
             SpotivibeTheme(darkTheme = darkMode, accent = accent) {
                 var showSettings by rememberSaveable { mutableStateOf(false) }
+                var showLyricsSearch by rememberSaveable { mutableStateOf(false) }
 
-                if (showSettings) {
+                val playing = state as? com.tglabs.spotivibe.domain.UiState.Playing
+
+                if (showLyricsSearch && playing != null) {
+                    LyricsSearchScreen(
+                        initialTitle = playing.track.title,
+                        initialArtist = playing.track.artist,
+                        state = viewModel.searchState.collectAsStateWithLifecycle().value,
+                        hasRememberedOverride = viewModel.hasRememberedOverride
+                            .collectAsStateWithLifecycle().value,
+                        onSearch = { t, a -> viewModel.searchLyrics(t, a) },
+                        onPick = { hasil, ingat ->
+                            viewModel.applySearchResult(hasil, ingat)
+                            showLyricsSearch = false
+                            viewModel.resetSearch()
+                        },
+                        onForget = {
+                            viewModel.forgetOverride()
+                            showLyricsSearch = false
+                            viewModel.resetSearch()
+                        },
+                        onBack = {
+                            showLyricsSearch = false
+                            viewModel.resetSearch()
+                        },
+                    )
+                } else if (showSettings) {
                     SettingsScreen(
                         state = state,
                         onBack = { showSettings = false },
@@ -149,6 +178,10 @@ class MainActivity : ComponentActivity() {
                         onBumpFontSize = { delta -> viewModel.bumpFontSize(delta) },
                         onLogout = { viewModel.logout() },
                         onOpenSettings = { showSettings = true },
+                        onSearchLyrics = { showLyricsSearch = true },
+                        hasRememberedOverride = viewModel.hasRememberedOverride
+                            .collectAsStateWithLifecycle().value,
+                        onForgetOverride = { viewModel.forgetOverride() },
                     )
                 }
             }

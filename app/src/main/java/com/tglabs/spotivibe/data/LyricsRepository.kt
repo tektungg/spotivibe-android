@@ -1,13 +1,16 @@
 package com.tglabs.spotivibe.data
 
-import android.content.Context
 import android.util.Log
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import com.tglabs.spotivibe.domain.LrclibProbe
 import com.tglabs.spotivibe.domain.LyricsLookup
+import com.tglabs.spotivibe.domain.LrclibSearchEntry
 import com.tglabs.spotivibe.domain.LyricsLookupEvent
+import com.tglabs.spotivibe.domain.LyricsOverrideSource
 import com.tglabs.spotivibe.domain.LyricsResult
+import com.tglabs.spotivibe.domain.LyricsSearchState
+import com.tglabs.spotivibe.domain.toSearchResults
 import com.tglabs.spotivibe.domain.LyricsSource
 import com.tglabs.spotivibe.domain.LyricsState
 import com.tglabs.spotivibe.domain.LyricsStatsRecorder
@@ -45,12 +48,18 @@ import java.util.concurrent.TimeUnit
  * kalau gagal. Caller cukup cek [LyricsResult.hasContent].
  */
 class LyricsRepository(
-    private val context: Context,
+    private val diskCache: LyricsDiskCache,
     /**
      * Pencatat statistik lookup. Default no-op supaya konstruksi tanpa
      * pencatat tetap sah, misalnya di test.
      */
     private val statsRecorder: LyricsStatsRecorder = LyricsStatsRecorder.NoOp,
+    /**
+     * Lirik pilihan user. Dicek PALING AWAL, menang atas mem cache, disk cache,
+     * dan jaringan. Default tidak pernah punya override supaya konstruksi tanpa
+     * ini tetap sah.
+     */
+    private val overrides: LyricsOverrideSource = LyricsOverrideSource.None,
 ) {
 
     // LRU bounded — max 50 tracks. Eviction otomatis dengan LinkedHashMap accessOrder.
@@ -65,7 +74,6 @@ class LyricsRepository(
     private fun memCachePut(key: String, value: LyricsResult) {
         synchronized(memCache) { memCache[key] = value }
     }
-    private val diskCache = LyricsCache(context)
 
     private val moshi: Moshi = Moshi.Builder()
         .add(KotlinJsonAdapterFactory())
@@ -118,6 +126,16 @@ class LyricsRepository(
         durationMs: Long,
         allowRetry: Boolean = true,
     ): LyricsState = withContext(Dispatchers.IO) {
+        // Layer 0: lirik pilihan user. Menang atas segalanya, dan sengaja tidak
+        // menyentuh jaringan sama sekali: lagu yang sudah diperbaiki manual
+        // berhenti menanyakan LRCLIB selamanya.
+        overrides.overrideFor(trackId)?.let { pilihan ->
+            Log.d(TAG, "override hit: $trackId")
+            val state = pilihan.toState()
+            record(LyricsSource.Override, state, null)
+            return@withContext state
+        }
+
         // Layer 1: in-memory (LRU bounded)
         memCacheGet(trackId)?.let {
             Log.d(TAG, "mem-cache hit: $trackId")
@@ -163,6 +181,53 @@ class LyricsRepository(
         record(LyricsSource.Network, state, (lookup as? LyricsLookup.Found)?.probe)
         state
     }
+
+    /**
+     * Pencarian lirik manual, untuk saat auto-match memuat lirik dari lagu yang
+     * sama sekali berbeda.
+     *
+     * SENGAJA tidak menyentuh cache maupun statistik. Ini penjelajahan yang
+     * dipandu user, bukan lookup: mencatatnya akan mengotori angka coverage
+     * dengan percobaan yang memang diharapkan meleset, dan menyimpannya ke
+     * cache akan menimpa entry track lain karena hasil pencarian bisa milik
+     * lagu apa pun.
+     *
+     * Tidak ada retry di sini. User sedang menatap layar dan bisa menekan tombol
+     * cari lagi sendiri, jadi backoff otomatis cuma membuatnya terasa macet.
+     */
+    suspend fun searchLyrics(title: String, artist: String): LyricsSearchState =
+        withContext(Dispatchers.IO) {
+            if (title.isBlank() && artist.isBlank()) return@withContext LyricsSearchState.Empty
+            try {
+                val resp = api.search(trackName = title, artistName = artist)
+                if (!resp.isSuccessful) {
+                    Log.w(TAG, "/search untuk pencarian manual gagal: ${resp.code()}")
+                    return@withContext LyricsSearchState.Failed("http_${resp.code()}")
+                }
+                val hasil = toSearchResults(
+                    dtos = resp.body().orEmpty().map { it.toSearchEntry() },
+                    // trackId Spotify yang sedang diputar; hasil pencarian akan
+                    // dipasang ke track ITU, bukan ke track milik entry LRCLIB.
+                    trackId = "",
+                )
+                if (hasil.isEmpty()) LyricsSearchState.Empty else LyricsSearchState.Ready(hasil)
+            } catch (t: Throwable) {
+                Log.w(TAG, "Pencarian manual gagal: ${t.message}")
+                LyricsSearchState.Failed(t.message ?: "gagal")
+            }
+        }
+
+    /** Bentuk netral supaya pemetaan hasil bisa diuji tanpa Moshi. */
+    private fun LrclibDto.toSearchEntry(): LrclibSearchEntry = LrclibSearchEntry(
+        id = id ?: 0L,
+        trackName = (trackName ?: name).orEmpty(),
+        artistName = artistName.orEmpty(),
+        albumName = albumName.orEmpty(),
+        durationSec = duration?.toInt() ?: 0,
+        instrumental = instrumental == true,
+        syncedLyrics = syncedLyrics,
+        plainLyrics = plainLyrics,
+    )
 
     /**
      * Catat satu lookup. Kegagalan pencatatan tidak boleh menjatuhkan fetch

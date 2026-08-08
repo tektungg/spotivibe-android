@@ -1,5 +1,11 @@
 package com.tglabs.spotivibe.ui.component
 
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -61,6 +67,10 @@ fun NPHeader(
     onOverlayClick: () -> Unit,
     onEnterKaraoke: () -> Unit,
     onMoreClick: () -> Unit,
+    onSearchLyrics: () -> Unit = {},
+    /** Hanya true kalau lagu ini punya lirik tersimpan permanen. */
+    showForgetOverride: Boolean = false,
+    onForgetOverride: () -> Unit = {},
     modifier: Modifier = Modifier,
     showRomajiIcon: Boolean = true,
     romajiEnabled: Boolean = false,
@@ -159,13 +169,55 @@ fun NPHeader(
                 enabled = false,
                 onClick = onEnterKaraoke,
             )
-            HairlineIconButton(
-                onClick = onMoreClick,
-                icon = SvIcons.Kebab,
-                contentDescription = "More",
-                size = 36.dp,
-                iconSize = 16.dp,
-            )
+            // Kebab jadi menu kecil, bukan pintasan langsung ke Settings.
+            // Menambah ikon ke-5 di baris ini bikin header sesak di layar kecil,
+            // apalagi saat ikon romaji ikut muncul. Settings jarang dibuka,
+            // sementara "Cari lirik" dipakai justru saat ada masalah.
+            var menuTerbuka by remember { mutableStateOf(false) }
+            Box {
+                HairlineIconButton(
+                    onClick = { menuTerbuka = true },
+                    icon = SvIcons.Kebab,
+                    contentDescription = "Menu",
+                    size = 36.dp,
+                    iconSize = 16.dp,
+                )
+                DropdownMenu(
+                    expanded = menuTerbuka,
+                    onDismissRequest = { menuTerbuka = false },
+                    containerColor = LocalSvColors.current.bg2,
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Cari lirik", style = SvType.Body) },
+                        onClick = {
+                            menuTerbuka = false
+                            onSearchLyrics()
+                        },
+                    )
+                    if (showForgetOverride) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    "Lupakan lirik tersimpan",
+                                    style = SvType.Body,
+                                    color = LocalSvColors.current.accent,
+                                )
+                            },
+                            onClick = {
+                                menuTerbuka = false
+                                onForgetOverride()
+                            },
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text("Settings", style = SvType.Body) },
+                        onClick = {
+                            menuTerbuka = false
+                            onMoreClick()
+                        },
+                    )
+                }
+            }
         }
     }
 }

@@ -15,6 +15,16 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
+ * Antarmuka kecil untuk lapis disk, supaya [LyricsRepository] bisa diuji tanpa
+ * `Context`. Urutan resolusi cache adalah wiring, dan wiring yang tidak diuji
+ * berulang kali jadi tempat bug bersembunyi di project ini.
+ */
+interface LyricsDiskCache {
+    fun get(trackId: String): LyricsResult?
+    fun put(result: LyricsResult)
+}
+
+/**
  * JSON file-based cache untuk hasil lookup LRCLIB.
  *
  * Disimpan di `context.cacheDir/lyrics-cache/<sanitized-trackId>.json`.
@@ -24,10 +34,12 @@ import java.util.concurrent.atomic.AtomicInteger
  * - Negative (kosong, biar nggak spam LRCLIB tiap kali user replay track yang
  *   memang tidak punya lirik) → 1 hari.
  *
+ * Dibatasi 500 entry atau 8 MB, dibuang secara LRU. Lihat [sweep].
+ *
  * Implementasi sengaja sederhana — satu file per track, no index, no lock.
  * Race condition write-write paling-paling overwrite dengan data identik.
  */
-class LyricsCache(context: Context) {
+class LyricsCache(context: Context) : LyricsDiskCache {
 
     private val dir: File = File(context.cacheDir, "lyrics-cache").apply {
         if (!exists()) mkdirs()
@@ -42,7 +54,7 @@ class LyricsCache(context: Context) {
     private val writesSinceSweep = AtomicInteger(0)
 
     /** Ambil cache kalau ada dan belum expired. Return null kalau miss/expired/corrupt. */
-    fun get(trackId: String): LyricsResult? {
+    override fun get(trackId: String): LyricsResult? {
         val file = fileFor(trackId)
         if (!file.exists()) return null
         // Sentuh stempel waktunya supaya pembatasan berperilaku LRU, bukan FIFO:
@@ -73,7 +85,7 @@ class LyricsCache(context: Context) {
     }
 
     /** Simpan hasil ke disk. Tidak throw — log saja kalau gagal. */
-    fun put(result: LyricsResult) {
+    override fun put(result: LyricsResult) {
         try {
             val entry = CachedEntry(
                 synced = result.synced?.map { line ->

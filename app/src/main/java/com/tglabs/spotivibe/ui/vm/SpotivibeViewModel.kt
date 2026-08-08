@@ -13,8 +13,10 @@ import com.tglabs.spotivibe.data.SpotifyConnection.ConnectionState
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.UiState
 import com.tglabs.spotivibe.domain.hasRomanizableText
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -23,7 +25,74 @@ class SpotivibeViewModel(
     private val controller: PlaybackController,
     private val connection: SpotifyConnection,
     private val preferencesRepository: PreferencesRepository,
+    private val lyricsRepository: com.tglabs.spotivibe.data.LyricsRepository,
+    private val overrideRepository: com.tglabs.spotivibe.data.LyricsOverrideRepository,
 ) : ViewModel() {
+
+    // ── Pencarian lirik manual ───────────────────────────────────
+
+    private val _searchState =
+        MutableStateFlow<com.tglabs.spotivibe.domain.LyricsSearchState>(
+            com.tglabs.spotivibe.domain.LyricsSearchState.Idle
+        )
+    val searchState: StateFlow<com.tglabs.spotivibe.domain.LyricsSearchState> =
+        _searchState.asStateFlow()
+
+    /**
+     * Apakah lagu yang sedang diputar punya lirik tersimpan permanen.
+     *
+     * Ikut `revision` karena override disimpan di ConcurrentHashMap yang tidak
+     * bisa diobservasi sendiri; tanpa itu menu tidak akan pernah menyadari
+     * pilihan baru sampai lagunya berganti.
+     */
+    val hasRememberedOverride: StateFlow<Boolean> = combine(
+        controller.track,
+        overrideRepository.revision,
+    ) { track, _ ->
+        track?.id?.let { overrideRepository.isRemembered(it) } ?: false
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), false)
+
+    fun searchLyrics(title: String, artist: String) {
+        viewModelScope.launch {
+            _searchState.value = com.tglabs.spotivibe.domain.LyricsSearchState.Loading
+            _searchState.value = lyricsRepository.searchLyrics(title, artist)
+        }
+    }
+
+    fun resetSearch() {
+        _searchState.value = com.tglabs.spotivibe.domain.LyricsSearchState.Idle
+    }
+
+    /**
+     * Terapkan lirik pilihan user ke track yang sedang diputar.
+     *
+     * Hasil pencarian dipasang ke track SPOTIFY yang sedang diputar, bukan ke
+     * track milik entry LRCLIB. Itu seluruh gunanya: menghubungkan lagu yang
+     * metadatanya tidak cocok dengan lirik yang benar.
+     */
+    fun applySearchResult(
+        result: com.tglabs.spotivibe.domain.LyricsSearchResult,
+        remember: Boolean,
+    ) {
+        val trackId = controller.track.value?.id ?: return
+        viewModelScope.launch {
+            overrideRepository.apply(
+                trackId = trackId,
+                result = result.result.copy(trackId = trackId),
+                lrclibId = result.lrclibId,
+                remember = remember,
+            )
+            controller.reloadLyrics()
+        }
+    }
+
+    fun forgetOverride() {
+        val trackId = controller.track.value?.id ?: return
+        viewModelScope.launch {
+            overrideRepository.forget(trackId)
+            controller.reloadLyrics()
+        }
+    }
 
     /**
      * Combine 8 flows → UiState. Accent dihitung di PlaybackController (off main)
@@ -230,6 +299,8 @@ class SpotivibeViewModel(
         private val controller: PlaybackController,
         private val connection: SpotifyConnection,
         private val preferencesRepository: PreferencesRepository,
+        private val lyricsRepository: com.tglabs.spotivibe.data.LyricsRepository,
+        private val overrideRepository: com.tglabs.spotivibe.data.LyricsOverrideRepository,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -237,6 +308,8 @@ class SpotivibeViewModel(
                 controller,
                 connection,
                 preferencesRepository,
+                lyricsRepository,
+                overrideRepository,
             ) as T
         }
     }

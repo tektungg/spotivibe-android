@@ -1,6 +1,9 @@
 package com.tglabs.spotivibe
 
 import android.app.Application
+import com.tglabs.spotivibe.data.FileLyricsOverrideStore
+import com.tglabs.spotivibe.data.LyricsCache
+import com.tglabs.spotivibe.data.LyricsOverrideRepository
 import com.tglabs.spotivibe.data.LyricsRepository
 import com.tglabs.spotivibe.data.PlaybackController
 import com.tglabs.spotivibe.data.PreferencesRepository
@@ -58,10 +61,16 @@ class SpotivibeApp : Application() {
     val sessionSupervisor: SpotifySessionSupervisor by lazy {
         SpotifySessionSupervisor(spotifyConnection, authRepository, applicationScope)
     }
+    /** Lirik pilihan user. Disimpan di filesDir, bukan cacheDir. */
+    val lyricsOverrideRepository: LyricsOverrideRepository by lazy {
+        LyricsOverrideRepository(FileLyricsOverrideStore(this))
+    }
+
     val lyricsRepository: LyricsRepository by lazy {
         LyricsRepository(
-            context = this,
+            diskCache = LyricsCache(this),
             statsRecorder = { event -> preferencesRepository.recordLyricsLookup(event) },
+            overrides = { trackId -> lyricsOverrideRepository.overrideFor(trackId) },
         )
     }
     val romanizationService: RomanizationService by lazy { RomanizationService() }

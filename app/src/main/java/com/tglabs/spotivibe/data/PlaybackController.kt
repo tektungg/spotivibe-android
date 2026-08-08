@@ -148,11 +148,7 @@ class PlaybackController(
                         durationMs = t.durationMs,
                     )
                     if (connection.nowPlaying.value?.id == trackId) {
-                        _lyricsState.value = fetched
-                        // Jangan tunggu tick berikutnya: kalau lirik datang dari
-                        // cache, baris aktif harus langsung benar.
-                        syncEngine.onLyrics((fetched as? LyricsState.Ready)?.result?.synced)
-                        publishLineIndex()
+                        applyLyrics(fetched)
                     }
                     // Cek /me sampai dapat jawaban. Gagal di sini tidak lagi
                     // menyembunyikan kontrol: capability tetap Unknown, dan
@@ -273,6 +269,37 @@ class PlaybackController(
                         }.toMap()
                     }
                 }
+        }
+    }
+
+    private fun applyLyrics(state: LyricsState) {
+        _lyricsState.value = state
+        // Jangan tunggu tick berikutnya: kalau lirik datang dari cache atau
+        // override, baris aktif harus langsung benar.
+        syncEngine.onLyrics((state as? LyricsState.Ready)?.result?.synced)
+        publishLineIndex()
+    }
+
+    /**
+     * Muat ulang lirik untuk track yang sedang diputar.
+     *
+     * Dipanggil setelah user menerapkan atau melupakan override, supaya
+     * perubahannya langsung terlihat tanpa menunggu ganti lagu. Karena override
+     * dicek paling awal di repository, pemanggilan ini otomatis mengambil
+     * pilihan terbaru.
+     */
+    fun reloadLyrics() {
+        val t = connection.nowPlaying.value ?: return
+        scope.launch {
+            val fetched = lyricsRepository.fetchLyrics(
+                trackId = t.id,
+                title = t.title,
+                artist = t.artist,
+                album = t.album,
+                durationMs = t.durationMs,
+                allowRetry = false,
+            )
+            if (connection.nowPlaying.value?.id == t.id) applyLyrics(fetched)
         }
     }
 
