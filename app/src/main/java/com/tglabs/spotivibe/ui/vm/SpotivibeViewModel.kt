@@ -34,7 +34,7 @@ class SpotivibeViewModel(
             controller.connectionState,
             controller.track,
             controller.albumBitmap,
-            controller.lyrics,
+            controller.lyricsState,
             controller.currentLineIndex,
             controller.romaji,
             controller.accent,
@@ -54,7 +54,7 @@ class SpotivibeViewModel(
         val connState = values[0] as ConnectionState
         val track = values[1] as com.tglabs.spotivibe.domain.NowPlaying?
         val bitmap = values[2] as Bitmap?
-        val lyrics = values[3] as LyricsResult?
+        val lyricsState = values[3] as com.tglabs.spotivibe.domain.LyricsState
         val currentLineIndex = values[4] as Int
         val romaji = values[5] as Map<Long, String?>
         val accent = values[6] as Color?
@@ -73,12 +73,14 @@ class SpotivibeViewModel(
             ConnectionState.Disconnected -> UiState.Disconnected
             ConnectionState.Connecting -> UiState.Connecting
             ConnectionState.Connected -> track?.let { t ->
-                val canRoma = lyrics?.synced?.let { hasRomanizableText(it.map { l -> l.text }) } ?: false
+                val synced = (lyricsState as? com.tglabs.spotivibe.domain.LyricsState.Ready)
+                    ?.result?.synced
+                val canRoma = synced?.let { hasRomanizableText(it.map { l -> l.text }) } ?: false
                 UiState.Playing(
                     track = t,
                     albumBitmap = bitmap,
                     accentColor = accent,
-                    lyrics = lyrics,
+                    lyricsState = lyricsState,
                     currentLineIndex = currentLineIndex,
                     canRomanize = canRoma,
                     romanizationEnabled = romaEnabled,

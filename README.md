@@ -142,6 +142,35 @@ penolakan permanen (`invalid_grant` dan kawan-kawan) yang memaksa login ulang.
 Token disimpan di DataStore dan direktori `datastore/` dikecualikan dari cloud
 backup maupun device transfer.
 
+### Cache lirik
+
+Tiga lapis: memory LRU 50, file JSON di `cacheDir`, lalu jaringan.
+
+Yang masuk cache HANYA jawaban sungguhan:
+
+| Hasil lookup | Ditulis? | TTL |
+|---|---|---|
+| Ada lirik | ya | 30 hari |
+| LRCLIB memastikan tidak ada | ya, penanda kosong | 1 hari |
+| Gagal dijangkau (jaringan, timeout, 5xx, 429) | **tidak sama sekali** | — |
+
+Dulu semua exception ditelan jadi satu hasil kosong yang tetap ditulis ke disk
+dengan TTL negatif. Satu lagu yang kebetulan diputar saat sinyal hilang
+kehilangan liriknya 24 jam penuh, walaupun jaringan balik semenit kemudian.
+
+`/get` dan `/search` ditanya paralel, lalu digabung. Aturan yang menentukan:
+**"tidak ada" hanya berlaku kalau KEDUA probe berhasil dan sama-sama bilang
+tidak ada.** Kalau salah satunya gagal dijangkau, kita tidak benar-benar tahu,
+karena yang gagal itu mungkin justru punya liriknya. 404 dari `/get` dihitung
+sebagai jawaban sungguhan; 429 dan 5xx tidak.
+
+Kegagalan sementara diulang sampai 3 kali dengan backoff 400 ms, 800 ms, 1.6 s.
+Preload antrean selalu satu percobaan saja, supaya tidak berebut jaringan
+dengan lagu yang sedang diputar.
+
+UI membedakan keduanya: "Lirik tidak ditemukan untuk track ini" versus "Gagal
+memuat lirik. Cek koneksi, lalu putar ulang lagunya."
+
 ### Sync lirik
 
 Baris aktif dihitung di SATU tempat: `LyricsSyncEngine`, dipegang oleh

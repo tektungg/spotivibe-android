@@ -116,7 +116,7 @@ fun NowPlayingScreen(
     var karaokeMode by remember { mutableStateOf(false) }
     if (karaokeMode) {
         KaraokeView(
-            lyrics = state.lyrics,
+            lyricsState = state.lyricsState,
             activeIndex = state.currentLineIndex,
             progressMs = effectiveProgressMs,
             accent = state.accentColor ?: sv.accent,
@@ -256,7 +256,7 @@ fun NowPlayingScreen(
             // Lyrics list (mask via padding handles edge fade)
             Box(modifier = Modifier.weight(1f, fill = true).fillMaxWidth()) {
                 LyricsList(
-                    lyrics = state.lyrics,
+                    lyricsState = state.lyricsState,
                     activeIndex = state.currentLineIndex,
                     progressMs = effectiveProgressMs,
                     romaji = state.romaji,

@@ -37,7 +37,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
-import com.tglabs.spotivibe.domain.LyricsResult
+import com.tglabs.spotivibe.domain.LyricsState
 import com.tglabs.spotivibe.domain.SyncedLine
 import com.tglabs.spotivibe.domain.SyncedWord
 import com.tglabs.spotivibe.ui.theme.LocalSvColors
@@ -64,7 +64,12 @@ import com.tglabs.spotivibe.util.Haptics
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun LyricsList(
-    lyrics: LyricsResult?,
+    /**
+     * Bukan sekadar konten. Kosong karena LRCLIB bilang lagu ini tidak
+     * berlirik itu beda dengan kosong karena jaringan mati, dan user berhak
+     * tahu bedanya: yang satu permanen, yang satu tinggal ditunggu.
+     */
+    lyricsState: LyricsState,
     /**
      * Baris aktif, sudah dihitung di PlaybackController dengan offset user
      * ikut diperhitungkan. Komponen ini SENGAJA tidak menghitungnya sendiri:
@@ -91,11 +96,14 @@ fun LyricsList(
 ) {
     val sv = LocalSvColors.current
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val synced = (lyricsState as? LyricsState.Ready)?.result?.synced
+        val plain = (lyricsState as? LyricsState.Ready)?.result?.plain
         when {
-            lyrics == null -> StatusText("Mencari lirik…")
-            lyrics.synced != null && lyrics.synced.isNotEmpty() ->
+            lyricsState is LyricsState.Loading -> StatusText("Mencari lirik…")
+
+            !synced.isNullOrEmpty() ->
                 SyncedView(
-                    lines = lyrics.synced,
+                    lines = synced,
                     activeIndex = activeIndex,
                     progressMs = progressMs,
                     romaji = romaji,
@@ -109,7 +117,12 @@ fun LyricsList(
                     selectedTimes = selectedTimes,
                     isSelecting = isSelecting,
                 )
-            !lyrics.plain.isNullOrBlank() -> PlainView(lyrics.plain, fontSize, sv.ink2)
+
+            !plain.isNullOrBlank() -> PlainView(plain, fontSize, sv.ink2)
+
+            lyricsState is LyricsState.Unavailable ->
+                StatusText("Gagal memuat lirik. Cek koneksi, lalu putar ulang lagunya.")
+
             else -> StatusText("Lirik tidak ditemukan untuk track ini")
         }
     }

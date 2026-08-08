@@ -318,7 +318,7 @@ fun NowPlayingTabletScreen(
 
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     LyricsList(
-                        lyrics = state.lyrics,
+                        lyricsState = state.lyricsState,
                         activeIndex = state.currentLineIndex,
                         progressMs = effectiveProgressMs,
                         romaji = state.romaji,

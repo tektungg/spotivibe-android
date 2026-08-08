@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.compose.ui.graphics.Color
 import androidx.palette.graphics.Palette
 import com.tglabs.spotivibe.domain.LyricsResult
+import com.tglabs.spotivibe.domain.LyricsState
 import com.tglabs.spotivibe.domain.NowPlaying
 import com.tglabs.spotivibe.domain.PlaybackCapability
 import com.tglabs.spotivibe.domain.SyncedLine
@@ -52,15 +53,24 @@ class PlaybackController(
     val connectionState = connection.connectionState
 
     // ── Lyrics state ─────────────────────────────────────────────
-    private val _lyrics = MutableStateFlow<LyricsResult?>(null)
-    val lyrics: StateFlow<LyricsResult?> = _lyrics.asStateFlow()
+    //
+    // lyricsState membawa ALASAN kosongnya, bukan cuma kosong. "LRCLIB bilang
+    // lagu ini tidak berlirik" dan "jaringan lagi mati" tampil beda di UI dan
+    // diperlakukan beda oleh cache.
+    private val _lyricsState = MutableStateFlow<LyricsState>(LyricsState.Loading)
+    val lyricsState: StateFlow<LyricsState> = _lyricsState.asStateFlow()
+
+    /** Konten saja, untuk konsumen yang tidak peduli kenapa kosong. */
+    val lyrics: StateFlow<LyricsResult?> = _lyricsState
+        .map { (it as? LyricsState.Ready)?.result }
+        .stateIn(scope, SharingStarted.Eagerly, null)
 
     // ── Current line index (ticker-driven) ───────────────────────
     private val _currentLineIndex = MutableStateFlow(-1)
     val currentLineIndex: StateFlow<Int> = _currentLineIndex.asStateFlow()
 
     val currentLine: StateFlow<SyncedLine?> = combine(
-        _lyrics,
+        lyrics,
         _currentLineIndex,
     ) { lyrics, idx ->
         lyrics?.synced?.getOrNull(idx)
@@ -117,8 +127,8 @@ class PlaybackController(
                 .map { it?.id }
                 .distinctUntilChanged()
                 .collect { trackId ->
-                    _lyrics.value = null
-                    // Engine WAJIB dikosongkan bareng _lyrics. Kalau tidak,
+                    _lyricsState.value = LyricsState.Loading
+                    // Engine WAJIB dikosongkan bareng lirik. Kalau tidak,
                     // ticker masih memegang baris lagu SEBELUMNYA selama fetch
                     // berjalan dan sempat menerbitkan index dari lagu yang salah.
                     syncEngine.onLyrics(null)
@@ -134,10 +144,10 @@ class PlaybackController(
                         durationMs = t.durationMs,
                     )
                     if (connection.nowPlaying.value?.id == trackId) {
-                        _lyrics.value = fetched
+                        _lyricsState.value = fetched
                         // Jangan tunggu tick berikutnya: kalau lirik datang dari
                         // cache, baris aktif harus langsung benar.
-                        syncEngine.onLyrics(fetched.synced)
+                        syncEngine.onLyrics((fetched as? LyricsState.Ready)?.result?.synced)
                         publishLineIndex()
                     }
                     // Cek /me sampai dapat jawaban. Gagal di sini tidak lagi
@@ -166,8 +176,11 @@ class PlaybackController(
                                 artist = next.artist,
                                 album = next.album,
                                 durationMs = next.durationMs,
+                                // Preload tidak boleh berebut jaringan dengan
+                                // lagu yang sedang diputar.
+                                allowRetry = false,
                             )
-                            // Result populates mem + disk cache; tidak set _lyrics
+                            // Hasilnya cuma mengisi cache; tidak menyentuh state.
                         }
                     }
                 }
@@ -238,7 +251,7 @@ class PlaybackController(
         // 5. Compute romaji reactive — saat lyrics berubah atau toggle berubah
         scope.launch {
             combine(
-                _lyrics,
+                lyrics,
                 preferencesRepository.romanizationEnabled,
             ) { lyrics, enabled -> lyrics to enabled }
                 .collect { (lyrics, enabled) ->

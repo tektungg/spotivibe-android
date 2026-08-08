@@ -20,7 +20,11 @@ sealed interface UiState {
         val track: NowPlaying,
         val albumBitmap: Bitmap? = null,
         val accentColor: Color? = null,
-        val lyrics: LyricsResult? = null,
+        /**
+         * Membawa alasan kenapa lirik kosong, bukan cuma kosongnya. UI
+         * membedakan "lagu ini memang tidak berlirik" dari "gagal memuat".
+         */
+        val lyricsState: LyricsState = LyricsState.Loading,
         /**
          * Baris aktif, dihitung sekali di PlaybackController dan dipakai
          * bersama oleh layar, notification, dan overlay. UI TIDAK boleh
@@ -46,7 +50,10 @@ sealed interface UiState {
         val highContrast: Boolean = false,
         val smoothScroll: Boolean = true,
         val hapticEnabled: Boolean = true,
-    ) : UiState
+    ) : UiState {
+        /** Konten lirik saja, untuk kode yang tidak peduli kenapa kosong. */
+        val lyrics: LyricsResult? get() = (lyricsState as? LyricsState.Ready)?.result
+    }
 
     data class Error(val message: String) : UiState
 }

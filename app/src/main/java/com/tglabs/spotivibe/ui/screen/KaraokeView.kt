@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import com.tglabs.spotivibe.domain.LyricsResult
+import com.tglabs.spotivibe.domain.LyricsState
 import com.tglabs.spotivibe.ui.component.LyricsList
 import com.tglabs.spotivibe.ui.component.MonoEyebrow
 import com.tglabs.spotivibe.ui.theme.LocalSvColors
@@ -50,7 +50,7 @@ import com.tglabs.spotivibe.ui.theme.SvType
  */
 @Composable
 fun KaraokeView(
-    lyrics: LyricsResult?,
+    lyricsState: LyricsState,
     activeIndex: Int,
     progressMs: Long,
     accent: Color,
@@ -88,7 +88,7 @@ fun KaraokeView(
     ) {
         // Lyrics fill the whole screen
         LyricsList(
-            lyrics = lyrics,
+            lyricsState = lyricsState,
             activeIndex = activeIndex,
             progressMs = progressMs,
             romaji = romaji,

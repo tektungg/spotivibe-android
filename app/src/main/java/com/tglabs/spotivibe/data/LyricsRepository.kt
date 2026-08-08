@@ -4,11 +4,19 @@ import android.content.Context
 import android.util.Log
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import com.tglabs.spotivibe.domain.LrclibProbe
+import com.tglabs.spotivibe.domain.LyricsLookup
 import com.tglabs.spotivibe.domain.LyricsResult
+import com.tglabs.spotivibe.domain.LyricsState
+import com.tglabs.spotivibe.domain.cacheEntryFor
+import com.tglabs.spotivibe.domain.combineProbes
 import com.tglabs.spotivibe.domain.parseLrc
+import com.tglabs.spotivibe.domain.probeFromHttpFailure
+import com.tglabs.spotivibe.domain.retryBackoffMs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
@@ -77,10 +85,18 @@ class LyricsRepository(private val context: Context) {
     /**
      * Fetch lirik untuk track tertentu. Cascade: memory → disk → network.
      *
+     * Yang di-cache HANYA jawaban yang sungguhan: ada lirik, atau LRCLIB
+     * memastikan tidak ada. Kegagalan transport tidak masuk cache manapun,
+     * karena dulu justru itu yang bikin satu lagu yang kebetulan diputar saat
+     * sinyal hilang kehilangan liriknya selama 24 jam penuh.
+     *
      * @param trackId identifier unik (biasanya Spotify URI `spotify:track:xxx`).
      *   Dipakai sebagai cache key — sanitize otomatis untuk filename.
      * @param durationMs durasi track dalam millisecond. Akan dikonversi ke
      *   detik untuk LRCLIB `/get` param.
+     * @param allowRetry false untuk preload latar belakang. Preload tidak boleh
+     *   berebut jaringan dengan lagu yang sedang diputar; kalau gagal, biarkan
+     *   saja dan biar fetch normal yang mengurusnya nanti.
      */
     suspend fun fetchLyrics(
         trackId: String,
@@ -88,102 +104,104 @@ class LyricsRepository(private val context: Context) {
         artist: String,
         album: String,
         durationMs: Long,
-    ): LyricsResult = withContext(Dispatchers.IO) {
+        allowRetry: Boolean = true,
+    ): LyricsState = withContext(Dispatchers.IO) {
         // Layer 1: in-memory (LRU bounded)
         memCacheGet(trackId)?.let {
             Log.d(TAG, "mem-cache hit: $trackId")
-            return@withContext it
+            return@withContext it.toState()
         }
 
         // Layer 2: disk
         diskCache.get(trackId)?.let { cached ->
             Log.d(TAG, "disk-cache hit: $trackId (hasContent=${cached.hasContent})")
             memCachePut(trackId, cached)
-            return@withContext cached
+            return@withContext cached.toState()
         }
 
-        // Layer 3: network — race /get vs /search
-        val result = try {
-            raceLrclib(trackId, title, artist, album, durationMs)
-        } catch (t: Throwable) {
-            Log.w(TAG, "Network fetch failed for $trackId: ${t.message}", t)
-            LyricsResult(trackId = trackId, synced = null, plain = null)
+        // Layer 3: network — /get + /search, dengan retry untuk gangguan sesaat
+        val maxAttempts = if (allowRetry) MAX_ATTEMPTS else 1
+        var lookup = probeNetwork(trackId, title, artist, album, durationMs)
+        var attempt = 1
+        while (lookup is LyricsLookup.Unavailable && attempt < maxAttempts) {
+            val backoff = retryBackoffMs(attempt)
+            Log.d(TAG, "Retry $attempt untuk $trackId dalam ${backoff}ms (${lookup.reason})")
+            delay(backoff)
+            lookup = probeNetwork(trackId, title, artist, album, durationMs)
+            attempt++
         }
 
-        // Cache walaupun kosong (negative cache, biar nggak spam LRCLIB)
-        memCachePut(trackId, result)
-        diskCache.put(result)
-        result
+        // Satu titik tulis, dan syaratnya diputuskan oleh fungsi murni yang
+        // sudah diuji. Versi lama memanggil diskCache.put() tanpa syarat, dan
+        // di situlah kegagalan jaringan ikut tersimpan sebagai "tidak ada".
+        cacheEntryFor(trackId, lookup)?.let { entry ->
+            memCachePut(trackId, entry)
+            diskCache.put(entry)
+        }
+
+        when (val l = lookup) {
+            is LyricsLookup.Found -> LyricsState.Ready(l.result)
+            LyricsLookup.NotFound -> LyricsState.NotFound
+            is LyricsLookup.Unavailable -> {
+                Log.w(TAG, "Lirik tidak tersedia untuk $trackId: ${l.reason}")
+                LyricsState.Unavailable(l.reason)
+            }
+        }
+    }
+
+    private fun LyricsResult.toState(): LyricsState =
+        if (hasContent) LyricsState.Ready(this) else LyricsState.NotFound
+
+    /**
+     * Tanya `/get` dan `/search` paralel, lalu gabungkan jadi satu keputusan.
+     *
+     * Strategi: tunggu `/get` sampai [PREFER_GET_TIMEOUT_MS]ms. Kalau sudah
+     * ber-content, pakai itu dan jangan tunggu `/search`. Kalau tidak, tunggu
+     * keduanya, karena [combineProbes] butuh tahu apakah probe yang lain
+     * BERHASIL bilang tidak ada, atau justru gagal dijangkau. Beda itu yang
+     * menentukan boleh tidaknya hasilnya di-cache.
+     */
+    private suspend fun probeNetwork(
+        trackId: String,
+        title: String,
+        artist: String,
+        album: String,
+        durationMs: Long,
+    ): LyricsLookup = coroutineScope {
+        val getDeferred = async { probeGet(trackId, title, artist, album, durationMs) }
+        val searchDeferred = async { probeSearch(trackId, title, artist) }
+
+        // Jalur cepat: /get sudah punya konten, tidak perlu menunggu /search.
+        val getQuick = withTimeoutOrNull(PREFER_GET_TIMEOUT_MS) { getDeferred.await() }
+        if (getQuick is LrclibProbe.Content) {
+            Log.d(TAG, "/get menang (jalur cepat) untuk $trackId")
+            // Biarkan /search selesai supaya tidak menggantung, hasilnya dibuang.
+            runCatching { searchDeferred.await() }
+            return@coroutineScope LyricsLookup.Found(getQuick.result)
+        }
+
+        val getProbe = getQuick ?: runCatching { getDeferred.await() }
+            .getOrElse { LrclibProbe.Failed(it.message ?: "get gagal") }
+        val searchProbe = runCatching { searchDeferred.await() }
+            .getOrElse { LrclibProbe.Failed(it.message ?: "search gagal") }
+
+        combineProbes(getProbe, searchProbe).also {
+            Log.d(TAG, "Lookup $trackId: get=$getProbe search=$searchProbe -> $it")
+        }
     }
 
     /**
-     * Fire `/get` dan `/search` paralel.
-     *
-     * Strategi: tunggu `/get` sampai [PREFER_GET_TIMEOUT_MS]ms. Kalau berhasil
-     * dan ber-content, pakai itu. Kalau tidak, baru tunggu `/search`. Begitu
-     * pun kalau /get 404, fallback ke /search.
+     * Hit `/api/get`. 404 berarti kombinasi judul + artis + album + durasi
+     * memang tidak ada di database, jadi [LrclibProbe.Absent]. Status lain yang
+     * tidak sukses bisa berubah, jadi [LrclibProbe.Failed].
      */
-    private suspend fun raceLrclib(
+    private suspend fun probeGet(
         trackId: String,
         title: String,
         artist: String,
         album: String,
         durationMs: Long,
-    ): LyricsResult = coroutineScope {
-        val getDeferred = async {
-            runCatching { fetchViaGet(trackId, title, artist, album, durationMs) }
-                .getOrElse {
-                    Log.w(TAG, "/get error: ${it.message}")
-                    null
-                }
-        }
-        val searchDeferred = async {
-            runCatching { fetchViaSearch(trackId, title, artist) }
-                .getOrElse {
-                    Log.w(TAG, "/search error: ${it.message}")
-                    null
-                }
-        }
-
-        // Prefer /get kalau ready cepat & ber-content
-        val getQuick = withTimeoutOrNull(PREFER_GET_TIMEOUT_MS) { getDeferred.await() }
-        if (getQuick != null && getQuick.hasContent) {
-            Log.d(TAG, "race winner: /get (fast path) for $trackId")
-            // /search masih running di background — biarkan complete biar
-            // tidak leak, tapi hasilnya kita buang.
-            runCatching { searchDeferred.await() }
-            return@coroutineScope getQuick
-        }
-
-        // /get belum selesai atau tidak ber-content — tunggu kedua-duanya
-        val getResult = getQuick ?: runCatching { getDeferred.await() }.getOrNull()
-        val searchResult = runCatching { searchDeferred.await() }.getOrNull()
-
-        val chosen = when {
-            getResult?.hasContent == true -> {
-                Log.d(TAG, "race winner: /get (slow path) for $trackId")
-                getResult
-            }
-            searchResult?.hasContent == true -> {
-                Log.d(TAG, "race winner: /search for $trackId")
-                searchResult
-            }
-            else -> {
-                Log.d(TAG, "race: no content for $trackId")
-                LyricsResult(trackId = trackId, synced = null, plain = null)
-            }
-        }
-        chosen
-    }
-
-    /** Hit `/api/get`. 404 di-treat sebagai "no result" (return empty). */
-    private suspend fun fetchViaGet(
-        trackId: String,
-        title: String,
-        artist: String,
-        album: String,
-        durationMs: Long,
-    ): LyricsResult {
+    ): LrclibProbe = runCatching {
         val durationSec = (durationMs / 1000L).toInt().coerceAtLeast(0)
         val resp = api.get(
             trackName = title,
@@ -191,31 +209,36 @@ class LyricsRepository(private val context: Context) {
             albumName = album,
             duration = durationSec,
         )
-        if (!resp.isSuccessful) {
-            Log.d(TAG, "/get returned ${resp.code()} for $trackId")
-            return LyricsResult(trackId = trackId, synced = null, plain = null)
-        }
-        val dto = resp.body() ?: return LyricsResult(trackId, null, null)
-        return dto.toLyricsResult(trackId)
+        if (!resp.isSuccessful) return@runCatching probeFromHttpFailure(resp.code())
+        val dto = resp.body() ?: return@runCatching LrclibProbe.Absent
+        dto.toLyricsResult(trackId).asProbe()
+    }.getOrElse { t ->
+        // IOException, timeout, parse error: semuanya sementara.
+        Log.w(TAG, "/get error untuk $trackId: ${t.message}")
+        LrclibProbe.Failed(t.message ?: "get gagal")
     }
 
-    /** Hit `/api/search`, pilih item pertama yang punya syncedLyrics. */
-    private suspend fun fetchViaSearch(
+    /** Hit `/api/search`. Array kosong adalah jawaban sungguhan "tidak ada". */
+    private suspend fun probeSearch(
         trackId: String,
         title: String,
         artist: String,
-    ): LyricsResult {
+    ): LrclibProbe = runCatching {
         val resp = api.search(trackName = title, artistName = artist)
-        if (!resp.isSuccessful) {
-            Log.d(TAG, "/search returned ${resp.code()} for $trackId")
-            return LyricsResult(trackId = trackId, synced = null, plain = null)
-        }
+        if (!resp.isSuccessful) return@runCatching probeFromHttpFailure(resp.code())
         val items = resp.body().orEmpty()
-        if (items.isEmpty()) return LyricsResult(trackId, null, null)
+        if (items.isEmpty()) return@runCatching LrclibProbe.Absent
         // Prefer item dengan syncedLyrics; fallback ke item pertama
         val pick = items.firstOrNull { !it.syncedLyrics.isNullOrBlank() } ?: items.first()
-        return pick.toLyricsResult(trackId)
+        pick.toLyricsResult(trackId).asProbe()
+    }.getOrElse { t ->
+        Log.w(TAG, "/search error untuk $trackId: ${t.message}")
+        LrclibProbe.Failed(t.message ?: "search gagal")
     }
+
+    /** Hasil tanpa isi sama artinya dengan "tidak ada", bukan konten kosong. */
+    private fun LyricsResult.asProbe(): LrclibProbe =
+        if (hasContent) LrclibProbe.Content(this) else LrclibProbe.Absent
 
     private fun LrclibDto.toLyricsResult(trackId: String): LyricsResult {
         val synced = syncedLyrics?.takeIf { it.isNotBlank() }?.let { parseLrc(it) }
@@ -233,5 +256,8 @@ class LyricsRepository(private val context: Context) {
         private const val USER_AGENT = "spotivibe-android (https://github.com/tektungg/spotivibe)"
         private const val PREFER_GET_TIMEOUT_MS = 1500L
         private const val MEM_CACHE_MAX = 50
+
+        /** Total percobaan untuk fetch normal. Preload selalu 1. */
+        private const val MAX_ATTEMPTS = 3
     }
 }
