@@ -102,7 +102,7 @@ object SpotifyAuthUrls {
 
         val queryStart = uri.indexOf('?')
         val base = if (queryStart >= 0) uri.substring(0, queryStart) else uri
-        if (!base.equals(expectedRedirectUri, ignoreCase = true)) return Redirect.NotOurs
+        if (!basesMatch(base, expectedRedirectUri)) return Redirect.NotOurs
         if (queryStart < 0) return Redirect.Malformed
 
         // Buang fragment kalau ada -- Spotify tidak memakainya di flow code,
@@ -118,6 +118,38 @@ object SpotifyAuthUrls {
         params["error"]?.takeIf { it.isNotBlank() }?.let { return Redirect.Denied(it) }
         params["code"]?.takeIf { it.isNotBlank() }?.let { return Redirect.Code(it) }
         return Redirect.Malformed
+    }
+
+    /**
+     * Apakah base URI yang masuk itu redirect kita.
+     *
+     * Perbandingan string persis TIDAK cukup. Server OAuth lazim menormalkan
+     * redirect URI dengan menambahkan garis miring saat path-nya kosong, jadi
+     * `spotivibe://callback` yang kita daftarkan bisa kembali sebagai
+     * `spotivibe://callback/`. Dulu selisih satu karakter itu membuat redirect
+     * yang benar-benar sah dibuang sebagai [Redirect.NotOurs], tanpa log dan
+     * tanpa mengubah state, sehingga UI terkunci di Connecting selamanya.
+     */
+    internal fun basesMatch(actual: String, expected: String): Boolean =
+        normalizeBase(actual).equals(normalizeBase(expected), ignoreCase = true)
+
+    /** Buang spasi tepi dan garis miring di akhir. */
+    internal fun normalizeBase(raw: String): String = raw.trim().trimEnd('/')
+
+    /**
+     * Bentuk ringkas URI redirect untuk log: base apa adanya plus DAFTAR NAMA
+     * parameter saja.
+     *
+     * Nilainya sengaja tidak ikut. Parameter `code` adalah kredensial yang bisa
+     * ditukar jadi token, jadi tidak boleh mendarat di logcat.
+     */
+    fun describeRedirect(uri: String?): String {
+        if (uri.isNullOrBlank()) return "<kosong>"
+        val queryStart = uri.indexOf('?')
+        val base = if (queryStart >= 0) uri.substring(0, queryStart) else uri
+        if (queryStart < 0) return "$base (tanpa query)"
+        val names = parseQuery(uri.substring(queryStart + 1).substringBefore('#')).keys
+        return "$base?[${names.joinToString(",")}]"
     }
 
     /**

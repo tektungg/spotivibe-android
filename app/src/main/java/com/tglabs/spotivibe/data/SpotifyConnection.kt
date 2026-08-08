@@ -137,7 +137,18 @@ class SpotifyConnection(
      */
     suspend fun handleRedirect(context: Context, uri: String?): Boolean {
         return when (val result = authRepository.completeRedirect(uri)) {
-            SpotifyAuthRepository.CompleteResult.Ignored -> false
+            SpotifyAuthRepository.CompleteResult.Ignored -> {
+                // Kalau kita SEDANG menunggu login dan redirect-nya justru
+                // ditolak, jangan diam. Membiarkan state di Connecting mengunci
+                // UI tanpa tombol Connect dan tanpa pesan apapun.
+                if (_connectionState.value is ConnectionState.Connecting) {
+                    Log.w(TAG, "Redirect ditolak saat menunggu login: $uri")
+                    _connectionState.value = ConnectionState.Error(
+                        "Balikan login tidak dikenali. Coba hubungkan lagi."
+                    )
+                }
+                false
+            }
 
             SpotifyAuthRepository.CompleteResult.Success -> {
                 Log.d(TAG, "Authorization sukses -- bind App Remote")

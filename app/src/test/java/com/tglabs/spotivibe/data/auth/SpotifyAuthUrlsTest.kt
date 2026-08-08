@@ -102,6 +102,74 @@ class SpotifyAuthUrlsTest {
         assertEquals(SpotifyAuthUrls.Redirect.StateMismatch, result)
     }
 
+    /**
+     * REGRESI: server OAuth lazim menormalkan redirect URI dengan menambahkan
+     * garis miring saat path-nya kosong. Perbandingan string persis menolak
+     * redirect yang sah karena selisih satu karakter, dan karena jalur NotOurs
+     * dulu tidak menulis log maupun mengubah state, UI terkunci di Connecting
+     * tanpa jejak apapun.
+     */
+    @Test
+    fun `garis miring di akhir tetap dikenali sebagai redirect kita`() {
+        val result = SpotifyAuthUrls.parseRedirect(
+            uri = "$redirect/?code=AQC123&state=STATE",
+            expectedRedirectUri = redirect,
+            expectedState = "STATE",
+        )
+        assertEquals(SpotifyAuthUrls.Redirect.Code("AQC123"), result)
+    }
+
+    @Test
+    fun `garis miring di sisi yang terdaftar juga ditoleransi`() {
+        val result = SpotifyAuthUrls.parseRedirect(
+            uri = "$redirect?code=AQC123&state=STATE",
+            expectedRedirectUri = "$redirect/",
+            expectedState = "STATE",
+        )
+        assertEquals(SpotifyAuthUrls.Redirect.Code("AQC123"), result)
+    }
+
+    @Test
+    fun `beda huruf besar kecil pada scheme tetap cocok`() {
+        val result = SpotifyAuthUrls.parseRedirect(
+            uri = "SPOTIVIBE://CALLBACK?code=AQC123&state=STATE",
+            expectedRedirectUri = redirect,
+            expectedState = "STATE",
+        )
+        assertEquals(SpotifyAuthUrls.Redirect.Code("AQC123"), result)
+    }
+
+    @Test
+    fun `host berbeda tetap ditolak walau normalisasi aktif`() {
+        val result = SpotifyAuthUrls.parseRedirect(
+            uri = "spotivibe://lain?code=AQC123&state=STATE",
+            expectedRedirectUri = redirect,
+            expectedState = "STATE",
+        )
+        assertEquals(SpotifyAuthUrls.Redirect.NotOurs, result)
+    }
+
+    // ── describeRedirect: aman untuk log ─────────────────────────
+
+    /**
+     * Parameter `code` adalah kredensial yang bisa ditukar jadi token, jadi
+     * nilainya tidak boleh mendarat di logcat.
+     */
+    @Test
+    fun `deskripsi untuk log tidak membocorkan nilai code`() {
+        val d = SpotifyAuthUrls.describeRedirect("$redirect?code=RAHASIA123&state=STATE456")
+        assertTrue("nama parameter harus ada", d.contains("code"))
+        assertTrue("base harus ada", d.contains(redirect))
+        assertTrue("nilai code bocor: $d", !d.contains("RAHASIA123"))
+        assertTrue("nilai state bocor: $d", !d.contains("STATE456"))
+    }
+
+    @Test
+    fun `deskripsi menangani uri kosong`() {
+        assertEquals("<kosong>", SpotifyAuthUrls.describeRedirect(null))
+        assertEquals("<kosong>", SpotifyAuthUrls.describeRedirect(""))
+    }
+
     @Test
     fun `deep link lain diabaikan`() {
         val result = SpotifyAuthUrls.parseRedirect(

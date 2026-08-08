@@ -133,8 +133,20 @@ class SpotifyAuthRepository(
      */
     suspend fun completeRedirect(uri: String?): CompleteResult {
         val pending = storage.loadPendingAuth()
+        // SELALU catat apa yang masuk. Sebelumnya jalur NotOurs diam total dan
+        // juga tidak mengubah state, jadi redirect yang ditolak karena selisih
+        // satu karakter menghasilkan UI terkunci di Connecting tanpa satu pun
+        // baris log untuk mendiagnosisnya.
+        Log.d(
+            TAG,
+            "completeRedirect: ${SpotifyAuthUrls.describeRedirect(uri)}, " +
+                "harap=$redirectUri, adaPending=${pending != null}",
+        )
         return when (val parsed = SpotifyAuthUrls.parseRedirect(uri, redirectUri, pending?.state)) {
-            SpotifyAuthUrls.Redirect.NotOurs -> CompleteResult.Ignored
+            SpotifyAuthUrls.Redirect.NotOurs -> {
+                Log.d(TAG, "Bukan redirect kita -- diabaikan")
+                CompleteResult.Ignored
+            }
 
             SpotifyAuthUrls.Redirect.StateMismatch -> {
                 Log.w(TAG, "Redirect state tidak cocok -- dibuang")
