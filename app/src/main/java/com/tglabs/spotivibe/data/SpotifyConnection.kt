@@ -89,7 +89,7 @@ class SpotifyConnection(
     suspend fun authorizeUrl(): String? {
         if (BuildConfig.SPOTIFY_CLIENT_ID.isEmpty()) {
             _connectionState.value = ConnectionState.Error(
-                "Spotify Client ID belum diset di local.properties"
+                "Spotify Client ID is not set in local.properties"
             )
             return null
         }
@@ -98,7 +98,7 @@ class SpotifyConnection(
             .onFailure {
                 Log.e(TAG, "beginAuthorization gagal", it)
                 _connectionState.value = ConnectionState.Error(
-                    "Gagal memulai login: ${it.message ?: "unknown"}"
+                    "Couldn't start sign-in: ${it.message ?: "unknown"}"
                 )
             }
             .getOrNull()
@@ -144,7 +144,7 @@ class SpotifyConnection(
                 if (_connectionState.value is ConnectionState.Connecting) {
                     Log.w(TAG, "Redirect ditolak saat menunggu login: $uri")
                     _connectionState.value = ConnectionState.Error(
-                        "Balikan login tidak dikenali. Coba hubungkan lagi."
+                        "Unrecognised sign-in response. Try connecting again."
                     )
                 }
                 false
@@ -169,9 +169,9 @@ class SpotifyConnection(
             is SpotifyAuthRepository.CompleteResult.Failed -> {
                 _connectionState.value = ConnectionState.Error(
                     if (result.permanent) {
-                        "Login ditolak Spotify (${result.reason}). Coba lagi."
+                        "Spotify rejected the sign-in (${result.reason}). Try again."
                     } else {
-                        "Gagal menyelesaikan login: ${result.reason}. Cek koneksi lalu coba lagi."
+                        "Couldn't finish sign-in: ${result.reason}. Check your connection and try again."
                     }
                 )
                 true
@@ -192,7 +192,7 @@ class SpotifyConnection(
         }
         if (BuildConfig.SPOTIFY_CLIENT_ID.isEmpty()) {
             _connectionState.value = ConnectionState.Error(
-                "Spotify Client ID belum diset di local.properties"
+                "Spotify Client ID is not set in local.properties"
             )
             return
         }
@@ -327,7 +327,7 @@ class SpotifyConnection(
             if (_connectionState.value is ConnectionState.Connecting) {
                 Log.w(TAG, "Connection timeout -- tidak ada callback dalam 15 detik")
                 _connectionState.value = ConnectionState.Error(
-                    "Timeout. Pastikan Spotify app running, lalu coba lagi."
+                    "Timed out. Make sure the Spotify app is running, then try again."
                 )
             }
         }.also { mainHandler.postDelayed(it, 15_000L) }

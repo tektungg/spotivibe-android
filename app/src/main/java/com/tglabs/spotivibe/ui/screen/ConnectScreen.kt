@@ -111,7 +111,7 @@ fun ConnectScreen(
                 )
                 Spacer(modifier = Modifier.height(SvSpace.s3))
                 Text(
-                    text = "Pastikan Spotify app sudah ter-install dan login dengan akun Premium.",
+                    text = "Make sure the Spotify app is installed and signed in with a Premium account.",
                     style = SvType.BodyItalic.copy(fontSize = 13.sp, lineHeight = 18.sp),
                     color = sv.ink3,
                 )

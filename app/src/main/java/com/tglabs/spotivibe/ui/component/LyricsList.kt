@@ -100,7 +100,7 @@ fun LyricsList(
         val synced = (lyricsState as? LyricsState.Ready)?.result?.synced
         val plain = (lyricsState as? LyricsState.Ready)?.result?.plain
         when {
-            lyricsState is LyricsState.Loading -> StatusText("Mencari lirik…")
+            lyricsState is LyricsState.Loading -> StatusText("Finding lyrics…")
 
             !synced.isNullOrEmpty() ->
                 SyncedView(
@@ -122,9 +122,9 @@ fun LyricsList(
             !plain.isNullOrBlank() -> PlainView(plain, fontSize, sv.ink2)
 
             lyricsState is LyricsState.Unavailable ->
-                StatusText("Gagal memuat lirik. Cek koneksi, lalu putar ulang lagunya.")
+                StatusText("Couldn't load lyrics. Check your connection, then replay the song.")
 
-            else -> StatusText("Lirik tidak ditemukan untuk track ini")
+            else -> StatusText("No lyrics found for this track")
         }
     }
 }

@@ -278,7 +278,7 @@ class SpotivibeNotificationService : Service() {
         val currText = current?.text?.takeIf { it.isNotBlank() } ?: "♪"
         val nextText = next?.text?.takeIf { it.isNotBlank() } ?: ""
         val currMarked = if (isReconnecting) {
-            "Menyambungkan ulang ke Spotify…"
+            "Reconnecting to Spotify…"
         } else {
             "▸ $currText"
         }
@@ -365,7 +365,7 @@ class SpotivibeNotificationService : Service() {
             "Lyrics",
             NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
-            description = "Synced lyrics di status bar dan lock screen"
+            description = "Synced lyrics in the status bar and on the lock screen"
             setShowBadge(false)
             setSound(null, null)
             enableVibration(false)

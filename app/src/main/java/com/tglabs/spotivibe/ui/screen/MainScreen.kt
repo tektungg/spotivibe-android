@@ -70,6 +70,9 @@ fun MainScreen(
                         onToggleRomanization = onToggleRomanization,
                         onToggleOverlay = onToggleOverlay,
                         onOpenSettings = onOpenSettings,
+                        onSearchLyrics = onSearchLyrics,
+                        hasRememberedOverride = hasRememberedOverride,
+                        onForgetOverride = onForgetOverride,
                     )
                 } else {
                     NowPlayingScreen(
@@ -84,8 +87,6 @@ fun MainScreen(
                         onBumpFontSize = onBumpFontSize,
                         onLogout = onLogout,
                         onOpenSettings = onOpenSettings,
-                        // Hanya portrait untuk sekarang. Layar tablet tidak
-                        // memakai NPHeader; tombolnya sendiri dan belum jadi menu.
                         onSearchLyrics = onSearchLyrics,
                         hasRememberedOverride = hasRememberedOverride,
                         onForgetOverride = onForgetOverride,

@@ -169,55 +169,12 @@ fun NPHeader(
                 enabled = false,
                 onClick = onEnterKaraoke,
             )
-            // Kebab jadi menu kecil, bukan pintasan langsung ke Settings.
-            // Menambah ikon ke-5 di baris ini bikin header sesak di layar kecil,
-            // apalagi saat ikon romaji ikut muncul. Settings jarang dibuka,
-            // sementara "Cari lirik" dipakai justru saat ada masalah.
-            var menuTerbuka by remember { mutableStateOf(false) }
-            Box {
-                HairlineIconButton(
-                    onClick = { menuTerbuka = true },
-                    icon = SvIcons.Kebab,
-                    contentDescription = "Menu",
-                    size = 36.dp,
-                    iconSize = 16.dp,
-                )
-                DropdownMenu(
-                    expanded = menuTerbuka,
-                    onDismissRequest = { menuTerbuka = false },
-                    containerColor = LocalSvColors.current.bg2,
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Cari lirik", style = SvType.Body) },
-                        onClick = {
-                            menuTerbuka = false
-                            onSearchLyrics()
-                        },
-                    )
-                    if (showForgetOverride) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    "Lupakan lirik tersimpan",
-                                    style = SvType.Body,
-                                    color = LocalSvColors.current.accent,
-                                )
-                            },
-                            onClick = {
-                                menuTerbuka = false
-                                onForgetOverride()
-                            },
-                        )
-                    }
-                    DropdownMenuItem(
-                        text = { Text("Settings", style = SvType.Body) },
-                        onClick = {
-                            menuTerbuka = false
-                            onMoreClick()
-                        },
-                    )
-                }
-            }
+            HeaderOverflowMenu(
+                onSearchLyrics = onSearchLyrics,
+                onOpenSettings = onMoreClick,
+                showForgetOverride = showForgetOverride,
+                onForgetOverride = onForgetOverride,
+            )
         }
     }
 }

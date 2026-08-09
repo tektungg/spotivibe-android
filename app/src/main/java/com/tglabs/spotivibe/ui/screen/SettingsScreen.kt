@@ -236,23 +236,23 @@ fun SettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = when (playing?.capability) {
-                                null -> "Tidak terhubung"
-                                PlaybackCapability.Full -> "Premium · Terhubung"
-                                PlaybackCapability.Unknown -> "Terhubung"
-                                PlaybackCapability.Restricted -> "Terhubung · kontrol dibatasi"
+                                null -> "Not connected"
+                                PlaybackCapability.Full -> "Premium · Connected"
+                                PlaybackCapability.Unknown -> "Connected"
+                                PlaybackCapability.Restricted -> "Connected · limited control"
                             },
                             style = SvType.Body,
                             color = sv.ink1,
                         )
                         Text(
                             text = when (playing?.capability) {
-                                null -> "tap Connect untuk mulai"
+                                null -> "tap Connect to start"
                                 PlaybackCapability.Full -> "full playback control"
                                 // Unknown bukan kegagalan: kontrol tetap jalan
                                 // lewat App Remote, hanya label akunnya yang
                                 // belum terkonfirmasi lewat Web API.
-                                PlaybackCapability.Unknown -> "tipe akun belum terkonfirmasi"
-                                PlaybackCapability.Restricted -> "view-only · butuh Premium untuk control"
+                                PlaybackCapability.Unknown -> "account type not confirmed yet"
+                                PlaybackCapability.Restricted -> "view-only · Premium required for control"
                             },
                             style = SvType.BodyItalic.copy(fontSize = 13.sp),
                             color = sv.ink3,
@@ -298,7 +298,7 @@ fun SettingsScreen(
             Column(modifier = Modifier.padding(horizontal = SvSpace.s5, vertical = SvSpace.s3)) {
                 if (lyricsStats.total == 0) {
                     Text(
-                        text = "Belum ada data. Putar beberapa lagu dulu.",
+                        text = "No data yet. Play a few songs first.",
                         style = SvType.BodyItalic.copy(fontSize = 13.sp),
                         color = sv.ink3,
                     )
@@ -337,10 +337,10 @@ fun SettingsScreen(
                         // "Terjawab" sengaja dipisah dari total: lookup yang gagal
                         // dijangkau bukan lubang di database LRCLIB, jadi tidak
                         // ikut jadi penyebut coverage.
-                        text = "${lyricsStats.synced} ter-sync · " +
-                            "${lyricsStats.plainOnly} teks polos · " +
-                            "${lyricsStats.notFound} tidak ada · " +
-                            "${lyricsStats.unavailable} gagal dijangkau",
+                        text = "${lyricsStats.synced} synced · " +
+                            "${lyricsStats.plainOnly} plain text · " +
+                            "${lyricsStats.notFound} not found · " +
+                            "${lyricsStats.unavailable} unreachable",
                         style = SvType.BodyItalic.copy(fontSize = 13.sp),
                         color = sv.ink3,
                     )

@@ -128,21 +128,21 @@ private fun stateData(kind: EmptyKind): EmptyStateData = when (kind) {
     EmptyKind.Idle -> EmptyStateData(
         eyebrow  = "STATUS · IDLE",
         headline = "Nothing\nplaying.",
-        body     = "Buka Spotify dan putar lagu apa saja. Spotivibe akan menyusul lirik secara otomatis.",
+        body     = "Open Spotify and play anything. Spotivibe pulls the lyrics automatically.",
         cta      = "",
         code     = "NP-002",
     )
     EmptyKind.NotFound -> EmptyStateData(
         eyebrow  = "ERR · NO LYRICS",
         headline = "Silent\nedition.",
-        body     = "LRCLIB belum punya lirik untuk track ini. Kamu bisa request atau kontribusi timing-nya.",
+        body     = "LRCLIB has no lyrics for this track yet. You can request it or contribute the timing.",
         cta      = "",
         code     = "404",
     )
     EmptyKind.Premium -> EmptyStateData(
         eyebrow  = "AUTH · UPGRADE",
         headline = "Free tier\ncan only watch.",
-        body     = "Spotify Premium diperlukan untuk kontrol playback. Lirik tetap muncul saat ada device Premium yang main.",
+        body     = "Spotify Premium is required for playback control. Lyrics still show while a Premium device is playing.",
         cta      = "GO TO SPOTIFY",
         code     = "403",
     )

@@ -90,7 +90,7 @@ fun LyricsSearchScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MonoEyebrow(text = "CARI LIRIK")
+            MonoEyebrow(text = "SEARCH LYRICS")
             Box(
                 modifier = Modifier
                     .size(32.dp)
@@ -100,7 +100,7 @@ fun LyricsSearchScreen(
             ) {
                 Icon(
                     imageVector = SvIcons.Close,
-                    contentDescription = "Tutup",
+                    contentDescription = "Close",
                     tint = sv.ink2,
                     modifier = Modifier.size(16.dp),
                 )
@@ -110,9 +110,9 @@ fun LyricsSearchScreen(
         HairlineRule(soft = true)
         Spacer(modifier = Modifier.height(SvSpace.s4))
 
-        FieldRow(label = "JUDUL", value = title, onValueChange = { title = it })
+        FieldRow(label = "TITLE", value = title, onValueChange = { title = it })
         Spacer(modifier = Modifier.height(SvSpace.s3))
-        FieldRow(label = "ARTIS", value = artist, onValueChange = { artist = it })
+        FieldRow(label = "ARTIST", value = artist, onValueChange = { artist = it })
 
         Spacer(modifier = Modifier.height(SvSpace.s4))
         Row(
@@ -120,7 +120,7 @@ fun LyricsSearchScreen(
             horizontalArrangement = Arrangement.End,
         ) {
             com.tglabs.spotivibe.ui.component.AccentCtaButton(
-                label = "CARI",
+                label = "SEARCH",
                 onClick = { onSearch(title.trim(), artist.trim()) },
             )
         }
@@ -129,7 +129,7 @@ fun LyricsSearchScreen(
         HairlineRule(soft = true)
         CheckRow(
             checked = remember,
-            label = "Ingat lirik ini untuk lagu ini",
+            label = "Remember these lyrics for this song",
             onToggle = { remember = !remember },
         )
         HairlineRule(soft = true)
@@ -143,7 +143,7 @@ fun LyricsSearchScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Lupakan lirik tersimpan untuk lagu ini",
+                    text = "Forget saved lyrics for this song",
                     style = SvType.BodyItalic.copy(fontSize = 14.sp),
                     color = sv.accent,
                 )
@@ -154,8 +154,8 @@ fun LyricsSearchScreen(
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (state) {
                 LyricsSearchState.Idle -> Hint(
-                    "Ketik judul atau artis lalu tekan Cari. " +
-                        "Kolomnya sudah terisi dari Spotify, tapi bisa kamu ubah."
+                    "Type a title or artist, then hit Search. " +
+                        "The fields are prefilled from Spotify, but you can edit them."
                 )
                 LyricsSearchState.Loading -> Box(
                     modifier = Modifier.fillMaxSize(),
@@ -164,10 +164,10 @@ fun LyricsSearchScreen(
                     CircularProgressIndicator(color = sv.accent, strokeWidth = 2.dp)
                 }
                 LyricsSearchState.Empty -> Hint(
-                    "Tidak ada hasil. Coba ubah judul atau artisnya."
+                    "No results. Try a different title or artist."
                 )
                 is LyricsSearchState.Failed -> Hint(
-                    "Gagal mencari (${state.reason}). Cek koneksi lalu coba lagi."
+                    "Search failed (${state.reason}). Check your connection and try again."
                 )
                 is LyricsSearchState.Ready -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(state.results, key = { it.lrclibId }) { hasil ->
@@ -261,7 +261,7 @@ private fun ResultRow(hasil: LyricsSearchResult, onClick: () -> Unit) {
         // Durasi paling menentukan untuk mengenali versi live atau extended.
         MonoEyebrow(
             text = "${formatDuration(hasil.durationSec)} · " +
-                if (hasil.hasSynced) "TER-SYNC" else "TEKS POLOS",
+                if (hasil.hasSynced) "SYNCED" else "PLAIN TEXT",
             color = if (hasil.hasSynced) sv.accent else sv.ink3,
         )
     }

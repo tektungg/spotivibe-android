@@ -87,6 +87,9 @@ fun NowPlayingTabletScreen(
     onToggleRomanization: () -> Unit,
     onToggleOverlay: () -> Unit,
     onOpenSettings: () -> Unit,
+    onSearchLyrics: () -> Unit = {},
+    hasRememberedOverride: Boolean = false,
+    onForgetOverride: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val sv = LocalSvColors.current
@@ -306,10 +309,15 @@ fun NowPlayingTabletScreen(
                             contentDescription = "Toggle overlay",
                             tint = if (state.overlayEnabled) sv.accent else sv.ink2,
                         )
-                        HairlineIconButton(
-                            onClick = onOpenSettings,
-                            icon = SvIcons.Kebab,
-                            contentDescription = "More",
+                        // Komponen yang sama dengan portrait. Saat fitur
+                        // pencarian pertama dipasang, layar ini tertinggal dan
+                        // pintunya tidak ada sama sekali karena menunya ditulis
+                        // langsung di NPHeader yang tidak dipakai di sini.
+                        com.tglabs.spotivibe.ui.component.HeaderOverflowMenu(
+                            onSearchLyrics = onSearchLyrics,
+                            onOpenSettings = onOpenSettings,
+                            showForgetOverride = hasRememberedOverride,
+                            onForgetOverride = onForgetOverride,
                         )
                     }
                 }

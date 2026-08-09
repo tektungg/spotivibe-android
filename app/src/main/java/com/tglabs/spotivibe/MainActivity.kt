@@ -271,7 +271,7 @@ class MainActivity : ComponentActivity() {
                 awaitingAuthRedirect = true
             } else {
                 (application as SpotivibeApp).spotifyConnection.onAuthorizeLaunchFailed(
-                    "Tidak ada browser di device untuk membuka login Spotify."
+                    "No browser on this device to open the Spotify sign-in."
                 )
             }
         }
