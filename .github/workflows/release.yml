@@ -1,0 +1,152 @@
+name: Release
+
+# Dipicu tag `v<versi>`, mis. `v0.6.0`. APK ditandatangani dengan keystore yang
+# SAMA dengan build lokal, jadi bisa dipasang menimpa versi yang sudah ada dan
+# SHA-1-nya tetap yang terdaftar di Spotify Dashboard.
+#
+# Secret yang wajib ada (pasang lewat scripts/setup-ci-secrets.ps1):
+#   KEYSTORE_BASE64     release.jks dalam base64
+#   KEYSTORE_PASSWORD   storePassword
+#   KEY_ALIAS           keyAlias
+#   KEY_PASSWORD        keyPassword
+#   SPOTIFY_CLIENT_ID   spotify.clientId dari local.properties
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # butuh menulis untuk membuat GitHub Release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v4
+
+      - name: Pasang SDK platform
+        run: sdkmanager --install "platforms;android-36.1" "build-tools;36.1.0"
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      # Tanpa cek ini, tag v0.7.0 bisa menghasilkan APK berisi versionName 0.6.0
+      # dan tidak ada yang menyadarinya sampai ada yang mencoba memasangnya di
+      # atas versi lama.
+      - name: Cocokkan tag dengan versionName
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          # sed, bukan `grep -oP`. PCRE dan `\K` tidak ada di semua grep, dan
+          # kegagalannya berupa string KOSONG, bukan error, jadi cek versinya
+          # lolos diam-diam.
+          versi=$(sed -n 's/.*versionName *= *"\([^"]*\)".*/\1/p' app/build.gradle.kts)
+          tag="${GITHUB_REF_NAME#v}"
+          echo "build.gradle.kts = $versi"
+          echo "tag              = $tag"
+          if [ -z "$versi" ]; then
+            echo "::error::versionName tidak terbaca dari app/build.gradle.kts"
+            exit 1
+          fi
+          if [ "$versi" != "$tag" ]; then
+            echo "::error::Tag v$tag tidak cocok dengan versionName $versi di app/build.gradle.kts"
+            exit 1
+          fi
+
+      # Secret ditulis ke file, tidak pernah di-echo. `set +x` supaya baris
+      # perintahnya sendiri tidak muncul di log.
+      - name: Siapkan keystore dan client ID
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+        run: |
+          set +x
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::Secret KEYSTORE_BASE64 kosong. Jalankan scripts/setup-ci-secrets.ps1."
+            exit 1
+          fi
+          if [ -z "$SPOTIFY_CLIENT_ID" ]; then
+            echo "::error::Secret SPOTIFY_CLIENT_ID kosong. Tanpa ini app tidak bisa login Spotify."
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > release.jks
+          # base64 yang rusak menghasilkan file kecil, dan Gradle akan gagal jauh
+          # kemudian dengan pesan yang tidak menyebut base64 sama sekali.
+          ukuran=$(stat -c%s release.jks)
+          if [ "$ukuran" -lt 1000 ]; then
+            echo "::error::release.jks cuma $ukuran byte. Secret KEYSTORE_BASE64 kemungkinan rusak."
+            exit 1
+          fi
+          {
+            echo "storeFile=release.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > keystore.properties
+          echo "spotify.clientId=$SPOTIFY_CLIENT_ID" > local.properties
+
+      - name: Unit test
+        run: ./gradlew testDebugUnitTest --console=plain
+
+      - name: Build release
+        run: ./gradlew assembleRelease --console=plain
+
+      # Kalau keystore.properties gagal terbaca, Gradle diam-diam jatuh ke debug
+      # signing dan APK-nya tidak bisa memasang di atas rilis sebelumnya. Log
+      # build-nya tetap hijau. Ini yang menangkapnya.
+      - name: Verifikasi tanda tangan
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --print-certs \
+            app/build/outputs/apk/release/app-release.apk | tee /tmp/certs.txt
+          if grep -qi "CN=Android Debug" /tmp/certs.txt; then
+            echo "::error::APK ditandatangani debug key. keystore.properties tidak terbaca."
+            exit 1
+          fi
+
+      - name: Beri nama berversi
+        id: apk
+        run: |
+          versi=$(python3 -c "import json;print(json.load(open('app/build/outputs/apk/release/output-metadata.json'))['elements'][0]['versionName'])")
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk "dist/spotivibe-$versi.apk"
+          echo "versi=$versi" >> "$GITHUB_OUTPUT"
+          echo "path=dist/spotivibe-$versi.apk" >> "$GITHUB_OUTPUT"
+          ls -la dist/
+
+      # APK selalu diunggah sebagai artifact, termasuk saat dijalankan manual
+      # tanpa tag. Tanpa ini workflow_dispatch tidak menghasilkan apa-apa yang
+      # bisa diunduh.
+      - name: Unggah artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: spotivibe-${{ steps.apk.outputs.versi }}
+          path: ${{ steps.apk.outputs.path }}
+          retention-days: 90
+
+      # gh CLI sudah terpasang di runner. Tidak perlu action pihak ketiga.
+      - name: Buat GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "${{ steps.apk.outputs.path }}" \
+            --title "Spotivibe ${{ steps.apk.outputs.versi }}" \
+            --generate-notes
+
+      # Rahasia dihapus walau langkah sebelumnya gagal. Runner memang dibuang
+      # setelah job selesai, tapi langkah ini membuat itu tidak jadi asumsi.
+      - name: Bersihkan rahasia
+        if: always()
+        run: rm -f release.jks keystore.properties local.properties

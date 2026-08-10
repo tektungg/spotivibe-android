@@ -115,6 +115,53 @@ jatuh ke debug signing.
 
 `dist/` masuk `.gitignore` (`*.apk`). APK tidak pernah di-commit.
 
+## Rilis otomatis lewat GitHub Actions
+
+Dua workflow di `.github/workflows/`:
+
+| Workflow | Pemicu | Hasil |
+|---|---|---|
+| `ci.yml` | push ke `main`, PR | unit test + lint. Tanpa secret |
+| `release.yml` | tag `v*` | APK ditandatangani, terpasang di GitHub Release |
+
+### Sekali saja: pasang secret
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup-ci-secrets.ps1
+```
+
+Script membaca `keystore.properties`, `local.properties`, dan `release.jks` lalu
+mengirim lima secret lewat `gh`. Nilainya tidak pernah ditampilkan dan tidak perlu
+diketik ulang, jadi password tidak singgah di clipboard maupun riwayat shell.
+Repo tujuan diambil dari remote git, bukan diketik. Tambahkan `-WhatIf` untuk
+melihat apa yang akan dikirim tanpa mengirim apa pun.
+
+Secret yang dipasang: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`,
+`KEY_PASSWORD`, `SPOTIFY_CLIENT_ID`.
+
+### Setiap rilis
+
+```bash
+git tag v0.6.0 && git push origin v0.6.0
+```
+
+CI membangun APK dengan keystore yang **sama** dengan build lokal, jadi bisa
+dipasang menimpa versi sebelumnya dan SHA-1-nya tetap yang terdaftar di Spotify
+Dashboard.
+
+Tiga hal yang ditolak workflow di depan, karena ketiganya gagal secara diam-diam
+kalau dibiarkan:
+
+- **Tag tidak cocok `versionName`.** Tag `v0.7.0` di atas `versionName = "0.6.0"`
+  akan menghasilkan APK bernama salah yang baru ketahuan saat gagal dipasang.
+- **`KEYSTORE_BASE64` rusak.** Base64 cacat menghasilkan `release.jks` mungil,
+  dan Gradle gagal jauh setelahnya dengan pesan yang tidak menyebut base64.
+- **APK bertanda tangan debug.** Kalau `keystore.properties` gagal terbaca,
+  Gradle jatuh ke debug key dan build tetap hijau. `apksigner verify` memeriksanya.
+
+Menjalankan `release.yml` lewat "Run workflow" tanpa tag tetap menghasilkan APK
+sebagai artifact, hanya tidak membuat Release.
+
 > Release keystore SHA-1 beda dari debug — daftar juga di Spotify Dashboard kalau mau App Remote jalan di release build.
 
 ## Architecture

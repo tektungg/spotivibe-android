@@ -1,0 +1,61 @@
+name: CI
+
+# Test berjalan di setiap push ke main dan setiap PR. Tidak butuh secret apa
+# pun: unit test tidak menyentuh keystore maupun Spotify client ID.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # AGP 9 butuh JDK 17 ke atas. 21 dipakai supaya sama dengan JBR bawaan
+      # Android Studio yang dipakai untuk build lokal.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v4
+
+      # compileSdk = 36.1 dan runner tidak membawanya. Dipasang eksplisit supaya
+      # kegagalannya jelas di sini, bukan berupa error resolusi yang samar.
+      - name: Pasang SDK platform
+        run: sdkmanager --install "platforms;android-36.1" "build-tools;36.1.0"
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Unit test
+        run: ./gradlew testDebugUnitTest --console=plain
+
+      # Laporan diunggah HANYA saat gagal. Log Gradle cuma menyebut nama test
+      # yang gagal; pesan assertion-nya ada di HTML ini.
+      - name: Unggah laporan test
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: laporan-test
+          path: app/build/reports/tests/testDebugUnitTest/
+          retention-days: 14
+
+      - name: Lint
+        run: ./gradlew lintDebug --console=plain
+
+      - name: Unggah laporan lint
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: laporan-lint
+          path: app/build/reports/lint-results-debug.html
+          retention-days: 14
