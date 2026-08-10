@@ -20,6 +20,25 @@ class LyricsMetricsTest {
     private fun pusatRelatif(viewport: Float): Float =
         (lyricsPadding(viewport).anchorDp + tinggiBaris / 2f) / viewport
 
+    /**
+     * Posisi PUSAT baris aktif sebagai pecahan tinggi LAYAR. Ini yang dinilai
+     * mata, dan ini yang tidak sama dengan tengah viewport begitu chrome atas
+     * dan bawah tidak seimbang.
+     */
+    private fun pusatDiLayar(viewport: Float, atas: Float, bawah: Float): Float {
+        val layar = viewport + atas + bawah
+        val jangkar = lyricsPadding(viewport, atas, bawah).anchorDp
+        return (atas + jangkar + tinggiBaris / 2f) / layar
+    }
+
+    /** Panel kanan landscape: padding atas 32 + baris header 36, bawah 16. */
+    private val chromeLandscapeAtas = 68f
+    private val chromeLandscapeBawah = 16f
+
+    /** Portrait: NPHeader di atas, transport di bawah. */
+    private val chromePortraitAtas = 90f
+    private val chromePortraitBawah = 119f
+
     // ── Baris aktif di tengah ────────────────────────────────────
 
     /**
@@ -213,6 +232,67 @@ class LyricsMetricsTest {
     fun `romanisasi tidak pernah lebih besar dari liriknya`() {
         listOf(12f, 20f, 30f, 44f, 60f).forEach { ukuran ->
             assertTrue("ukuran=$ukuran", romanizationSizeSp(ukuran) <= ukuran)
+        }
+    }
+
+    // ── Tengah LAYAR, bukan tengah viewport ──────────────────────
+
+    /**
+     * REGRESI: dilaporkan dari perangkat, "lirik di landscape masih belum tepat
+     * di tengah" padahal portrait sudah.
+     *
+     * Baris aktif memang SUDAH di tengah viewport. Yang tidak di tengah adalah
+     * viewport-nya terhadap layar: panel kanan punya 68 dp chrome di atas
+     * (padding 32 + baris header berisi ikon 36) tapi cuma 16 dp di bawah, jadi
+     * baris aktif mendarat 26 dp di bawah tengah layar, persis (68 - 16) / 2.
+     */
+    @Test
+    fun `baris aktif di tengah LAYAR walau chrome timpang`() {
+        val pusat = pusatDiLayar(291f, chromeLandscapeAtas, chromeLandscapeBawah)
+        assertEquals("harus tengah layar", 0.5f, pusat, 0.01f)
+    }
+
+    @Test
+    fun `mengabaikan chrome membuatnya meleset ke bawah`() {
+        val viewport = 291f
+        val layar = viewport + chromeLandscapeAtas + chromeLandscapeBawah
+        val tanpaKoreksi = lyricsPadding(viewport).anchorDp
+        val pusatSalah = (chromeLandscapeAtas + tanpaKoreksi + tinggiBaris / 2f) / layar
+        assertTrue("tanpa koreksi harusnya meleset ke bawah, dapat $pusatSalah", pusatSalah > 0.55f)
+    }
+
+    /**
+     * Portrait chrome-nya nyaris seimbang, jadi bug yang sama cuma meleset
+     * 14,5 dp ke ATAS dan tidak pernah dikeluhkan. Koreksinya tetap harus
+     * berlaku, dan tidak boleh merusak yang sudah terasa benar.
+     */
+    @Test
+    fun `portrait juga tepat di tengah layar`() {
+        val pusat = pusatDiLayar(625f, chromePortraitAtas, chromePortraitBawah)
+        assertEquals(0.5f, pusat, 0.01f)
+    }
+
+    @Test
+    fun `chrome seimbang tidak menggeser apa pun`() {
+        val tanpa = lyricsPadding(400f).anchorDp
+        val seimbang = lyricsPadding(400f, 50f, 50f).anchorDp
+        assertEquals("chrome simetris harus netral", tanpa, seimbang, 0.001f)
+    }
+
+    @Test
+    fun `chrome ekstrem tidak menghasilkan jangkar negatif atau melewati tengah`() {
+        listOf(0f to 500f, 500f to 0f, 1000f to 1f, 1f to 1000f).forEach { (a, b) ->
+            val p = lyricsPadding(300f, a, b)
+            assertTrue("atas=$a bawah=$b jangkar=${p.anchorDp}", p.anchorDp >= 0f)
+            assertTrue("atas=$a bawah=$b jangkar=${p.anchorDp}", p.anchorDp <= 150f + 0.01f)
+        }
+    }
+
+    @Test
+    fun `ruang atas tetap cukup walau chrome timpang`() {
+        listOf(0f to 0f, 68f to 16f, 90f to 119f, 200f to 10f).forEach { (a, b) ->
+            val p = lyricsPadding(291f, a, b)
+            assertTrue("atas=$a bawah=$b", p.leadingDp >= p.anchorDp)
         }
     }
 }

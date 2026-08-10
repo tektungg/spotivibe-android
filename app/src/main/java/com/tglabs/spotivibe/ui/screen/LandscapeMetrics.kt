@@ -64,8 +64,14 @@ const val PAD_TIGHT_DP = 24f
 const val TRANSPORT_FULL_DP = 119f
 const val TRANSPORT_COMPACT_DP = 91f
 
-/** HairlineRule + jarak tepat di atas transport. */
-const val HEADER_RULE_DP = 13f
+/**
+ * Jarak antara blok judul dan transport.
+ *
+ * Menggantikan HairlineRule + jarak yang dulu ada di sini. Garis itu dibuang
+ * karena Transport sudah menggambar garisnya SENDIRI di baris pertama, jadi
+ * keduanya menghasilkan dua garis bertumpuk tepat di atas seeker.
+ */
+const val TITLE_TRANSPORT_GAP_DP = 12f
 
 /** Judul boleh membungkus jadi dua baris, jadi ruangnya dipesan untuk dua. */
 const val TITLE_MAX_LINES = 2f
@@ -103,7 +109,7 @@ fun landscapePaneMetrics(
     val blokTeks = titleSp * TITLE_LINE_FACTOR * TITLE_MAX_LINES +
         TITLE_ARTIST_GAP_DP +
         artistSp * ARTIST_LINE_FACTOR
-    val wajib = gapDp + blokTeks + HEADER_RULE_DP + transport
+    val wajib = gapDp + blokTeks + TITLE_TRANSPORT_GAP_DP + transport
 
     val sisa = (isiTinggi - wajib).coerceAtLeast(0f)
     // Tanpa lantai minimum. Lantai apa pun akan melanggar invarian di atas dan

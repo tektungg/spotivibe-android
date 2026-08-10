@@ -191,7 +191,11 @@ fun NowPlayingTabletScreen(
                     }
                 }
 
+                // Ruang lentur di ATAS blok judul, bukan di bawahnya. Dengan
+                // weight di bawah artis, judul menempel ke album dan seluruh
+                // sisa ruang menumpuk jadi satu lubang tepat di atas divider.
                 Spacer(modifier = Modifier.height(m.gapDp.dp))
+                Spacer(modifier = Modifier.weight(1f))
 
                 // Track meta — serif title + italic subtitle
                 Text(
@@ -212,7 +216,7 @@ fun NowPlayingTabletScreen(
                     color = sv.ink3,
                 )
 
-                Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.height(TITLE_TRANSPORT_GAP_DP.dp))
 
                 // Transport / Premium banner / Selection action bar
                 when {
@@ -237,8 +241,10 @@ fun NowPlayingTabletScreen(
                         }
                     }
                     else -> {
-                        HairlineRule(soft = true)
-                        Spacer(modifier = Modifier.height(SvSpace.s3))
+                        // TANPA HairlineRule di sini. Transport sudah menggambar
+                        // garisnya sendiri di baris pertama, jadi menambahkan
+                        // satu lagi menghasilkan dua garis bertumpuk di atas
+                        // seeker.
                         Transport(
                             compact = m.compactTransport,
                             progressMs = rawProgressMs,

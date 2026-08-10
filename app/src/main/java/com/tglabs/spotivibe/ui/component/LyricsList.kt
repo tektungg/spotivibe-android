@@ -25,6 +25,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.findRootCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -175,10 +181,31 @@ private fun SyncedView(
         }
     }
 
+    // Chrome di atas dan di bawah daftar lirik DIUKUR, bukan dititipkan pemanggil.
+    // Nilainya beda di portrait, di panel landscape, dan di overlay, dan tiap
+    // pemanggil yang menghitungnya sendiri berarti tiga tempat yang harus tetap
+    // sepakat. Mengukur sendiri membuatnya benar di layout mana pun, termasuk
+    // yang belum ada.
+    var chromeAtasDp by remember { mutableFloatStateOf(0f) }
+    var chromeBawahDp by remember { mutableFloatStateOf(0f) }
+    val density = LocalDensity.current
+
     // Diukur, bukan ditebak. Ruang atas/bawah dan jangkar baris aktif semuanya
     // turunan dari tinggi viewport nyata — lihat lyricsPadding().
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-    val ukuran = lyricsPadding(maxHeight.value)
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { koordinat ->
+                val akar = koordinat.findRootCoordinates()
+                val atasPx = koordinat.positionInRoot().y
+                val bawahPx = akar.size.height - atasPx - koordinat.size.height
+                with(density) {
+                    chromeAtasDp = atasPx.toDp().value
+                    chromeBawahDp = bawahPx.toDp().value
+                }
+            },
+    ) {
+    val ukuran = lyricsPadding(maxHeight.value, chromeAtasDp, chromeBawahDp)
     // scrollOffset satuannya PIKSEL. Nilai 200 yang lama berarti jarak yang
     // berbeda di tiap kerapatan layar; sekarang dp dikonversi eksplisit.
     val jangkarPx = with(LocalDensity.current) { ukuran.anchorDp.dp.roundToPx() }

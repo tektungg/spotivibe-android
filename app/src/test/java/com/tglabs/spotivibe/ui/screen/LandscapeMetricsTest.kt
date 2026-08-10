@@ -23,7 +23,7 @@ class LandscapeMetricsTest {
             m.titleSp * TITLE_LINE_FACTOR * TITLE_MAX_LINES +
             TITLE_ARTIST_GAP_DP +
             m.artistSp * ARTIST_LINE_FACTOR +
-            HEADER_RULE_DP +
+            TITLE_TRANSPORT_GAP_DP +
             (if (m.compactTransport) TRANSPORT_COMPACT_DP else TRANSPORT_FULL_DP)
 
     // ── Invarian: transport tidak boleh terpotong ────────────────

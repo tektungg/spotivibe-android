@@ -79,14 +79,40 @@ fun lyricsScrollIndex(lineIndex: Int): Int =
 
 /**
  * @param viewportHeightDp tinggi area lirik yang terlihat.
+ * @param chromeAboveDp tinggi apa pun yang berada DI ATAS area lirik di dalam
+ *   jendela: header, padding, tombol.
+ * @param chromeBelowDp tinggi apa pun yang berada DI BAWAHNYA.
+ *
+ * Dua parameter terakhir ada karena "tengah viewport" dan "tengah layar"
+ * ternyata bukan hal yang sama, dan yang dinilai mata adalah tengah LAYAR.
+ *
+ * Di panel kanan landscape, chrome-nya timpang berat: 68 dp di atas (padding
+ * 32 + baris header berisi ikon 36 dp) tapi cuma 16 dp di bawah. Baris aktif
+ * yang duduk tepat di tengah viewport karena itu mendarat 26 dp di bawah tengah
+ * layar, yaitu persis (68 - 16) / 2, dan terlihat jelas melenceng.
+ *
+ * Portrait tidak pernah mengeluh karena chrome-nya nyaris seimbang: header
+ * 90 dp di atas, transport 119 dp di bawah, jadi melesetnya 14,5 dp ke ATAS
+ * dan tidak terasa. Bug yang sama, cuma sepertiga besarnya dan arah
+ * sebaliknya.
  */
-fun lyricsPadding(viewportHeightDp: Float): LyricsPadding {
+fun lyricsPadding(
+    viewportHeightDp: Float,
+    chromeAboveDp: Float = 0f,
+    chromeBelowDp: Float = 0f,
+): LyricsPadding {
     val tinggi = viewportHeightDp.coerceAtLeast(0f)
 
     // Setengah sisa ruang setelah baris itu sendiri. Ini yang membuat PUSAT
     // baris mendarat di 50% pada tinggi viewport mana pun, bukan cuma pada satu
     // yang kebetulan dipakai untuk menyetel angkanya.
-    val jangkar = ((tinggi - LYRICS_TYPICAL_LINE_DP) / 2f).coerceIn(0f, tinggi * 0.5f)
+    val tengahViewport = (tinggi - LYRICS_TYPICAL_LINE_DP) / 2f
+
+    // Geser ke atas sebesar setengah kelebihan chrome atas. Setelah koreksi ini
+    // pusat baris mendarat di tengah LAYAR, bukan tengah viewport.
+    val koreksi = (chromeAboveDp - chromeBelowDp) / 2f
+
+    val jangkar = (tengahViewport - koreksi).coerceIn(0f, tinggi * 0.5f)
 
     return LyricsPadding(
         anchorDp = jangkar,
