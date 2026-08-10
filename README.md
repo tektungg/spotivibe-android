@@ -90,20 +90,30 @@ Di Android Studio → Sync Gradle → klik ▶ Run (pilih device fisik).
 
 ## Build release APK
 
-Lihat detail di [docs/release-build.md](docs/release-build.md) (TODO). Quick:
+Sekali saja, untuk menyiapkan keystore:
 
 ```powershell
-# Generate keystore (one-time)
 $keytool = "C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe"
 & $keytool -genkey -v -keystore release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias spotivibe
-
-# Buat keystore.properties (lihat keystore.properties.example)
-
-# Build release APK
-.\gradlew assembleRelease
-
-# Output: app/build/outputs/apk/release/app-release.apk
+# lalu buat keystore.properties, lihat keystore.properties.example
 ```
+
+Setiap rilis, jalankan script-nya. Jangan `assembleRelease` langsung:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\release.ps1
+```
+
+Script yang menjalankan test, build, lalu menaruh APK di `dist/spotivibe-<versi>.apk`.
+Nama berkas dan folder tujuan diturunkan dari `versionName` di `app/build.gradle.kts`,
+bukan diketik ulang, karena langkah salin manual sudah pernah salah tujuan sekali.
+Script juga mencari JDK Android Studio sendiri kalau `JAVA_HOME` belum diset, dan
+menolak jalan kalau `keystore.properties` belum ada, supaya build tidak diam-diam
+jatuh ke debug signing.
+
+`-SkipTests` melewati test, hanya untuk build ulang cepat, bukan untuk rilis.
+
+`dist/` masuk `.gitignore` (`*.apk`). APK tidak pernah di-commit.
 
 > Release keystore SHA-1 beda dari debug — daftar juga di Spotify Dashboard kalau mau App Remote jalan di release build.
 
