@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -150,21 +150,31 @@ fun NowPlayingTabletScreen(
             modifier = Modifier.fillMaxSize(),
         ) {
             // ── LEFT half — album + meta + transport ──
-            Column(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxHeight()
                     .weight(1f)
-                    .background(sv.bg0.copy(alpha = if (sv.isDark) 0.25f else 0.35f))
+                    .background(sv.bg0.copy(alpha = if (sv.isDark) 0.25f else 0.35f)),
+            ) {
+                // Album HARUS dibatasi tinggi, bukan cuma lebar. Versi lama cuma
+                // memakai widthIn + aspectRatio, jadi di HP landscape album
+                // memakan 267 dari 295 dp yang tersedia dan mendorong judul,
+                // artis, meta, serta transport keluar layar sepenuhnya.
+                val m = landscapePaneMetrics(
+                    paneWidthDp = maxWidth.value - SvSpace.s10.value * 2,
+                    paneHeightDp = maxHeight.value - SvSpace.s10.value * 2,
+                )
+            Column(
+                modifier = Modifier
+                    .fillMaxHeight()
                     .padding(SvSpace.s10),
             ) {
                 MonoEyebrow(text = "● NOW PLAYING", color = sv.accent)
                 Spacer(modifier = Modifier.height(SvSpace.s5))
 
-                // Album cover 1:1, widthIn cap supaya tidak terlalu besar di tablet
                 Box(
                     modifier = Modifier
-                        .widthIn(max = 360.dp)
-                        .fillMaxWidth()
+                        .size(m.albumDp.dp)
                         .aspectRatio(1f)
                         .clip(androidx.compose.foundation.shape.RoundedCornerShape(SvRadius.r1))
                         .background(sv.bg2),
@@ -184,12 +194,16 @@ fun NowPlayingTabletScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(SvSpace.s8))
+                Spacer(modifier = Modifier.height(m.gapDp.dp))
 
                 // Track meta — serif title + italic subtitle
                 Text(
                     text = track.title.ifBlank { "Untitled" },
-                    style = SvType.H1.copy(fontSize = 42.sp, lineHeight = 44.sp, letterSpacing = (-0.6).sp),
+                    style = SvType.H1.copy(
+                        fontSize = m.titleSp.sp,
+                        lineHeight = (m.titleSp * 1.1f).sp,
+                        letterSpacing = (-0.6).sp,
+                    ),
                     color = sv.ink1,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -197,7 +211,7 @@ fun NowPlayingTabletScreen(
                 Spacer(modifier = Modifier.height(SvSpace.s1))
                 Text(
                     text = track.artist.ifBlank { "Unknown artist" },
-                    style = SvType.BodyItalic.copy(fontSize = 18.sp),
+                    style = SvType.BodyItalic.copy(fontSize = m.artistSp.sp),
                     color = sv.ink3,
                 )
 
@@ -268,6 +282,8 @@ fun NowPlayingTabletScreen(
                     .fillMaxHeight()
                     .background(sv.rule),
             )
+
+            }
 
             // ── RIGHT half — lyrics + header icons ──
             Column(

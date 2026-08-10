@@ -1,5 +1,11 @@
 package com.tglabs.spotivibe.ui.screen
 
+import android.content.res.Configuration
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -77,6 +83,9 @@ fun LyricsSearchScreen(
     // pencarian sebelumnya.
     var remember by rememberSaveable { mutableStateOf(false) }
 
+    val isLandscape = LocalConfiguration.current.orientation ==
+        Configuration.ORIENTATION_LANDSCAPE
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -84,99 +93,174 @@ fun LyricsSearchScreen(
             .padding(horizontal = SvSpace.s5),
     ) {
         Spacer(modifier = Modifier.height(SvSpace.s8))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            MonoEyebrow(text = "SEARCH LYRICS")
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(RoundedCornerShape(SvRadius.r2))
-                    .clickable(onClick = onBack),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = SvIcons.Close,
-                    contentDescription = "Close",
-                    tint = sv.ink2,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-        }
+        SearchHeader(onBack = onBack)
         Spacer(modifier = Modifier.height(SvSpace.s3))
         HairlineRule(soft = true)
-        Spacer(modifier = Modifier.height(SvSpace.s4))
 
-        FieldRow(label = "TITLE", value = title, onValueChange = { title = it })
-        Spacer(modifier = Modifier.height(SvSpace.s3))
-        FieldRow(label = "ARTIST", value = artist, onValueChange = { artist = it })
+        if (isLandscape) {
+            // Rasio 1 : 1.4 sama persis dengan layar lirik landscape, supaya
+            // kedua layar terasa satu sistem dan mata tidak perlu menyesuaikan
+            // lebar kolom saat berpindah.
+            Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState())
+                        .padding(end = SvSpace.s5, top = SvSpace.s4),
+                ) {
+                    SearchInputs(
+                        title = title,
+                        artist = artist,
+                        onTitleChange = { title = it },
+                        onArtistChange = { artist = it },
+                        onSearch = { onSearch(title.trim(), artist.trim()) },
+                        remember = remember,
+                        onToggleRemember = { remember = !remember },
+                        hasRememberedOverride = hasRememberedOverride,
+                        onForget = onForget,
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .fillMaxHeight()
+                        .background(sv.rule),
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1.4f)
+                        .fillMaxHeight()
+                        .padding(start = SvSpace.s5),
+                ) {
+                    SearchResults(state = state, onPick = { onPick(it, remember) })
+                }
+            }
+        } else {
+            Spacer(modifier = Modifier.height(SvSpace.s4))
+            SearchInputs(
+                title = title,
+                artist = artist,
+                onTitleChange = { title = it },
+                onArtistChange = { artist = it },
+                onSearch = { onSearch(title.trim(), artist.trim()) },
+                remember = remember,
+                onToggleRemember = { remember = !remember },
+                hasRememberedOverride = hasRememberedOverride,
+                onForget = onForget,
+            )
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                SearchResults(state = state, onPick = { onPick(it, remember) })
+            }
+        }
+    }
+}
 
-        Spacer(modifier = Modifier.height(SvSpace.s4))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
+@Composable
+private fun SearchHeader(onBack: () -> Unit) {
+    val sv = LocalSvColors.current
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MonoEyebrow(text = "SEARCH LYRICS")
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(SvRadius.r2))
+                .clickable(onClick = onBack),
+            contentAlignment = Alignment.Center,
         ) {
-            com.tglabs.spotivibe.ui.component.AccentCtaButton(
-                label = "SEARCH",
-                onClick = { onSearch(title.trim(), artist.trim()) },
+            Icon(
+                imageVector = SvIcons.Close,
+                contentDescription = "Close",
+                tint = sv.ink2,
+                modifier = Modifier.size(16.dp),
             )
         }
+    }
+}
 
-        Spacer(modifier = Modifier.height(SvSpace.s4))
-        HairlineRule(soft = true)
-        CheckRow(
-            checked = remember,
-            label = "Remember these lyrics for this song",
-            onToggle = { remember = !remember },
-        )
-        HairlineRule(soft = true)
+@Composable
+private fun SearchInputs(
+    title: String,
+    artist: String,
+    onTitleChange: (String) -> Unit,
+    onArtistChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    remember: Boolean,
+    onToggleRemember: () -> Unit,
+    hasRememberedOverride: Boolean,
+    onForget: () -> Unit,
+) {
+    val sv = LocalSvColors.current
+    FieldRow(label = "TITLE", value = title, onValueChange = onTitleChange)
+    Spacer(modifier = Modifier.height(SvSpace.s3))
+    FieldRow(label = "ARTIST", value = artist, onValueChange = onArtistChange)
 
-        if (hasRememberedOverride) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onForget)
-                    .padding(vertical = SvSpace.s3),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Forget saved lyrics for this song",
-                    style = SvType.BodyItalic.copy(fontSize = 14.sp),
-                    color = sv.accent,
-                )
-            }
-            HairlineRule(soft = true)
+    Spacer(modifier = Modifier.height(SvSpace.s4))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End,
+    ) {
+        com.tglabs.spotivibe.ui.component.AccentCtaButton(label = "SEARCH", onClick = onSearch)
+    }
+
+    Spacer(modifier = Modifier.height(SvSpace.s4))
+    HairlineRule(soft = true)
+    CheckRow(
+        checked = remember,
+        label = "Remember these lyrics for this song",
+        onToggle = onToggleRemember,
+    )
+    HairlineRule(soft = true)
+
+    if (hasRememberedOverride) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onForget)
+                .padding(vertical = SvSpace.s3),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Forget saved lyrics for this song",
+                style = SvType.BodyItalic.copy(fontSize = 14.sp),
+                color = sv.accent,
+            )
         }
+        HairlineRule(soft = true)
+    }
+}
 
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            when (state) {
-                LyricsSearchState.Idle -> Hint(
-                    "Type a title or artist, then hit Search. " +
-                        "The fields are prefilled from Spotify, but you can edit them."
-                )
-                LyricsSearchState.Loading -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(color = sv.accent, strokeWidth = 2.dp)
-                }
-                LyricsSearchState.Empty -> Hint(
-                    "No results. Try a different title or artist."
-                )
-                is LyricsSearchState.Failed -> Hint(
-                    "Search failed (${state.reason}). Check your connection and try again."
-                )
-                is LyricsSearchState.Ready -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(state.results, key = { it.lrclibId }) { hasil ->
-                        ResultRow(hasil) { onPick(hasil, remember) }
-                        HairlineRule(soft = true)
-                    }
-                    item { Spacer(modifier = Modifier.height(SvSpace.s8)) }
-                }
+@Composable
+private fun SearchResults(
+    state: LyricsSearchState,
+    onPick: (LyricsSearchResult) -> Unit,
+) {
+    val sv = LocalSvColors.current
+    when (state) {
+        LyricsSearchState.Idle -> Hint(
+            "Type a title or artist, then hit Search. " +
+                "The fields are prefilled from Spotify, but you can edit them."
+        )
+        LyricsSearchState.Loading -> Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            CircularProgressIndicator(color = sv.accent, strokeWidth = 2.dp)
+        }
+        LyricsSearchState.Empty -> Hint("No results. Try a different title or artist.")
+        is LyricsSearchState.Failed -> Hint(
+            "Search failed (${state.reason}). Check your connection and try again."
+        )
+        is LyricsSearchState.Ready -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+            items(state.results, key = { it.lrclibId }) { hasil ->
+                ResultRow(hasil) { onPick(hasil) }
+                HairlineRule(soft = true)
             }
+            item { Spacer(modifier = Modifier.height(SvSpace.s8)) }
         }
     }
 }
