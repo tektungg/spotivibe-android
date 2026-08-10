@@ -161,17 +161,14 @@ fun NowPlayingTabletScreen(
                 // memakan 267 dari 295 dp yang tersedia dan mendorong judul,
                 // artis, meta, serta transport keluar layar sepenuhnya.
                 val m = landscapePaneMetrics(
-                    paneWidthDp = maxWidth.value - SvSpace.s10.value * 2,
-                    paneHeightDp = maxHeight.value - SvSpace.s10.value * 2,
+                    paneWidthDp = maxWidth.value,
+                    paneHeightDp = maxHeight.value,
                 )
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .padding(SvSpace.s10),
+                    .padding(m.padDp.dp),
             ) {
-                MonoEyebrow(text = "● NOW PLAYING", color = sv.accent)
-                Spacer(modifier = Modifier.height(SvSpace.s5))
-
                 Box(
                     modifier = Modifier
                         .size(m.albumDp.dp)
@@ -215,22 +212,6 @@ fun NowPlayingTabletScreen(
                     color = sv.ink3,
                 )
 
-                Spacer(modifier = Modifier.height(SvSpace.s5))
-
-                // Meta strip — ARTIST | ALBUM | YEAR (hairline dividers)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(SvSpace.s4),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    MetricCol(label = "ALBUM", value = track.album.ifBlank { "—" })
-                    Box(modifier = Modifier.width(1.dp).height(28.dp).background(sv.rule))
-                    MetricCol(
-                        label = "DURATION",
-                        value = formatDuration(track.durationMs),
-                    )
-                }
-
                 Spacer(modifier = Modifier.weight(1f))
 
                 // Transport / Premium banner / Selection action bar
@@ -259,6 +240,7 @@ fun NowPlayingTabletScreen(
                         HairlineRule(soft = true)
                         Spacer(modifier = Modifier.height(SvSpace.s3))
                         Transport(
+                            compact = m.compactTransport,
                             progressMs = rawProgressMs,
                             durationMs = track.durationMs,
                             isPaused = track.isPaused,
@@ -370,27 +352,4 @@ fun NowPlayingTabletScreen(
             }
         }
     }
-}
-
-@Composable
-private fun MetricCol(label: String, value: String) {
-    val sv = LocalSvColors.current
-    Column {
-        MonoEyebrow(text = label)
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = value,
-            style = SvType.H3.copy(fontSize = 18.sp),
-            color = sv.ink1,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-private fun formatDuration(ms: Long): String {
-    val totalSec = (ms / 1000).coerceAtLeast(0)
-    val m = totalSec / 60
-    val s = totalSec % 60
-    return "%d:%02d".format(m, s)
 }

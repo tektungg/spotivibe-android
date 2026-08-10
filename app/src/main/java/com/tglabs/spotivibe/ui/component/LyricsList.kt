@@ -366,14 +366,21 @@ private fun LyricLineItem(
             }
 
             if (!romaji.isNullOrBlank() && state != LyricLineState.Distant) {
-                val romaSize = when (state) {
-                    LyricLineState.Active -> SvType.RomanizationActive
-                    else -> SvType.Romanization
-                }
+                // Ukuran mengikuti baris yang diromanisasi, bukan ukuran tetap.
+                // Gaya lama memakai SvType.Romanization yang ukurannya kaku, jadi
+                // menaikkan ukuran font lirik di Settings tidak berpengaruh sama
+                // sekali dan romanisasinya makin tenggelam.
+                val romaSp = romanizationSizeSp(textStyle.fontSize.value)
                 Text(
                     text = romaji,
-                    style = romaSize,
-                    color = sv.accentDim.copy(alpha = 0.85f * targetAlpha),
+                    style = SvType.Romanization.copy(
+                        fontSize = romaSp.sp,
+                        lineHeight = (romaSp + 4f).sp,
+                    ),
+                    // Warna PERSIS sama dengan baris liriknya, termasuk alpha.
+                    // Sebelumnya accentDim dengan alpha 0,85, jadi romanisasi
+                    // selalu lebih redup dari liriknya walau baris itu aktif.
+                    color = color.copy(alpha = color.alpha * targetAlpha),
                     textAlign = TextAlign.Start,
                     modifier = Modifier.padding(top = 2.dp),
                 )

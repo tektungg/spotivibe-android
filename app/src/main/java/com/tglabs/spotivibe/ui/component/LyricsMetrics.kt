@@ -101,3 +101,19 @@ fun lyricsPadding(viewportHeightDp: Float): LyricsPadding {
         trailingDp = (tinggi - jangkar).coerceAtLeast(0f),
     )
 }
+
+/**
+ * Perbandingan ukuran romanisasi terhadap baris liriknya.
+ *
+ * Sebelumnya romanisasi memakai gaya berukuran TETAP, jadi ia tidak ikut
+ * membesar saat pengguna menaikkan ukuran font lirik di Settings, dan di baris
+ * aktif yang 30 sp romanisasinya tenggelam. Diikatkan ke ukuran baris supaya
+ * perbandingannya tetap sama di semua ukuran font dan di semua state.
+ */
+const val ROMANIZATION_RATIO = 0.75f
+
+/** Di bawah ini teks latin tidak terbaca lagi di layar ponsel. */
+const val ROMANIZATION_MIN_SP = 10f
+
+fun romanizationSizeSp(lyricSizeSp: Float): Float =
+    (lyricSizeSp * ROMANIZATION_RATIO).coerceAtLeast(ROMANIZATION_MIN_SP)

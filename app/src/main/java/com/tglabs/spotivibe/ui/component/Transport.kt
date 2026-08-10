@@ -50,13 +50,20 @@ fun Transport(
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Rapatkan jarak vertikal untuk panel pendek. Ukuran TOMBOL tidak ikut
+     * mengecil: 44 dp sudah di bawah ambang target sentuh Material 48 dp, dan
+     * mengecilkannya lagi menukar bug tata letak dengan bug aksesibilitas.
+     * Yang dipangkas hanya padding.
+     */
+    compact: Boolean = false,
 ) {
     val sv = LocalSvColors.current
     val safeDuration = durationMs.coerceAtLeast(1L)
     val ratio = (progressMs.toFloat() / safeDuration).coerceIn(0f, 1f)
 
     Column(modifier = modifier.fillMaxWidth()) {
-        HairlineRule(modifier = Modifier.padding(bottom = SvSpace.s4))
+        HairlineRule(modifier = Modifier.padding(bottom = if (compact) SvSpace.s2 else SvSpace.s4))
 
         // ── Seek row ─────────────────────────────────
         Row(
@@ -119,11 +126,11 @@ fun Transport(
             )
         }
 
-        Spacer(modifier = Modifier.height(SvSpace.s4))
+        Spacer(modifier = Modifier.height(if (compact) SvSpace.s2 else SvSpace.s4))
 
         // ── Buttons row ──────────────────────────────
         Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = SvSpace.s5),
+            modifier = Modifier.fillMaxWidth().padding(bottom = if (compact) SvSpace.s2 else SvSpace.s5),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {

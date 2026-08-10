@@ -175,4 +175,44 @@ class LyricsMetricsTest {
             assertEquals(lyricsScrollIndex(i) + 1, lyricsScrollIndex(i + 1))
         }
     }
+
+    // ── Ukuran romanisasi ────────────────────────────────────────
+
+    /**
+     * Permintaan langsung: romanisasi terlalu kecil, buat 3/4 ukuran lirik
+     * aslinya.
+     */
+    @Test
+    fun `romanisasi tiga perempat ukuran liriknya`() {
+        assertEquals(22.5f, romanizationSizeSp(30f), 0.01f)
+        assertEquals(16.5f, romanizationSizeSp(22f), 0.01f)
+        assertEquals(30f, romanizationSizeSp(40f), 0.01f)
+    }
+
+    /**
+     * REGRESI: gaya lama berukuran TETAP, jadi menaikkan ukuran font lirik di
+     * Settings tidak berpengaruh sama sekali pada romanisasi dan ia makin
+     * tenggelam di baris aktif.
+     */
+    @Test
+    fun `romanisasi ikut membesar saat lirik dibesarkan`() {
+        val kecil = romanizationSizeSp(20f)
+        val besar = romanizationSizeSp(40f)
+        assertTrue("harus ikut membesar, $kecil -> $besar", besar > kecil)
+        assertEquals("perbandingannya harus tetap", 2f, besar / kecil, 0.01f)
+    }
+
+    @Test
+    fun `romanisasi punya batas bawah supaya tetap terbaca`() {
+        assertEquals(ROMANIZATION_MIN_SP, romanizationSizeSp(1f), 0.01f)
+        assertEquals(ROMANIZATION_MIN_SP, romanizationSizeSp(0f), 0.01f)
+        assertTrue(romanizationSizeSp(-10f) >= ROMANIZATION_MIN_SP)
+    }
+
+    @Test
+    fun `romanisasi tidak pernah lebih besar dari liriknya`() {
+        listOf(12f, 20f, 30f, 44f, 60f).forEach { ukuran ->
+            assertTrue("ukuran=$ukuran", romanizationSizeSp(ukuran) <= ukuran)
+        }
+    }
 }
