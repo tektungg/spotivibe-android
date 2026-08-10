@@ -169,33 +169,51 @@ fun NowPlayingTabletScreen(
                     .fillMaxHeight()
                     .padding(m.padDp.dp),
             ) {
+                // Album mengambil SISA ruang, diukur bukan diperkirakan.
+                //
+                // Versi sebelumnya menghitung ukurannya dari perkiraan judul dua
+                // baris. Judul satu baris seperti "OMG" menyisakan 26 dp yang
+                // tidak dipakai siapa pun, dan muncul sebagai lubang antara album
+                // dan judul. weight(1f) membuat kotak ini menerima persis apa pun
+                // yang tersisa setelah judul, artis, dan transport diukur, jadi
+                // lubang itu tidak bisa ada lagi.
                 Box(
                     modifier = Modifier
-                        .size(m.albumDp.dp)
-                        .aspectRatio(1f)
-                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(SvRadius.r1))
-                        .background(sv.bg2),
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    if (state.albumBitmap != null) {
-                        Image(
-                            bitmap = state.albumBitmap.asImageBitmap(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            filterQuality = FilterQuality.High,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(text = "♪", style = SvType.H1, color = sv.accent)
+                    BoxWithConstraints {
+                        // Sisi terpendek supaya tetap persegi tanpa tumpah, dan
+                        // tidak melebihi batas desain di layar besar.
+                        val sisi = minOf(maxWidth.value, maxHeight.value, ALBUM_MAX_DP)
+                        Box(
+                            modifier = Modifier
+                                .size(sisi.dp)
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(SvRadius.r1))
+                                .background(sv.bg2),
+                        ) {
+                            if (state.albumBitmap != null) {
+                                Image(
+                                    bitmap = state.albumBitmap.asImageBitmap(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    filterQuality = FilterQuality.High,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(text = "♪", style = SvType.H1, color = sv.accent)
+                                }
+                            }
                         }
                     }
                 }
 
-                // Ruang lentur di ATAS blok judul, bukan di bawahnya. Dengan
-                // weight di bawah artis, judul menempel ke album dan seluruh
-                // sisa ruang menumpuk jadi satu lubang tepat di atas divider.
                 Spacer(modifier = Modifier.height(m.gapDp.dp))
-                Spacer(modifier = Modifier.weight(1f))
 
                 // Track meta — serif title + italic subtitle
                 Text(

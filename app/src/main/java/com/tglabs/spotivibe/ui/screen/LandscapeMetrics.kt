@@ -34,7 +34,6 @@ package com.tglabs.spotivibe.ui.screen
  * Perhitungan tata letak yang salah tidak pernah gagal compile.
  */
 data class LandscapePaneMetrics(
-    val albumDp: Float,
     val titleSp: Float,
     val artistSp: Float,
     /** Jarak antara album dan blok judul. */
@@ -86,44 +85,46 @@ const val TITLE_ARTIST_GAP_DP = 4f
  * @param paneHeightDp tinggi panel SEBELUM padding. Padding ditentukan di sini,
  *   bukan oleh pemanggil, supaya tidak ada dua tempat yang harus sepakat soal
  *   berapa ruang yang tersisa.
+ *
+ * Ukuran album TIDAK dikembalikan. Sebelumnya iya, dihitung dari perkiraan judul
+ * dua baris, dan judul satu baris menyisakan 26 dp yang tidak dipakai siapa pun
+ * lalu muncul sebagai lubang antara album dan judul. Sekarang album memakai
+ * `weight(1f)` sehingga menerima persis apa pun yang tersisa setelah judul,
+ * artis, dan transport DIUKUR. Perkiraan yang tidak bisa tepat lebih baik
+ * dihapus daripada disetel ulang.
  */
 fun landscapePaneMetrics(
     paneWidthDp: Float,
     paneHeightDp: Float,
 ): LandscapePaneMetrics {
-    val lebar = paneWidthDp.coerceAtLeast(0f)
     val tinggi = paneHeightDp.coerceAtLeast(0f)
     val lega = tinggi >= ROOMY_PANE_DP
 
-    val pad = if (lega) PAD_ROOMY_DP else PAD_TIGHT_DP
-    val isiLebar = (lebar - pad * 2).coerceAtLeast(0f)
-    val isiTinggi = (tinggi - pad * 2).coerceAtLeast(0f)
-
-    val titleSp = if (lega) 42f else 24f
-    val artistSp = if (lega) 18f else 14f
-    val gapDp = if (lega) 32f else 16f
-    val rapat = !lega
-    val transport = if (rapat) TRANSPORT_COMPACT_DP else TRANSPORT_FULL_DP
-
-    // Semua yang harus tetap terlihat. Album TIDAK ada di sini; ia dapat sisanya.
-    val blokTeks = titleSp * TITLE_LINE_FACTOR * TITLE_MAX_LINES +
-        TITLE_ARTIST_GAP_DP +
-        artistSp * ARTIST_LINE_FACTOR
-    val wajib = gapDp + blokTeks + TITLE_TRANSPORT_GAP_DP + transport
-
-    val sisa = (isiTinggi - wajib).coerceAtLeast(0f)
-    // Tanpa lantai minimum. Lantai apa pun akan melanggar invarian di atas dan
-    // mengembalikan transport ke keadaan terpotong, yaitu bug yang justru
-    // sedang diperbaiki. Album yang mengecil sampai nol lebih baik daripada
-    // tombol play yang hilang.
-    val album = minOf(isiLebar, ALBUM_MAX_DP, sisa)
-
     return LandscapePaneMetrics(
-        albumDp = album,
-        titleSp = titleSp,
-        artistSp = artistSp,
-        gapDp = gapDp,
-        padDp = pad,
-        compactTransport = rapat,
+        titleSp = if (lega) 42f else 24f,
+        artistSp = if (lega) 18f else 14f,
+        gapDp = if (lega) 32f else 16f,
+        padDp = if (lega) PAD_ROOMY_DP else PAD_TIGHT_DP,
+        compactTransport = !lega,
     )
 }
+
+/**
+ * Tinggi semua yang berada DI BAWAH album dan wajib terlihat.
+ *
+ * Album mendapat sisanya. Kalau angka ini melebihi tinggi isi panel, `weight(1f)`
+ * memberi album nol dan yang terpotong justru transport, yaitu bug yang sudah
+ * pernah terjadi: baris tombol play/next hilang seluruhnya di HP landscape
+ * karena model memesan 90 dp untuk transport yang sebenarnya 119 dp.
+ */
+fun landscapeFixedBelowAlbumDp(m: LandscapePaneMetrics): Float =
+    m.gapDp +
+        m.titleSp * TITLE_LINE_FACTOR * TITLE_MAX_LINES +
+        TITLE_ARTIST_GAP_DP +
+        m.artistSp * ARTIST_LINE_FACTOR +
+        TITLE_TRANSPORT_GAP_DP +
+        (if (m.compactTransport) TRANSPORT_COMPACT_DP else TRANSPORT_FULL_DP)
+
+/** Tinggi isi panel setelah padding. */
+fun landscapeContentHeightDp(paneHeightDp: Float, m: LandscapePaneMetrics): Float =
+    (paneHeightDp.coerceAtLeast(0f) - m.padDp * 2).coerceAtLeast(0f)
