@@ -16,6 +16,12 @@
     <!-- Floating overlay di atas app lain (Phase 7) — user grant via system Settings -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
+    <!-- Haptic tick saat baris lirik berganti. Tanpa ini Vibrator.vibrate()
+         melempar SecurityException, dan runCatching di Haptics.tick menelannya,
+         jadi setelan haptic di Settings diam-diam tidak pernah bekerja.
+         Permission normal, tidak butuh grant runtime. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <application
         android:name=".SpotivibeApp"
         android:allowBackup="true"
