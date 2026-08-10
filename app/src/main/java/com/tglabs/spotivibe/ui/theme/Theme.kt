@@ -1,5 +1,6 @@
 package com.tglabs.spotivibe.ui.theme
 
+import androidx.compose.ui.platform.LocalConfiguration
 import android.app.Activity
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -164,7 +165,19 @@ fun SpotivibeTheme(
         }
     }
 
-    CompositionLocalProvider(LocalSvColors provides svColors) {
+    // Klasifikasi jendela disediakan DARI SINI, satu tempat untuk seluruh app.
+    // Sebelumnya tiap layar memutuskan sendiri lewat cek orientation mentah, dan
+    // tidak ada yang menjamin keempatnya sepakat.
+    val cfg = LocalConfiguration.current
+    val window = classifyWindow(
+        widthDp = cfg.screenWidthDp.toFloat(),
+        heightDp = cfg.screenHeightDp.toFloat(),
+    )
+
+    CompositionLocalProvider(
+        LocalSvColors provides svColors,
+        LocalSvWindow provides window,
+    ) {
         MaterialTheme(
             colorScheme = m3Scheme,
             typography = Typography,

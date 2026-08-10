@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -37,6 +38,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import com.tglabs.spotivibe.domain.LyricsState
 import com.tglabs.spotivibe.domain.SyncedLine
 import com.tglabs.spotivibe.domain.SyncedWord
@@ -173,13 +175,21 @@ private fun SyncedView(
         }
     }
 
+    // Diukur, bukan ditebak. Ruang atas/bawah dan jangkar baris aktif semuanya
+    // turunan dari tinggi viewport nyata — lihat lyricsPadding().
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    val ukuran = lyricsPadding(maxHeight.value)
+    // scrollOffset satuannya PIKSEL. Nilai 200 yang lama berarti jarak yang
+    // berbeda di tiap kerapatan layar; sekarang dp dikonversi eksplisit.
+    val jangkarPx = with(LocalDensity.current) { ukuran.anchorDp.dp.roundToPx() }
+
     // Smooth scroll uses spring. Snap mode uses scrollToItem (no anim).
-    LaunchedEffect(activeIndex) {
+    LaunchedEffect(activeIndex, jangkarPx) {
         if (activeIndex >= 0) {
             if (smoothScroll) {
-                listState.animateScrollToItem(index = activeIndex, scrollOffset = -200)
+                listState.animateScrollToItem(index = activeIndex, scrollOffset = -jangkarPx)
             } else {
-                listState.scrollToItem(index = activeIndex, scrollOffset = -200)
+                listState.scrollToItem(index = activeIndex, scrollOffset = -jangkarPx)
             }
         }
     }
@@ -196,7 +206,7 @@ private fun SyncedView(
         contentPadding = PaddingValues(horizontal = 0.dp, vertical = SvSpace.s3),
         verticalArrangement = Arrangement.spacedBy(lineSpacing.coerceIn(0, 40).dp),
     ) {
-        item { Spacer(modifier = Modifier.height(80.dp)) }
+        item { Spacer(modifier = Modifier.height(ukuran.leadingDp.dp)) }
 
         // key = line.id, BUKAN line.timeMs. File LRC boleh punya beberapa baris
         // dengan timestamp identik, dan key duplikat membuat Compose melempar
@@ -216,7 +226,8 @@ private fun SyncedView(
             )
         }
 
-        item { Spacer(modifier = Modifier.height(120.dp)) }
+        item { Spacer(modifier = Modifier.height(ukuran.trailingDp.dp)) }
+    }
     }
 }
 

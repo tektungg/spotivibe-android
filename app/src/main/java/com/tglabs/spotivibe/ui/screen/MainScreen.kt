@@ -1,14 +1,13 @@
 package com.tglabs.spotivibe.ui.screen
 
-import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import com.tglabs.spotivibe.domain.UiState
 import com.tglabs.spotivibe.ui.theme.LocalSvColors
+import com.tglabs.spotivibe.ui.theme.LocalSvWindow
 
 /**
  * State-based router. NowPlayingScreen handles its own ambient bg.
@@ -57,10 +56,9 @@ fun MainScreen(
             )
             is UiState.Idle -> EmptyState(kind = EmptyKind.Idle)
             is UiState.Playing -> {
-                // Route ke tablet/landscape variant kalau orientation landscape.
-                val isLandscape = LocalConfiguration.current.orientation ==
-                    Configuration.ORIENTATION_LANDSCAPE
-                if (isLandscape) {
+                // Lebar, BUKAN orientasi. Orientasi tidak bisa membedakan HP
+                // landscape dari tablet landscape.
+                if (LocalSvWindow.current.isWide) {
                     NowPlayingTabletScreen(
                         state = state,
                         onTogglePlayPause = onTogglePlayPause,

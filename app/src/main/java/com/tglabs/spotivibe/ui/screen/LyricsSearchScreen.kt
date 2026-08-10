@@ -1,11 +1,9 @@
 package com.tglabs.spotivibe.ui.screen
 
-import android.content.res.Configuration
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -46,6 +44,7 @@ import com.tglabs.spotivibe.domain.formatDuration
 import com.tglabs.spotivibe.ui.component.HairlineRule
 import com.tglabs.spotivibe.ui.component.MonoEyebrow
 import com.tglabs.spotivibe.ui.theme.LocalSvColors
+import com.tglabs.spotivibe.ui.theme.LocalSvWindow
 import com.tglabs.spotivibe.ui.theme.SvIcons
 import com.tglabs.spotivibe.ui.theme.SvRadius
 import com.tglabs.spotivibe.ui.theme.SvSpace
@@ -83,8 +82,8 @@ fun LyricsSearchScreen(
     // pencarian sebelumnya.
     var remember by rememberSaveable { mutableStateOf(false) }
 
-    val isLandscape = LocalConfiguration.current.orientation ==
-        Configuration.ORIENTATION_LANDSCAPE
+    // Dua kolom saat lebarnya muat, bukan saat kebetulan landscape.
+    val isLandscape = LocalSvWindow.current.isWide
 
     Column(
         modifier = Modifier

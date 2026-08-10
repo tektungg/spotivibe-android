@@ -1,6 +1,5 @@
 package com.tglabs.spotivibe.ui.screen
 
-import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -27,7 +26,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -42,6 +40,7 @@ import com.tglabs.spotivibe.ui.component.SelectionHeader
 import com.tglabs.spotivibe.ui.component.Transport
 import com.tglabs.spotivibe.ui.theme.AccentDefault
 import com.tglabs.spotivibe.ui.theme.LocalSvColors
+import com.tglabs.spotivibe.ui.theme.LocalSvWindow
 import com.tglabs.spotivibe.ui.theme.SvSpace
 import com.tglabs.spotivibe.ui.theme.SvType
 import com.tglabs.spotivibe.ui.theme.SpotivibeTheme
@@ -92,7 +91,9 @@ fun NowPlayingScreen(
     val sv = LocalSvColors.current
     val track = state.track
     val context = LocalContext.current
-    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    // Padding atas dikurangi saat tingginya sempit, bukan saat landscape:
+    // tablet landscape tingginya lega dan tidak perlu dirapatkan.
+    val isLandscape = LocalSvWindow.current.isShort
 
     // ── Progress extrapolation (per fix di NowPlaying.extrapolatedProgressMs) ──
     val displayProgressMs by produceState(
