@@ -186,10 +186,13 @@ private fun SyncedView(
     // Smooth scroll uses spring. Snap mode uses scrollToItem (no anim).
     LaunchedEffect(activeIndex, jangkarPx) {
         if (activeIndex >= 0) {
+            // lyricsScrollIndex, BUKAN activeIndex mentah. Spacer atas memakai
+            // indeks 0 LazyColumn, jadi lines[i] ada di indeks i+1.
+            val target = lyricsScrollIndex(activeIndex)
             if (smoothScroll) {
-                listState.animateScrollToItem(index = activeIndex, scrollOffset = -jangkarPx)
+                listState.animateScrollToItem(index = target, scrollOffset = -jangkarPx)
             } else {
-                listState.scrollToItem(index = activeIndex, scrollOffset = -jangkarPx)
+                listState.scrollToItem(index = target, scrollOffset = -jangkarPx)
             }
         }
     }

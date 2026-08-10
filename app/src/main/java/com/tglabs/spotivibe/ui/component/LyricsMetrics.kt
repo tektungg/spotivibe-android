@@ -36,24 +36,46 @@ data class LyricsPadding(
 )
 
 /**
- * Jangkar sebagai bagian dari tinggi viewport, dijepit.
+ * Tinggi perkiraan satu baris lirik, untuk lagu berbahasa Inggris pada ukuran
+ * font default: dua baris teks.
  *
- * Batas atas 64 dp dipilih karena mereproduksi perilaku lama di HP penguji
- * (200 px pada density 3,25 = 62 dp), jadi portrait tidak melihat perubahan
- * sama sekali. Di viewport pendek pecahannya yang berlaku, sehingga jangkar
- * ikut naik dan baris aktif tidak terdorong ke tengah panel.
+ * Dibutuhkan karena `scrollToItem` menempatkan ATAS baris di jangkar, sementara
+ * yang harus berada di tengah adalah PUSAT baris. Tanpa memperhitungkan tinggi
+ * baris, satu pecahan tetap tidak bisa menengahkan viewport portrait dan
+ * landscape sekaligus: 0,44 memberi 49% di portrait tapi 55% di landscape,
+ * karena tinggi baris yang sama memakan porsi dua kali lebih besar di panel yang
+ * tingginya separuh.
+ *
+ * Bait yang jauh lebih panjang atau ukuran font yang dinaikkan pengguna akan
+ * menggeser pusatnya turun sebesar separuh selisihnya. Tinggi baris sungguhan
+ * tidak tersedia di lapis ini, dan menariknya ke sini berarti mengukur teks
+ * sebelum tata letak. Perkiraan ini meleset jauh lebih kecil daripada pecahan
+ * tetap.
  */
-const val LYRICS_ANCHOR_FRACTION = 0.11f
-const val LYRICS_ANCHOR_MIN_DP = 36f
-const val LYRICS_ANCHOR_MAX_DP = 64f
+const val LYRICS_TYPICAL_LINE_DP = 60f
 
-/** Napas di atas baris pertama, di luar jangkar. */
-const val LYRICS_LEAD_EXTRA_DP = 16f
+/**
+ * Banyaknya item LazyColumn SEBELUM baris lirik pertama.
+ *
+ * Spacer atas adalah `item { }` tersendiri, jadi ia memakai indeks 0 dan baris
+ * lirik baru mulai dari indeks 1.
+ */
+const val LYRICS_LEADING_ITEMS = 1
 
-/** Ruang bawah sebagai bagian dari tinggi viewport. */
-const val LYRICS_TRAIL_FRACTION = 0.20f
-const val LYRICS_TRAIL_MIN_DP = 64f
-const val LYRICS_TRAIL_MAX_DP = 200f
+/**
+ * Ubah indeks ke dalam `lines` menjadi indeks item LazyColumn.
+ *
+ * REGRESI: `scrollToItem` memakai indeks LazyColumn, sementara `activeIndex`
+ * datang sebagai indeks ke dalam `lines`. Memasukkannya mentah-mentah membuat
+ * baris SEBELUMNYA yang duduk di jangkar, dan baris aktif terdorong satu baris
+ * ke bawah. Di portrait selisih itu nyaris tidak terlihat; di landscape yang
+ * tingginya separuh, satu baris lirik dua baris teks mendorongnya sampai ke
+ * bawah tengah layar.
+ *
+ * Tidak akan pernah gagal compile: keduanya `Int`.
+ */
+fun lyricsScrollIndex(lineIndex: Int): Int =
+    (lineIndex + LYRICS_LEADING_ITEMS).coerceAtLeast(0)
 
 /**
  * @param viewportHeightDp tinggi area lirik yang terlihat.
@@ -61,22 +83,21 @@ const val LYRICS_TRAIL_MAX_DP = 200f
 fun lyricsPadding(viewportHeightDp: Float): LyricsPadding {
     val tinggi = viewportHeightDp.coerceAtLeast(0f)
 
-    // Jepitan bawah 36 dp masih bisa melebihi seperempat viewport di panel yang
-    // sangat pendek, dan di situ baris aktif terdorong ke tengah. Seperempat
-    // tinggi jadi batas terakhir.
-    val jangkar = (tinggi * LYRICS_ANCHOR_FRACTION)
-        .coerceIn(LYRICS_ANCHOR_MIN_DP, LYRICS_ANCHOR_MAX_DP)
-        .coerceAtMost(tinggi * 0.25f)
-
-    val ekor = (tinggi * LYRICS_TRAIL_FRACTION)
-        .coerceIn(LYRICS_TRAIL_MIN_DP, LYRICS_TRAIL_MAX_DP)
-        // Ruang bawah tidak boleh melebihi viewport itu sendiri, kalau tidak
-        // daftar lirik pendek jadi tidak bisa di-scroll ke mana-mana.
-        .coerceAtMost(tinggi)
+    // Setengah sisa ruang setelah baris itu sendiri. Ini yang membuat PUSAT
+    // baris mendarat di 50% pada tinggi viewport mana pun, bukan cuma pada satu
+    // yang kebetulan dipakai untuk menyetel angkanya.
+    val jangkar = ((tinggi - LYRICS_TYPICAL_LINE_DP) / 2f).coerceIn(0f, tinggi * 0.5f)
 
     return LyricsPadding(
         anchorDp = jangkar,
-        leadingDp = jangkar + LYRICS_LEAD_EXTRA_DP,
-        trailingDp = ekor,
+        // Persis sebesar jangkar. Baris PERTAMA cuma bisa naik sampai batas
+        // scroll atas, jadi tanpa ruang sebesar ini ia tidak akan pernah sampai
+        // ke tengah dan bait pembuka duduk lebih tinggi dari bait lainnya.
+        leadingDp = jangkar,
+        // Sisa viewport di bawah jangkar. Baris TERAKHIR cuma bisa turun sampai
+        // batas scroll bawah; kurang dari ini, bait penutup melorot ke bawah
+        // tengah satu per satu menjelang lagu habis. Kelebihan sedikit tidak
+        // berbahaya karena scrollToItem berhenti di jangkar.
+        trailingDp = (tinggi - jangkar).coerceAtLeast(0f),
     )
 }

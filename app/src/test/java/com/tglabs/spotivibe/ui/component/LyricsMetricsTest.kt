@@ -1,6 +1,7 @@
 package com.tglabs.spotivibe.ui.component
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -12,70 +13,119 @@ class LyricsMetricsTest {
     /** Panel kanan landscape di HP penguji: 375 dp layar minus padding + transport. */
     private val landscape = 285f
 
+    /** Baris lirik dua baris teks pada font default, kira-kira. */
+    private val tinggiBaris = LYRICS_TYPICAL_LINE_DP
+
+    /** Posisi PUSAT baris aktif sebagai pecahan tinggi viewport. */
+    private fun pusatRelatif(viewport: Float): Float =
+        (lyricsPadding(viewport).anchorDp + tinggiBaris / 2f) / viewport
+
+    // ── Baris aktif di tengah ────────────────────────────────────
+
     /**
-     * REGRESI: perilaku portrait TIDAK boleh berubah. Nilai lama 80 dp atas dan
-     * 120 dp bawah harus keluar lagi persis, kalau tidak perbaikan landscape
-     * ikut menggeser layar yang selama ini sudah benar.
+     * Permintaan langsung dari pemakaian di perangkat: baris aktif duduk terlalu
+     * ke bawah di landscape dan seharusnya di tengah layar.
      */
     @Test
-    fun `portrait mereproduksi nilai lama`() {
-        val p = lyricsPadding(portrait)
-        assertEquals(80f, p.leadingDp, 0.5f)
-        assertEquals(120f, p.trailingDp, 0.5f)
+    fun `baris aktif mendarat dekat tengah di landscape`() {
+        val pusat = pusatRelatif(landscape)
+        assertTrue("pusat di $pusat, harusnya dekat 0,5", pusat in 0.42f..0.58f)
+    }
+
+    @Test
+    fun `baris aktif mendarat dekat tengah di portrait`() {
+        val pusat = pusatRelatif(portrait)
+        assertTrue("pusat di $pusat, harusnya dekat 0,5", pusat in 0.42f..0.58f)
     }
 
     /**
-     * REGRESI: ini alasan fungsi ini ada. Ruang atas + bawah yang tetap memakan
-     * 200 dari 285 dp panel landscape, yaitu 70% ruang untuk kekosongan.
+     * Keputusan yang diambil bersama: tengah berlaku untuk KEDUA orientasi, bukan
+     * landscape saja. Tanpa test ini tidak ada yang menahan salah satunya
+     * bergeser sendiri nanti.
      */
     @Test
-    fun `landscape tidak menghabiskan separuh panel`() {
-        val p = lyricsPadding(landscape)
-        val lamaTotal = 80f + 120f
-        val baruTotal = p.leadingDp + p.trailingDp
-
-        assertTrue("nilai lama memakan $lamaTotal dari $landscape dp", lamaTotal / landscape > 0.6f)
-        assertTrue("jangkar harus ikut mengecil, bukan tetap 64 dp", p.anchorDp < LYRICS_ANCHOR_MAX_DP)
-        assertTrue(
-            "yang baru memakan $baruTotal dari $landscape dp, harus di bawah separuh",
-            baruTotal / landscape < 0.5f,
+    fun `portrait dan landscape menaruh pusat baris di titik yang sama`() {
+        assertEquals(
+            "yang harus identik adalah PUSAT baris, bukan pecahan jangkar",
+            pusatRelatif(portrait),
+            pusatRelatif(landscape),
+            0.001f,
         )
     }
 
+    /**
+     * Pecahan tetap tidak bisa menengahkan dua tinggi viewport sekaligus: 0,44
+     * memberi 49% di portrait tapi 55% di landscape. Menurunkan jangkar dari
+     * tinggi baris yang tepat 50% di mana pun.
+     */
     @Test
-    fun `ruang bawah tidak pernah lebih besar dari viewport`() {
-        listOf(0f, 10f, 50f, 100f, 285f, 600f, 2000f).forEach { h ->
-            val p = lyricsPadding(h)
-            assertTrue("h=$h ekor=${p.trailingDp}", p.trailingDp <= h || h == 0f)
+    fun `pusat baris tepat di tengah pada tinggi viewport apa pun`() {
+        listOf(100f, 200f, 285f, 400f, 600f, 900f, 1400f).forEach { h ->
+            assertEquals("h=$h", 0.5f, pusatRelatif(h), 0.001f)
         }
     }
 
     /**
-     * Jangkar harus tetap di bagian ATAS viewport. Tanpa batas seperempat, di
-     * panel 200 dp jangkar 64 dp masih 32%, tapi di panel 150 dp jadi 43% dan
-     * baris aktif turun ke tengah-bawah.
+     * Jangkar di bawah tengah membuat "baris aktif" berada di paruh bawah layar
+     * dan lirik berikutnya nyaris tidak terlihat.
      */
     @Test
-    fun `jangkar tetap di bagian atas viewport`() {
-        listOf(120f, 150f, 200f, 285f, 600f, 1000f).forEach { h ->
+    fun `jangkar tidak pernah melewati tengah`() {
+        listOf(0f, 50f, 120f, 285f, 600f, 1200f, 5000f).forEach { h ->
+            val a = lyricsPadding(h).anchorDp
+            assertTrue("h=$h jangkar=$a melewati tengah", a <= h * 0.5f + 0.01f)
+        }
+    }
+
+    // ── Ruang atas dan bawah ─────────────────────────────────────
+
+    /**
+     * Baris PERTAMA cuma bisa naik sampai batas scroll atas. Ruang atas yang
+     * kurang membuat bait pembuka duduk lebih tinggi dari bait lainnya.
+     */
+    @Test
+    fun `baris pertama bisa mencapai jangkar`() {
+        listOf(120f, 285f, 600f, 1200f).forEach { h ->
             val p = lyricsPadding(h)
-            assertTrue("h=$h jangkar=${p.anchorDp} terlalu turun", p.anchorDp <= h * 0.25f + 0.01f)
+            assertTrue(
+                "h=$h ruang atas ${p.leadingDp} < jangkar ${p.anchorDp}",
+                p.leadingDp >= p.anchorDp,
+            )
+        }
+    }
+
+    /**
+     * Baris TERAKHIR cuma bisa turun sampai batas scroll bawah. Ruang bawah yang
+     * kurang membuat bait penutup melorot ke bawah tengah satu per satu
+     * menjelang lagu habis. Ini yang membuat nilai tetap 120 dp lama tidak bisa
+     * dipakai lagi: di viewport 600 dp dibutuhkan lebih dari dua kali lipatnya.
+     */
+    @Test
+    fun `baris terakhir bisa mencapai jangkar`() {
+        listOf(120f, 285f, 600f, 1200f).forEach { h ->
+            val p = lyricsPadding(h)
+            val dibutuhkan = h - p.anchorDp - tinggiBaris
+            assertTrue("h=$h ruang bawah ${p.trailingDp} < $dibutuhkan", p.trailingDp >= dibutuhkan)
         }
     }
 
     @Test
-    fun `ruang atas selalu cukup untuk baris pertama mencapai jangkar`() {
-        listOf(120f, 285f, 600f, 1000f).forEach { h ->
-            val p = lyricsPadding(h)
-            assertTrue("h=$h", p.leadingDp >= p.anchorDp)
-        }
+    fun `nilai tetap 120 dp lama tidak akan cukup di portrait`() {
+        val p = lyricsPadding(portrait)
+        assertTrue(
+            "ruang bawah ${p.trailingDp} harus jauh di atas 120 dp yang lama",
+            p.trailingDp > 120f * 2,
+        )
     }
+
+    // ── Ketahanan ────────────────────────────────────────────────
 
     @Test
     fun `viewport nol tidak menghasilkan nilai negatif atau NaN`() {
         val p = lyricsPadding(0f)
-        assertTrue(p.anchorDp >= 0f && p.leadingDp >= 0f && p.trailingDp >= 0f)
-        assertTrue(!p.trailingDp.isNaN() && !p.anchorDp.isNaN())
+        listOf(p.anchorDp, p.leadingDp, p.trailingDp).forEach {
+            assertTrue("nilai $it", it >= 0f && !it.isNaN())
+        }
     }
 
     @Test
@@ -84,33 +134,45 @@ class LyricsMetricsTest {
     }
 
     @Test
-    fun `viewport besar tidak menghasilkan ruang bawah tak terbatas`() {
-        assertEquals(LYRICS_TRAIL_MAX_DP, lyricsPadding(5000f).trailingDp, 0.01f)
-    }
-
-    /**
-     * Jangkar dinyatakan dalam dp, jadi konversinya ke piksel ikut kerapatan
-     * layar. Nilai 200 px yang lama berarti jarak yang berbeda di tiap
-     * perangkat; ini menunjukkan selisihnya.
-     */
-    @Test
-    fun `jangkar dp konsisten sementara 200 px tidak`() {
-        val jangkarDp = lyricsPadding(portrait).anchorDp
-        listOf(2.0f, 2.625f, 3.25f, 4.0f).forEach { density ->
-            val lamaDp = 200f / density
-            val px = jangkarDp * density
-            assertEquals("dp -> px -> dp harus bolak-balik", jangkarDp, px / density, 0.01f)
-            if (density != 3.25f) {
-                assertTrue(
-                    "density=$density: 200 px = $lamaDp dp, beda dari $jangkarDp dp",
-                    kotlin.math.abs(lamaDp - jangkarDp) > 5f,
-                )
-            }
+    fun `viewport lebih besar tidak pernah menghasilkan jangkar lebih kecil`() {
+        var sebelumnya = -1f
+        listOf(0f, 120f, 285f, 600f, 1200f, 5000f).forEach { h ->
+            val a = lyricsPadding(h).anchorDp
+            assertTrue("mundur di h=$h", a >= sebelumnya)
+            sebelumnya = a
         }
     }
 
     @Test
     fun `deterministik`() {
         repeat(5) { assertEquals(lyricsPadding(landscape), lyricsPadding(landscape)) }
+    }
+
+    // ── Indeks scroll ────────────────────────────────────────────
+
+    /**
+     * REGRESI: `scrollToItem` memakai indeks LazyColumn, dan Spacer atas memakai
+     * indeks 0. Memasukkan `activeIndex` mentah membuat baris SEBELUMNYA yang
+     * duduk di jangkar. Terlihat sebagai "baris aktif terlalu ke bawah" di
+     * landscape, dan nyaris tak terlihat di portrait yang tingginya dua kali.
+     */
+    @Test
+    fun `indeks scroll melewati Spacer atas`() {
+        assertEquals(1, lyricsScrollIndex(0))
+        assertEquals(6, lyricsScrollIndex(5))
+        assertNotEquals("indeks mentah adalah bug-nya", 5, lyricsScrollIndex(5))
+    }
+
+    @Test
+    fun `indeks scroll tidak pernah negatif`() {
+        assertTrue(lyricsScrollIndex(-1) >= 0)
+        assertTrue(lyricsScrollIndex(-100) >= 0)
+    }
+
+    @Test
+    fun `indeks scroll naik satu-satu`() {
+        (0..20).forEach { i ->
+            assertEquals(lyricsScrollIndex(i) + 1, lyricsScrollIndex(i + 1))
+        }
     }
 }
