@@ -181,11 +181,10 @@ class OverlayManager(
         val view = composeView ?: return
         val (_, sh) = screenSize()
         val vh = view.height.coerceAtLeast(1)
-        val maxY = (sh - vh).coerceAtLeast(0)
 
         // X selalu 0 (full-width overlay)
         p.x = 0
-        p.y = (p.y + dy).coerceIn(0, maxY)
+        p.y = com.tglabs.spotivibe.domain.clampOverlayY(p.y, dy, sh, vh)
         currentX = 0
         currentY = p.y
 
@@ -206,10 +205,10 @@ class OverlayManager(
         val view = composeView ?: return
         val (_, sh) = screenSize()
         val vh = view.height.coerceAtLeast(1)
-        val targetY = currentY.coerceIn(0, (sh - vh).coerceAtLeast(0))
+        val targetY = com.tglabs.spotivibe.domain.clampOverlayY(currentY, 0, sh, vh)
 
         // Kalau Y sudah dalam bounds, langsung persist tanpa animasi
-        if (targetY == currentY) {
+        if (!com.tglabs.spotivibe.domain.needsSettleAnimation(targetY, currentY)) {
             onPositionChange(0, currentY)
             return
         }

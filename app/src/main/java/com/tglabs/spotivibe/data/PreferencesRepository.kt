@@ -1,5 +1,9 @@
 package com.tglabs.spotivibe.data
 
+import com.tglabs.spotivibe.domain.bumpFontSize
+import com.tglabs.spotivibe.domain.clampFontSize
+import com.tglabs.spotivibe.domain.clampLineSpacing
+import com.tglabs.spotivibe.domain.clampLyricsOffsetMs
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -203,18 +207,18 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
 
     /** Lyrics font size in sp. Range 12-56, default 17. */
     val lyricsFontSize: Flow<Int> = context.dataStore.data
-        .map { prefs -> (prefs[lyricsFontSizeKey] ?: 17).coerceIn(12, 56) }
+        .map { prefs -> clampFontSize(prefs[lyricsFontSizeKey]) }
 
     /**
      * Manual sync correction. Positive = lyrics dipercepat (kompensasi LRC lambat).
      * Negative = lyrics dilambatkan. Range ±2000 ms.
      */
     val lyricsOffsetMs: Flow<Int> = context.dataStore.data
-        .map { prefs -> (prefs[lyricsOffsetMsKey] ?: 0).coerceIn(-2000, 2000) }
+        .map { prefs -> clampLyricsOffsetMs(prefs[lyricsOffsetMsKey]) }
 
     /** Extra vertical spacing antar baris lyric (sp). Range 0-20, default 7 = paritas lama. */
     val lineSpacing: Flow<Int> = context.dataStore.data
-        .map { prefs -> (prefs[lineSpacingKey] ?: 7).coerceIn(0, 20) }
+        .map { prefs -> clampLineSpacing(prefs[lineSpacingKey]) }
 
     /** High contrast mode — heavier weights, no dim fade. Default false. */
     val highContrast: Flow<Boolean> = context.dataStore.data
@@ -251,7 +255,7 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
     }
 
     suspend fun setLyricsFontSize(size: Int) {
-        context.dataStore.edit { it[lyricsFontSizeKey] = size.coerceIn(12, 56) }
+        context.dataStore.edit { it[lyricsFontSizeKey] = clampFontSize(size) }
     }
 
     /**
@@ -262,17 +266,16 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
      */
     suspend fun bumpLyricsFontSize(delta: Int) {
         context.dataStore.edit { prefs ->
-            val current = (prefs[lyricsFontSizeKey] ?: 17).coerceIn(12, 56)
-            prefs[lyricsFontSizeKey] = (current + delta).coerceIn(12, 56)
+            prefs[lyricsFontSizeKey] = bumpFontSize(prefs[lyricsFontSizeKey], delta)
         }
     }
 
     suspend fun setLyricsOffsetMs(ms: Int) {
-        context.dataStore.edit { it[lyricsOffsetMsKey] = ms.coerceIn(-2000, 2000) }
+        context.dataStore.edit { it[lyricsOffsetMsKey] = clampLyricsOffsetMs(ms) }
     }
 
     suspend fun setLineSpacing(dp: Int) {
-        context.dataStore.edit { it[lineSpacingKey] = dp.coerceIn(0, 20) }
+        context.dataStore.edit { it[lineSpacingKey] = clampLineSpacing(dp) }
     }
 
     suspend fun setHighContrast(enabled: Boolean) {

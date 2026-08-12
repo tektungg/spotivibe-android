@@ -200,6 +200,16 @@ class SpotivibeNotificationService : Service() {
     }
 
     private fun handleOverlayState(enabled: Boolean, pos: Pair<Int, Int>) {
+        when (com.tglabs.spotivibe.domain.overlayAction(enabled, overlayManager != null)) {
+            com.tglabs.spotivibe.domain.OverlayAction.DiamSaja -> return
+            com.tglabs.spotivibe.domain.OverlayAction.Sembunyikan -> {
+                Log.d(TAG, "Hiding overlay")
+                overlayManager?.hide()
+                overlayManager = null
+                return
+            }
+            com.tglabs.spotivibe.domain.OverlayAction.Buat -> Unit
+        }
         if (enabled) {
             if (overlayManager == null) {
                 Log.d(TAG, "Showing overlay at (${pos.first}, ${pos.second})")
@@ -219,7 +229,7 @@ class SpotivibeNotificationService : Service() {
                     initialY = pos.second,
                 )
                 val ok = manager.show()
-                if (ok) {
+                if (!com.tglabs.spotivibe.domain.shouldDisableOverlayAfterFailure(ok)) {
                     overlayManager = manager
                 } else {
                     Log.w(TAG, "Overlay show returned false — auto-disable")
@@ -269,19 +279,23 @@ class SpotivibeNotificationService : Service() {
         val next = lastNextLine
         val isPaused = track?.isPaused ?: true
 
-        val title = track?.title?.ifBlank { "Spotivibe" } ?: "Spotivibe"
-        val subtitle = track?.artist ?: "Loading…"
-
         // 3-baris karaoke style — prev (dim) / current (highlighted ▸) / next (dim).
-        // Blank line jadi "♪" supaya tetap occupy space tapi tidak ngosong.
-        val prevText = prev?.text?.takeIf { it.isNotBlank() } ?: ""
-        val currText = current?.text?.takeIf { it.isNotBlank() } ?: "♪"
-        val nextText = next?.text?.takeIf { it.isNotBlank() } ?: ""
-        val currMarked = if (isReconnecting) {
-            "Reconnecting to Spotify…"
-        } else {
-            "▸ $currText"
-        }
+        // Perakitan teksnya murni dan diuji di NotificationTextTest.
+        val teks = com.tglabs.spotivibe.domain.notificationText(
+            title = track?.title,
+            artist = track?.artist,
+            window = com.tglabs.spotivibe.domain.LyricWindow(
+                prev = prev?.text,
+                current = current?.text,
+                next = next?.text,
+            ),
+            isReconnecting = isReconnecting,
+        )
+        val title = teks.title
+        val subtitle = teks.subtitle
+        val prevText = teks.prev
+        val nextText = teks.next
+        val currMarked = teks.current
 
         val prevPi = actionPendingIntent(ActionReceiver.ACTION_PREVIOUS, REQ_PREV)
         val playPausePi = actionPendingIntent(ActionReceiver.ACTION_PLAY_PAUSE, REQ_PLAY_PAUSE)

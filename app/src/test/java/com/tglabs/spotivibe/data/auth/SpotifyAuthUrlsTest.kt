@@ -1,263 +1,334 @@
 package com.tglabs.spotivibe.data.auth
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SpotifyAuthUrlsTest {
 
     private val redirect = "spotivibe://callback"
+    private val state = "STATE123"
 
-    // ── buildAuthorizeUrl ────────────────────────────────────────
+    private fun parse(uri: String?, expectedState: String? = state) =
+        SpotifyAuthUrls.parseRedirect(uri, redirect, expectedState)
 
-    @Test
-    fun `authorize url memuat semua parameter PKCE`() {
-        val url = SpotifyAuthUrls.buildAuthorizeUrl(
-            clientId = "abc123",
-            redirectUri = redirect,
-            codeChallenge = "CHALLENGE",
-            state = "STATE",
-        )
-        assertTrue(url.startsWith("https://accounts.spotify.com/authorize?"))
-        assertTrue(url.contains("client_id=abc123"))
-        assertTrue(url.contains("response_type=code"))
-        assertTrue(url.contains("code_challenge_method=S256"))
-        assertTrue(url.contains("code_challenge=CHALLENGE"))
-        assertTrue(url.contains("state=STATE"))
-    }
-
-    @Test
-    fun `redirect uri di-percent-encode`() {
-        val url = SpotifyAuthUrls.buildAuthorizeUrl(
-            clientId = "abc",
-            redirectUri = redirect,
-            codeChallenge = "c",
-            state = "s",
-        )
-        assertTrue(url.contains("redirect_uri=spotivibe%3A%2F%2Fcallback"))
-    }
+    // ── Regresi: redirect sah dibuang gara-gara satu garis miring ─
 
     /**
-     * `app-remote-control` wajib ikut: kalau hilang, grant dari flow web tidak
-     * mengizinkan App Remote bind dan user kena dialog consent kedua.
+     * REGRESI PRODUKSI. Ini bug yang membuat app terkunci di layar
+     * "Connecting" selamanya setelah login berhasil.
+     *
+     * Server OAuth menormalkan redirect URI dengan menambahkan garis miring saat
+     * path-nya kosong, jadi `spotivibe://callback` yang didaftarkan kembali
+     * sebagai `spotivibe://callback/`. Perbandingan string persis membuang
+     * redirect yang benar-benar sah sebagai NotOurs.
+     *
+     * Yang membuatnya sulit dilacak: NotOurs adalah SATU-SATUNYA hasil yang
+     * sekaligus tidak menulis log dan tidak mengubah state. Tidak ada crash,
+     * tidak ada pesan, tidak ada jejak di logcat sama sekali.
      */
     @Test
-    fun `scope memuat app-remote-control dan dipisah persen-20`() {
-        val url = SpotifyAuthUrls.buildAuthorizeUrl(
-            clientId = "abc",
-            redirectUri = redirect,
-            codeChallenge = "c",
-            state = "s",
-        )
-        assertTrue(SpotifyAuthUrls.SCOPES.contains("app-remote-control"))
-        assertTrue(url.contains("scope=app-remote-control%20user-read-currently-playing"))
+    fun `redirect dengan garis miring akhir tetap milik kita`() {
+        val hasil = parse("spotivibe://callback/?code=AQC123&state=$state")
+        assertEquals(SpotifyAuthUrls.Redirect.Code("AQC123"), hasil)
     }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun `client id kosong ditolak`() {
-        SpotifyAuthUrls.buildAuthorizeUrl("", redirect, "c", "s")
+    /** Bentuk persis yang tertangkap di logcat perangkat saat bug itu terjadi. */
+    @Test
+    fun `bentuk nyata dari logcat perangkat`() {
+        val hasil = parse("spotivibe://callback/?code=AQC123&state=$state&ubi=xyz")
+        assertEquals(SpotifyAuthUrls.Redirect.Code("AQC123"), hasil)
     }
-
-    // ── parseRedirect ────────────────────────────────────────────
 
     @Test
-    fun `code diterima saat state cocok`() {
-        val result = SpotifyAuthUrls.parseRedirect(
-            uri = "$redirect?code=AQC123&state=STATE",
-            expectedRedirectUri = redirect,
-            expectedState = "STATE",
-        )
-        assertEquals(SpotifyAuthUrls.Redirect.Code("AQC123"), result)
+    fun `perbandingan persis akan menolak bentuk itu`() {
+        // Mendokumentasikan bug-nya: inilah yang dilakukan versi lama.
+        assertFalse("spotivibe://callback/" == redirect)
+        assertTrue(SpotifyAuthUrls.basesMatch("spotivibe://callback/", redirect))
     }
+
+    @Test
+    fun `normalisasi base membuang garis miring dan spasi tepi`() {
+        assertEquals("spotivibe://callback", SpotifyAuthUrls.normalizeBase("  spotivibe://callback//  "))
+        assertEquals("spotivibe://callback", SpotifyAuthUrls.normalizeBase(redirect))
+    }
+
+    @Test
+    fun `pencocokan base tidak peduli besar kecil huruf`() {
+        assertTrue(SpotifyAuthUrls.basesMatch("SPOTIVIBE://CALLBACK", redirect))
+    }
+
+    // ── URI yang bukan milik kita ────────────────────────────────
+
+    @Test
+    fun `skema lain diabaikan`() {
+        assertEquals(SpotifyAuthUrls.Redirect.NotOurs, parse("https://example.com/?code=X&state=$state"))
+        assertEquals(SpotifyAuthUrls.Redirect.NotOurs, parse("otherapp://callback?code=X&state=$state"))
+    }
+
+    @Test
+    fun `uri kosong atau null diabaikan`() {
+        assertEquals(SpotifyAuthUrls.Redirect.NotOurs, parse(null))
+        assertEquals(SpotifyAuthUrls.Redirect.NotOurs, parse(""))
+        assertEquals(SpotifyAuthUrls.Redirect.NotOurs, parse("   "))
+    }
+
+    @Test
+    fun `redirect kita tanpa query itu cacat bukan bukan-milik-kita`() {
+        assertEquals(SpotifyAuthUrls.Redirect.Malformed, parse(redirect))
+    }
+
+    // ── State, proteksi CSRF ─────────────────────────────────────
+
+    /**
+     * Tanpa flow yang sedang berjalan, redirect apa pun harus dibuang. Kalau
+     * tidak, `code` dari sesi lama bisa dipakai ulang.
+     */
+    @Test
+    fun `tanpa state tersimpan redirect dibuang`() {
+        assertEquals(
+            SpotifyAuthUrls.Redirect.StateMismatch,
+            parse("spotivibe://callback?code=X&state=$state", expectedState = null),
+        )
+        assertEquals(
+            SpotifyAuthUrls.Redirect.StateMismatch,
+            parse("spotivibe://callback?code=X&state=$state", expectedState = ""),
+        )
+    }
+
+    @Test
+    fun `state berbeda ditolak`() {
+        assertEquals(
+            SpotifyAuthUrls.Redirect.StateMismatch,
+            parse("spotivibe://callback?code=X&state=LAIN"),
+        )
+    }
+
+    @Test
+    fun `state hilang ditolak`() {
+        assertEquals(SpotifyAuthUrls.Redirect.StateMismatch, parse("spotivibe://callback?code=X"))
+    }
+
+    /** State dicek SEBELUM error, supaya redirect basi tidak lolos jadi Denied. */
+    @Test
+    fun `state dicek lebih dulu daripada error`() {
+        assertEquals(
+            SpotifyAuthUrls.Redirect.StateMismatch,
+            parse("spotivibe://callback?error=access_denied&state=LAIN"),
+        )
+    }
+
+    // ── Hasil ────────────────────────────────────────────────────
 
     @Test
     fun `user menolak menghasilkan Denied`() {
-        val result = SpotifyAuthUrls.parseRedirect(
-            uri = "$redirect?error=access_denied&state=STATE",
-            expectedRedirectUri = redirect,
-            expectedState = "STATE",
+        assertEquals(
+            SpotifyAuthUrls.Redirect.Denied("access_denied"),
+            parse("spotivibe://callback?error=access_denied&state=$state"),
         )
-        assertEquals(SpotifyAuthUrls.Redirect.Denied("access_denied"), result)
     }
 
-    /** Proteksi CSRF: code dari state asing tidak boleh pernah ditukar. */
+    /** Kalau keduanya ada, penolakan yang menang. Code-nya tidak akan berguna. */
     @Test
-    fun `state berbeda ditolak`() {
-        val result = SpotifyAuthUrls.parseRedirect(
-            uri = "$redirect?code=AQC123&state=PENYERANG",
-            expectedRedirectUri = redirect,
-            expectedState = "STATE",
+    fun `error menang atas code`() {
+        assertEquals(
+            SpotifyAuthUrls.Redirect.Denied("access_denied"),
+            parse("spotivibe://callback?code=X&error=access_denied&state=$state"),
         )
-        assertEquals(SpotifyAuthUrls.Redirect.StateMismatch, result)
     }
 
-    /** Tidak ada flow aktif berarti redirect apapun harus dibuang. */
     @Test
-    fun `redirect tanpa pending state ditolak`() {
-        val result = SpotifyAuthUrls.parseRedirect(
-            uri = "$redirect?code=AQC123&state=STATE",
-            expectedRedirectUri = redirect,
-            expectedState = null,
+    fun `error kosong tidak dianggap penolakan`() {
+        assertEquals(
+            SpotifyAuthUrls.Redirect.Code("X"),
+            parse("spotivibe://callback?error=&code=X&state=$state"),
         )
-        assertEquals(SpotifyAuthUrls.Redirect.StateMismatch, result)
+    }
+
+    @Test
+    fun `tanpa code maupun error itu cacat`() {
+        assertEquals(SpotifyAuthUrls.Redirect.Malformed, parse("spotivibe://callback?foo=bar&state=$state"))
+    }
+
+    @Test
+    fun `fragment dibuang`() {
+        assertEquals(
+            SpotifyAuthUrls.Redirect.Code("ABC"),
+            parse("spotivibe://callback?code=ABC&state=$state#sisa"),
+        )
+    }
+
+    @Test
+    fun `code yang di-encode ikut ter-decode`() {
+        val hasil = parse("spotivibe://callback?code=a%2Fb%2Bc&state=$state")
+        assertEquals(SpotifyAuthUrls.Redirect.Code("a/b+c"), hasil)
+    }
+
+    // ── Query parsing ────────────────────────────────────────────
+
+    @Test
+    fun `key duplikat dimenangkan yang pertama`() {
+        assertEquals(mapOf("a" to "1"), SpotifyAuthUrls.parseQuery("a=1&a=2"))
+    }
+
+    @Test
+    fun `pasangan tanpa sama dengan diabaikan`() {
+        assertEquals(mapOf("b" to "2"), SpotifyAuthUrls.parseQuery("a&b=2&&"))
+    }
+
+    @Test
+    fun `query kosong menghasilkan map kosong`() {
+        assertEquals(emptyMap<String, String>(), SpotifyAuthUrls.parseQuery(""))
+        assertEquals(emptyMap<String, String>(), SpotifyAuthUrls.parseQuery("   "))
+    }
+
+    @Test
+    fun `nilai boleh kosong`() {
+        assertEquals(mapOf("a" to ""), SpotifyAuthUrls.parseQuery("a="))
+    }
+
+    // ── Encoding ─────────────────────────────────────────────────
+
+    /**
+     * Komponen query URI, BUKAN form-encoding. `+` adalah karakter literal di
+     * sini; memperlakukannya sebagai spasi akan merusak authorization code yang
+     * memang boleh mengandung `+`.
+     */
+    @Test
+    fun `plus bukan spasi`() {
+        assertEquals("a+b", SpotifyAuthUrls.percentDecode("a+b"))
+        assertEquals("a%2Bb", SpotifyAuthUrls.percentEncode("a+b"))
+    }
+
+    @Test
+    fun `spasi jadi persen dua nol`() {
+        assertEquals("a%20b", SpotifyAuthUrls.percentEncode("a b"))
+        assertEquals("a b", SpotifyAuthUrls.percentDecode("a%20b"))
+    }
+
+    @Test
+    fun `karakter unreserved lolos tanpa diubah`() {
+        val unreserved = "ABCxyz019-._~"
+        assertEquals(unreserved, SpotifyAuthUrls.percentEncode(unreserved))
+    }
+
+    @Test
+    fun `bolak-balik encode decode utuh termasuk non-ASCII`() {
+        listOf("hello world", "a/b?c=d&e", "日本語", "한국어", "a+b~c-d_e.f", "%", "%%%").forEach {
+            assertEquals(it, SpotifyAuthUrls.percentDecode(SpotifyAuthUrls.percentEncode(it)))
+        }
     }
 
     /**
-     * REGRESI: server OAuth lazim menormalkan redirect URI dengan menambahkan
-     * garis miring saat path-nya kosong. Perbandingan string persis menolak
-     * redirect yang sah karena selisih satu karakter, dan karena jalur NotOurs
-     * dulu tidak menulis log maupun mengubah state, UI terkunci di Connecting
-     * tanpa jejak apapun.
+     * Escape rusak dibiarkan literal, bukan melempar exception. Redirect cacat
+     * lebih baik jadi Malformed daripada membuat app crash saat menerima intent.
      */
     @Test
-    fun `garis miring di akhir tetap dikenali sebagai redirect kita`() {
-        val result = SpotifyAuthUrls.parseRedirect(
-            uri = "$redirect/?code=AQC123&state=STATE",
-            expectedRedirectUri = redirect,
-            expectedState = "STATE",
-        )
-        assertEquals(SpotifyAuthUrls.Redirect.Code("AQC123"), result)
+    fun `escape rusak tidak melempar exception`() {
+        assertEquals("%zz", SpotifyAuthUrls.percentDecode("%zz"))
+        assertEquals("%4", SpotifyAuthUrls.percentDecode("%4"))
+        assertEquals("%", SpotifyAuthUrls.percentDecode("%"))
+        assertEquals("ab%", SpotifyAuthUrls.percentDecode("ab%"))
     }
 
     @Test
-    fun `garis miring di sisi yang terdaftar juga ditoleransi`() {
-        val result = SpotifyAuthUrls.parseRedirect(
-            uri = "$redirect?code=AQC123&state=STATE",
-            expectedRedirectUri = "$redirect/",
-            expectedState = "STATE",
-        )
-        assertEquals(SpotifyAuthUrls.Redirect.Code("AQC123"), result)
+    fun `escape di ujung akhir tetap ter-decode`() {
+        assertEquals("ab ", SpotifyAuthUrls.percentDecode("ab%20"))
     }
 
-    @Test
-    fun `beda huruf besar kecil pada scheme tetap cocok`() {
-        val result = SpotifyAuthUrls.parseRedirect(
-            uri = "SPOTIVIBE://CALLBACK?code=AQC123&state=STATE",
-            expectedRedirectUri = redirect,
-            expectedState = "STATE",
-        )
-        assertEquals(SpotifyAuthUrls.Redirect.Code("AQC123"), result)
-    }
-
-    @Test
-    fun `host berbeda tetap ditolak walau normalisasi aktif`() {
-        val result = SpotifyAuthUrls.parseRedirect(
-            uri = "spotivibe://lain?code=AQC123&state=STATE",
-            expectedRedirectUri = redirect,
-            expectedState = "STATE",
-        )
-        assertEquals(SpotifyAuthUrls.Redirect.NotOurs, result)
-    }
-
-    // ── describeRedirect: aman untuk log ─────────────────────────
+    // ── Log tidak boleh membocorkan kredensial ───────────────────
 
     /**
-     * Parameter `code` adalah kredensial yang bisa ditukar jadi token, jadi
-     * nilainya tidak boleh mendarat di logcat.
+     * `code` bisa ditukar jadi access token. Ia tidak boleh pernah mendarat di
+     * logcat, yang bisa dibaca lewat adb oleh siapa pun yang memegang perangkat.
      */
     @Test
-    fun `deskripsi untuk log tidak membocorkan nilai code`() {
-        val d = SpotifyAuthUrls.describeRedirect("$redirect?code=RAHASIA123&state=STATE456")
-        assertTrue("nama parameter harus ada", d.contains("code"))
-        assertTrue("base harus ada", d.contains(redirect))
-        assertTrue("nilai code bocor: $d", !d.contains("RAHASIA123"))
-        assertTrue("nilai state bocor: $d", !d.contains("STATE456"))
+    fun `deskripsi log tidak memuat nilai code`() {
+        val ringkas = SpotifyAuthUrls.describeRedirect(
+            "spotivibe://callback/?code=RAHASIA_SEKALI&state=$state&ubi=xyz"
+        )
+        assertFalse("code bocor ke log: $ringkas", ringkas.contains("RAHASIA_SEKALI"))
+        assertFalse("state bocor ke log: $ringkas", ringkas.contains(state))
+        assertTrue("nama parameter harus tetap ada", ringkas.contains("code"))
+        assertTrue(ringkas.contains("state"))
     }
 
     @Test
-    fun `deskripsi menangani uri kosong`() {
+    fun `deskripsi log menangani bentuk aneh`() {
         assertEquals("<kosong>", SpotifyAuthUrls.describeRedirect(null))
         assertEquals("<kosong>", SpotifyAuthUrls.describeRedirect(""))
+        assertTrue(SpotifyAuthUrls.describeRedirect(redirect).contains("tanpa query"))
     }
 
+    // ── URL authorize ────────────────────────────────────────────
+
     @Test
-    fun `deep link lain diabaikan`() {
-        val result = SpotifyAuthUrls.parseRedirect(
-            uri = "https://example.com/callback?code=AQC123&state=STATE",
-            expectedRedirectUri = redirect,
-            expectedState = "STATE",
+    fun `url authorize memuat semua parameter wajib`() {
+        val url = SpotifyAuthUrls.buildAuthorizeUrl(
+            clientId = "CID",
+            redirectUri = redirect,
+            codeChallenge = "CHAL",
+            state = state,
         )
-        assertEquals(SpotifyAuthUrls.Redirect.NotOurs, result)
+        assertTrue(url.startsWith(SpotifyAuthUrls.AUTHORIZE_ENDPOINT + "?"))
+        listOf(
+            "client_id=CID",
+            "response_type=code",
+            "code_challenge_method=S256",
+            "code_challenge=CHAL",
+            "state=$state",
+        ).forEach { assertTrue("hilang: $it dari $url", url.contains(it)) }
+    }
+
+    /**
+     * `app-remote-control` yang membuat grant ini juga mengizinkan App Remote
+     * bind tanpa dialog kedua. Tanpa scope itu, login berhasil tapi playback
+     * tidak pernah tersambung.
+     */
+    @Test
+    fun `scope app-remote-control selalu diminta`() {
+        assertTrue(SpotifyAuthUrls.SCOPES.contains("app-remote-control"))
+        val url = SpotifyAuthUrls.buildAuthorizeUrl("CID", redirect, "CHAL", state)
+        assertTrue(url.contains("app-remote-control"))
     }
 
     @Test
-    fun `intent launcher biasa tanpa data diabaikan`() {
-        assertEquals(
-            SpotifyAuthUrls.Redirect.NotOurs,
-            SpotifyAuthUrls.parseRedirect(null, redirect, "STATE"),
+    fun `scope dipisah spasi yang di-encode bukan koma`() {
+        val url = SpotifyAuthUrls.buildAuthorizeUrl(
+            "CID", redirect, "CHAL", state,
+            scopes = listOf("a", "b"),
         )
+        assertTrue("scope harus dipisah %20, dapat $url", url.contains("scope=a%20b"))
     }
 
     @Test
-    fun `redirect kita tanpa query dianggap malformed`() {
-        assertEquals(
-            SpotifyAuthUrls.Redirect.Malformed,
-            SpotifyAuthUrls.parseRedirect(redirect, redirect, "STATE"),
-        )
+    fun `redirect uri di-encode`() {
+        val url = SpotifyAuthUrls.buildAuthorizeUrl("CID", redirect, "CHAL", state)
+        assertTrue(url.contains("redirect_uri=spotivibe%3A%2F%2Fcallback"))
     }
 
     @Test
-    fun `redirect dengan state cocok tapi tanpa code maupun error malformed`() {
-        assertEquals(
-            SpotifyAuthUrls.Redirect.Malformed,
-            SpotifyAuthUrls.parseRedirect("$redirect?state=STATE", redirect, "STATE"),
-        )
+    fun `urutan parameter deterministik`() {
+        val a = SpotifyAuthUrls.buildAuthorizeUrl("CID", redirect, "CHAL", state)
+        val b = SpotifyAuthUrls.buildAuthorizeUrl("CID", redirect, "CHAL", state)
+        assertEquals(a, b)
     }
 
     @Test
-    fun `fragment yang ditempel browser tidak mengganggu parsing`() {
-        val result = SpotifyAuthUrls.parseRedirect(
-            uri = "$redirect?code=AQC123&state=STATE#_=_",
-            expectedRedirectUri = redirect,
-            expectedState = "STATE",
-        )
-        assertEquals(SpotifyAuthUrls.Redirect.Code("AQC123"), result)
-    }
-
-    @Test
-    fun `error diprioritaskan di atas code`() {
-        val result = SpotifyAuthUrls.parseRedirect(
-            uri = "$redirect?code=AQC&error=access_denied&state=STATE",
-            expectedRedirectUri = redirect,
-            expectedState = "STATE",
-        )
-        assertEquals(SpotifyAuthUrls.Redirect.Denied("access_denied"), result)
-    }
-
-    // ── encoding helper ──────────────────────────────────────────
-
-    @Test
-    fun `percent decode tidak mengubah plus jadi spasi`() {
-        // Komponen query URI, bukan form-encoding. Code Spotify bisa memuat
-        // '+', dan mengubahnya jadi spasi akan merusak penukaran token.
-        assertEquals("a+b", SpotifyAuthUrls.percentDecode("a+b"))
-    }
-
-    @Test
-    fun `percent decode menangani escape valid`() {
-        assertEquals("spotivibe://callback", SpotifyAuthUrls.percentDecode("spotivibe%3A%2F%2Fcallback"))
-    }
-
-    @Test
-    fun `percent decode membiarkan escape rusak apa adanya`() {
-        assertEquals("100%zz", SpotifyAuthUrls.percentDecode("100%zz"))
-    }
-
-    @Test
-    fun `percent encode memakai persen-20 untuk spasi`() {
-        assertEquals("a%20b", SpotifyAuthUrls.percentEncode("a b"))
-    }
-
-    @Test
-    fun `percent encode meloloskan karakter unreserved`() {
-        assertEquals("aZ0-._~", SpotifyAuthUrls.percentEncode("aZ0-._~"))
-    }
-
-    @Test
-    fun `parse query mengambil kemunculan pertama untuk key duplikat`() {
-        assertEquals(
-            mapOf("a" to "1", "b" to "2"),
-            SpotifyAuthUrls.parseQuery("a=1&b=2&a=3"),
-        )
+    fun `masukan kosong ditolak di depan`() {
+        listOf(
+            { SpotifyAuthUrls.buildAuthorizeUrl("", redirect, "CHAL", state) },
+            { SpotifyAuthUrls.buildAuthorizeUrl("CID", "", "CHAL", state) },
+            { SpotifyAuthUrls.buildAuthorizeUrl("CID", redirect, "", state) },
+            { SpotifyAuthUrls.buildAuthorizeUrl("CID", redirect, "CHAL", "") },
+        ).forEach { blok ->
+            try {
+                blok()
+                throw AssertionError("seharusnya menolak masukan kosong")
+            } catch (e: IllegalArgumentException) {
+                // memang ini yang diharapkan
+            }
+        }
     }
 }

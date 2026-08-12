@@ -14,7 +14,16 @@ import com.spotify.protocol.types.ImageUri
 import com.spotify.protocol.types.PlayerState
 import com.tglabs.spotivibe.BuildConfig
 import com.tglabs.spotivibe.data.auth.SpotifyAuthRepository
+import com.tglabs.spotivibe.domain.ConnPhase
 import com.tglabs.spotivibe.domain.NowPlaying
+import com.tglabs.spotivibe.domain.authIssueOf
+import com.tglabs.spotivibe.domain.connectFailureMessage
+import com.tglabs.spotivibe.domain.shouldAbandonToDisconnected
+import com.tglabs.spotivibe.domain.shouldFetchAlbumArt
+import com.tglabs.spotivibe.domain.shouldHandleRemoteLost
+import com.tglabs.spotivibe.domain.shouldReportRejectedRedirect
+import com.tglabs.spotivibe.domain.shouldReportTimeout
+import com.tglabs.spotivibe.domain.shouldStartAutoConnect
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -71,6 +80,15 @@ class SpotifyConnection(
 
     private var lastFetchedImageUri: String? = null
 
+    /** Fase saat ini dalam bentuk yang dipahami keputusan murni di domain. */
+    private val phase: ConnPhase
+        get() = when (_connectionState.value) {
+            is ConnectionState.Disconnected -> ConnPhase.Disconnected
+            is ConnectionState.Connecting -> ConnPhase.Connecting
+            is ConnectionState.Connected -> ConnPhase.Connected
+            is ConnectionState.Error -> ConnPhase.Error
+        }
+
     /**
      * Menandai bahwa kita sendiri yang memutus. Tanpa ini, teardown memicu
      * callback onStop subscription dan [onRemoteLost] menganggapnya kehilangan
@@ -123,7 +141,7 @@ class SpotifyConnection(
      * percobaan berikutnya toh menimpanya.
      */
     fun abandonPendingAuthorization() {
-        if (_connectionState.value is ConnectionState.Connecting) {
+        if (shouldAbandonToDisconnected(phase)) {
             Log.d(TAG, "Kembali tanpa redirect — kembalikan ke Disconnected")
             _connectionState.value = ConnectionState.Disconnected
         }
@@ -141,7 +159,7 @@ class SpotifyConnection(
                 // Kalau kita SEDANG menunggu login dan redirect-nya justru
                 // ditolak, jangan diam. Membiarkan state di Connecting mengunci
                 // UI tanpa tombol Connect dan tanpa pesan apapun.
-                if (_connectionState.value is ConnectionState.Connecting) {
+                if (shouldReportRejectedRedirect(phase)) {
                     Log.w(TAG, "Redirect ditolak saat menunggu login: $uri")
                     _connectionState.value = ConnectionState.Error(
                         "Unrecognised sign-in response. Try connecting again."
@@ -184,9 +202,7 @@ class SpotifyConnection(
      * Connect, langsung bind App Remote.
      */
     fun tryAutoConnect(context: Context) {
-        if (_connectionState.value is ConnectionState.Connected ||
-            _connectionState.value is ConnectionState.Connecting
-        ) {
+        if (!shouldStartAutoConnect(phase)) {
             Log.d(TAG, "tryAutoConnect() diabaikan -- sudah ${_connectionState.value}")
             return
         }
@@ -244,8 +260,7 @@ class SpotifyConnection(
                         }
                     } else {
                         _connectionState.value = ConnectionState.Error(
-                            "${throwable.javaClass.simpleName}: " +
-                                (throwable.message ?: "").ifBlank { "unknown" }
+                            connectFailureMessage(throwable.javaClass.simpleName, throwable.message)
                         )
                     }
                 }
@@ -277,19 +292,15 @@ class SpotifyConnection(
                     onAuthorizationLost()
                 } else {
                     _connectionState.value = ConnectionState.Error(
-                        "${throwable.javaClass.simpleName}: " +
-                            (throwable.message ?: "").ifBlank { "unknown" }
+                        connectFailureMessage(throwable.javaClass.simpleName, throwable.message)
                     )
                 }
             }
         })
     }
 
-    private fun isAuthIssue(throwable: Throwable): Boolean {
-        val name = throwable.javaClass.simpleName
-        val msg = throwable.message.orEmpty().lowercase()
-        return "NotAuthorized" in name || "NotLoggedIn" in name || "authorization" in msg
-    }
+    private fun isAuthIssue(throwable: Throwable): Boolean =
+        authIssueOf(throwable.javaClass.simpleName, throwable.message)
 
     /**
      * Grant sudah tidak berlaku (user cabut akses di spotify.com, atau
@@ -324,7 +335,7 @@ class SpotifyConnection(
     private fun scheduleTimeout() {
         cancelTimeout()
         timeoutRunnable = Runnable {
-            if (_connectionState.value is ConnectionState.Connecting) {
+            if (shouldReportTimeout(phase)) {
                 Log.w(TAG, "Connection timeout -- tidak ada callback dalam 15 detik")
                 _connectionState.value = ConnectionState.Error(
                     "Timed out. Make sure the Spotify app is running, then try again."
@@ -370,8 +381,7 @@ class SpotifyConnection(
      * dibuang: kredensialnya masih sah, cuma app Spotify-nya yang pergi.
      */
     private fun onRemoteLost(reason: String) {
-        if (tearingDown) return
-        if (_connectionState.value !is ConnectionState.Connected) return
+        if (!shouldHandleRemoteLost(tearingDown, phase)) return
         Log.w(TAG, "App Remote hilang ($reason)")
         appRemote = null
         _nowPlaying.value = null
@@ -382,7 +392,7 @@ class SpotifyConnection(
 
     /** Fetch album cover saat track berubah. Cache via lastFetchedImageUri. */
     private fun maybeFetchAlbumArt(remote: SpotifyAppRemote, imageUriRaw: String?) {
-        if (imageUriRaw == lastFetchedImageUri) return
+        if (!shouldFetchAlbumArt(imageUriRaw, lastFetchedImageUri)) return
         lastFetchedImageUri = imageUriRaw
         _albumBitmap.value = null
         if (imageUriRaw.isNullOrBlank()) return

@@ -6,6 +6,7 @@ import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import com.tglabs.spotivibe.domain.LyricsOverride
+import com.tglabs.spotivibe.domain.cacheFileName
 import com.tglabs.spotivibe.domain.LyricsOverrideStore
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.SyncedLine
@@ -28,10 +29,19 @@ import java.io.File
  * override dibatasi oleh seberapa sering user menemukan lirik salah, bukan oleh
  * berapa banyak lagu yang diputar. Cache tumbuh sendiri, override tidak.
  */
-class FileLyricsOverrideStore(context: Context) : LyricsOverrideStore {
+class FileLyricsOverrideStore(private val dir: File) : LyricsOverrideStore {
 
-    private val dir: File = File(context.filesDir, "lyrics-overrides").apply {
-        if (!exists()) mkdirs()
+    /**
+     * Direktori di-inject, bukan diturunkan dari Context di dalam.
+     *
+     * Tanpa ini seluruh kelas hanya bisa dijalankan di perangkat, padahal
+     * isinya adalah keputusan user yang tidak boleh hilang: pilihan lirik
+     * manual, yang tidak punya sumber lain untuk dipulihkan.
+     */
+    constructor(context: Context) : this(File(context.filesDir, OVERRIDE_DIR))
+
+    init {
+        if (!dir.exists()) dir.mkdirs()
     }
 
     private val moshi: Moshi = Moshi.Builder()
@@ -63,9 +73,8 @@ class FileLyricsOverrideStore(context: Context) : LyricsOverrideStore {
         Unit
     }
 
-    /** Sanitize trackId untuk nama file, sama seperti [LyricsCache]. */
-    private fun fileFor(trackId: String): File =
-        File(dir, "${trackId.replace(':', '_')}.json")
+    /** Sanitize trackId untuk nama file, aturan yang sama dengan cache lirik. */
+    private fun fileFor(trackId: String): File = File(dir, cacheFileName(trackId))
 
     // ── Bentuk tersimpan ─────────────────────────────────────────
     //
@@ -128,5 +137,8 @@ class FileLyricsOverrideStore(context: Context) : LyricsOverrideStore {
 
     companion object {
         private const val TAG = "LyricsOverrideStore"
+
+        /** filesDir, BUKAN cacheDir. Keputusan user tidak boleh dihapus sistem. */
+        const val OVERRIDE_DIR = "lyrics-overrides"
     }
 }

@@ -33,8 +33,8 @@ android {
         applicationId = "com.tglabs.spotivibe"
         minSdk = 26
         targetSdk = 36
-        versionCode = 18
-        versionName = "0.6.4"
+        versionCode = 19
+        versionName = "0.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

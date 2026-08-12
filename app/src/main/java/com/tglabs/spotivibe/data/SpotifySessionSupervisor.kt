@@ -88,6 +88,14 @@ class SpotifySessionSupervisor(
         _reconnecting.value = false
     }
 
+    /** Jembatan ke keputusan murni di domain. */
+    private fun companionState(decision: ReconnectDecision): CompanionState =
+        when (com.tglabs.spotivibe.domain.companionFor(decision)) {
+            com.tglabs.spotivibe.domain.Companion.Undetermined -> CompanionState.Undetermined
+            com.tglabs.spotivibe.domain.Companion.Running -> CompanionState.Running
+            com.tglabs.spotivibe.domain.Companion.Stopped -> CompanionState.Stopped
+        }
+
     private suspend fun supervise(context: Context) {
         var consecutiveFailures = 0
 
@@ -100,8 +108,8 @@ class SpotifySessionSupervisor(
 
             when (decision) {
                 ReconnectDecision.Idle -> {
-                    _shouldRun.value = CompanionState.Stopped
-                    _reconnecting.value = false
+                    _shouldRun.value = companionState(decision)
+                    _reconnecting.value = com.tglabs.spotivibe.domain.reconnectingFor(decision)
                     consecutiveFailures = 0
                     Log.d(TAG, "Tidak ada sesi — menunggu login")
                     // Menggantung sampai user login lagi. Tidak ada polling.
@@ -111,20 +119,19 @@ class SpotifySessionSupervisor(
                 }
 
                 ReconnectDecision.AlreadyLive -> {
-                    _shouldRun.value = CompanionState.Running
-                    _reconnecting.value = false
+                    _shouldRun.value = companionState(decision)
+                    _reconnecting.value = com.tglabs.spotivibe.domain.reconnectingFor(decision)
                     consecutiveFailures = 0
                     // Tidur sampai link keluar dari kondisi hidup.
                     connection.connectionState.first {
-                        val s = it.toLinkState()
-                        s != LinkState.Connected && s != LinkState.Connecting
+                        com.tglabs.spotivibe.domain.linkNeedsReconnect(it.toLinkState())
                     }
                     Log.d(TAG, "Link putus — akan menyambung ulang")
                 }
 
                 is ReconnectDecision.RetryAfter -> {
-                    _shouldRun.value = CompanionState.Running
-                    if (decision.delayMs > 0) {
+                    _shouldRun.value = companionState(decision)
+                    if (com.tglabs.spotivibe.domain.reconnectingFor(decision)) {
                         _reconnecting.value = true
                         Log.d(
                             TAG,

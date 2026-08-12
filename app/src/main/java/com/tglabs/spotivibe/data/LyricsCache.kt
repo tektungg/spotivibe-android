@@ -1,5 +1,8 @@
 package com.tglabs.spotivibe.data
 
+import com.tglabs.spotivibe.domain.POSITIVE_TTL_MS
+import com.tglabs.spotivibe.domain.cacheFileName
+import com.tglabs.spotivibe.domain.isCacheExpired
 import android.content.Context
 import android.util.Log
 import com.squareup.moshi.JsonClass
@@ -69,10 +72,8 @@ class LyricsCache(context: Context) : LyricsDiskCache {
         return try {
             val json = file.readText()
             val entry = adapter.fromJson(json) ?: return null
-            val ageMs = System.currentTimeMillis() - entry.cachedAt
-            val ttl = if (entry.hasContent) POSITIVE_TTL_MS else NEGATIVE_TTL_MS
-            if (ageMs > ttl) {
-                Log.d(TAG, "Cache expired for $trackId (age=${ageMs}ms, ttl=${ttl}ms)")
+            if (isCacheExpired(entry.cachedAt, System.currentTimeMillis(), entry.hasContent)) {
+                Log.d(TAG, "Cache expired for $trackId")
                 file.delete()
                 return null
             }
@@ -146,11 +147,7 @@ class LyricsCache(context: Context) : LyricsDiskCache {
         Log.d(TAG, "Sweep cache: ${buang.size} dari ${files.size} file dibuang")
     }
 
-    /** Sanitize trackId untuk pakai sebagai nama file — `:` → `_`. */
-    private fun fileFor(trackId: String): File {
-        val safe = trackId.replace(':', '_')
-        return File(dir, "$safe.json")
-    }
+    private fun fileFor(trackId: String): File = File(dir, cacheFileName(trackId))
 
     @JsonClass(generateAdapter = false)
     internal data class SyncedWordDto(
@@ -197,9 +194,6 @@ class LyricsCache(context: Context) : LyricsDiskCache {
 
     companion object {
         private const val TAG = "LyricsCache"
-        private const val DAY_MS = 24L * 60L * 60L * 1000L
-        private const val POSITIVE_TTL_MS = 30L * DAY_MS
-        private const val NEGATIVE_TTL_MS = 1L * DAY_MS
 
         /**
          * Cukup untuk beberapa playlist besar tanpa membuang yang masih mungkin

@@ -4,6 +4,14 @@ import android.graphics.Bitmap
 import android.util.Log
 import androidx.compose.ui.graphics.Color
 import androidx.palette.graphics.Palette
+import com.tglabs.spotivibe.domain.lineAt
+import com.tglabs.spotivibe.domain.pickAccentArgb
+import com.tglabs.spotivibe.domain.shouldApplyAccent
+import com.tglabs.spotivibe.domain.shouldApplyFetchedLyrics
+import com.tglabs.spotivibe.domain.shouldCheckProduct
+import com.tglabs.spotivibe.domain.shouldPreload
+import com.tglabs.spotivibe.domain.shouldPublishLineIndex
+import com.tglabs.spotivibe.domain.shouldRecomputeAccent
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.LyricsState
 import com.tglabs.spotivibe.domain.NowPlaying
@@ -73,7 +81,7 @@ class PlaybackController(
         lyrics,
         _currentLineIndex,
     ) { lyrics, idx ->
-        lyrics?.synced?.getOrNull(idx)
+        lineAt(lyrics?.synced, idx)
     }.stateIn(scope, SharingStarted.Eagerly, null)
 
     // ── Romaji state (key = SyncedLine.id) ───────────────────────
@@ -147,13 +155,13 @@ class PlaybackController(
                         album = t.album,
                         durationMs = t.durationMs,
                     )
-                    if (connection.nowPlaying.value?.id == trackId) {
+                    if (shouldApplyFetchedLyrics(trackId, connection.nowPlaying.value?.id)) {
                         applyLyrics(fetched)
                     }
                     // Cek /me sampai dapat jawaban. Gagal di sini tidak lagi
                     // menyembunyikan kontrol: capability tetap Unknown, dan
                     // Unknown menampilkan transport.
-                    if (_product.value == null) {
+                    if (shouldCheckProduct(_product.value)) {
                         scope.launch {
                             val product = webApiClient.getProduct()
                             if (product != null) {
@@ -168,7 +176,7 @@ class PlaybackController(
                     scope.launch {
                         val queue = webApiClient.getQueue(limit = 3)
                         queue.forEach { next ->
-                            if (next.id.isBlank()) return@forEach
+                            if (!shouldPreload(next.id)) return@forEach
                             Log.d(TAG, "Preload lyrics: ${next.title}")
                             lyricsRepository.fetchLyrics(
                                 trackId = next.id,
@@ -230,7 +238,7 @@ class PlaybackController(
         //    Cache via reference equality supaya tidak recompute untuk bitmap sama.
         scope.launch {
             connection.albumBitmap.collect { bitmap ->
-                if (bitmap === lastAccentBitmap) return@collect
+                if (!shouldRecomputeAccent(bitmap, lastAccentBitmap)) return@collect
                 lastAccentBitmap = bitmap
                 accentJob?.cancel()
                 if (bitmap == null) {
@@ -241,7 +249,7 @@ class PlaybackController(
                     val accent = withContext(Dispatchers.Default) {
                         extractAccent(bitmap)
                     }
-                    if (lastAccentBitmap === bitmap) {
+                    if (shouldApplyAccent(bitmap, lastAccentBitmap)) {
                         _accent.value = accent
                     }
                 }
@@ -299,14 +307,14 @@ class PlaybackController(
                 durationMs = t.durationMs,
                 allowRetry = false,
             )
-            if (connection.nowPlaying.value?.id == t.id) applyLyrics(fetched)
+            if (shouldApplyFetchedLyrics(t.id, connection.nowPlaying.value?.id)) applyLyrics(fetched)
         }
     }
 
     /** Tanya engine, publikasikan kalau berubah. */
     private fun publishLineIndex() {
         val idx = syncEngine.activeIndex()
-        if (idx != _currentLineIndex.value) _currentLineIndex.value = idx
+        if (shouldPublishLineIndex(idx, _currentLineIndex.value)) _currentLineIndex.value = idx
     }
 
     /**
@@ -325,10 +333,12 @@ class PlaybackController(
     private fun extractAccent(bitmap: Bitmap): Color {
         return try {
             val palette = Palette.from(bitmap).maximumColorCount(16).generate()
-            val argb = palette.getVibrantColor(0)
-                .takeIf { it != 0 }
-                ?: palette.getLightVibrantColor(0).takeIf { it != 0 }
-                ?: palette.getDominantColor(0xFFEC6A5C.toInt()) // Coral fallback
+            val argb = pickAccentArgb(
+                vibrant = palette.getVibrantColor(0),
+                lightVibrant = palette.getLightVibrantColor(0),
+                dominant = palette.getDominantColor(0),
+                fallback = CORAL_FALLBACK_ARGB,
+            )
             AccentLock.lockedAccent(Color(argb), dark = true)
         } catch (t: Throwable) {
             Log.w(TAG, "Palette extract failed: ${t.message}")
@@ -341,5 +351,8 @@ class PlaybackController(
 
         /** Jeda saat tidak ada lirik synced untuk diikuti. */
         private const val IDLE_TICK_MS = 500L
+
+        /** Dipakai saat album art tidak punya swatch yang bisa dipakai sama sekali. */
+        private val CORAL_FALLBACK_ARGB = 0xFFEC6A5C.toInt()
     }
 }
