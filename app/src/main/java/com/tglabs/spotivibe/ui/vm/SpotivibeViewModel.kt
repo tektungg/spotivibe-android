@@ -12,6 +12,7 @@ import com.tglabs.spotivibe.data.SpotifyConnection
 import com.tglabs.spotivibe.data.SpotifyConnection.ConnectionState
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.UiState
+import com.tglabs.spotivibe.data.supportedScripts
 import com.tglabs.spotivibe.domain.hasRomanizableText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -144,7 +145,11 @@ class SpotivibeViewModel(
             ConnectionState.Connected -> track?.let { t ->
                 val synced = (lyricsState as? com.tglabs.spotivibe.domain.LyricsState.Ready)
                     ?.result?.synced
-                val canRoma = synced?.let { hasRomanizableText(it.map { l -> l.text }) } ?: false
+                // Script yang didukung VARIAN ini, bukan semua script.
+                // `lite` tanpa kamus Jepang tidak boleh menawarkan tombolnya.
+                val canRoma = synced?.let {
+                    hasRomanizableText(it.map { l -> l.text }, supportedScripts())
+                } ?: false
                 UiState.Playing(
                     track = t,
                     albumBitmap = bitmap,

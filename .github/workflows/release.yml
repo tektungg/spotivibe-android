@@ -95,34 +95,55 @@ jobs:
           } > keystore.properties
           echo "spotify.clientId=$SPOTIFY_CLIENT_ID" > local.properties
 
-      - name: Unit test
-        run: ./gradlew testDebugUnitTest --console=plain
+      # KEDUA varian. Menguji satu saja membuat separuh matriksnya tidak pernah
+      # dijalankan, dan yang berbeda di antara keduanya justru romanisasi.
+      - name: Unit test kedua varian
+        run: ./gradlew testFullDebugUnitTest testLiteDebugUnitTest --console=plain
 
-      - name: Build release
-        run: ./gradlew assembleRelease --console=plain
+      - name: Build release kedua varian
+        run: ./gradlew assembleFullRelease assembleLiteRelease --console=plain
 
       # Kalau keystore.properties gagal terbaca, Gradle diam-diam jatuh ke debug
       # signing dan APK-nya tidak bisa memasang di atas rilis sebelumnya. Log
       # build-nya tetap hijau. Ini yang menangkapnya.
-      - name: Verifikasi tanda tangan
+      #
+      # Kedua APK diperiksa. Memeriksa satu saja berarti varian yang lain bisa
+      # terbit dengan debug key tanpa ada yang tahu.
+      - name: Verifikasi tanda tangan kedua varian
         run: |
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          "$BT/apksigner" verify --print-certs \
-            app/build/outputs/apk/release/app-release.apk | tee /tmp/certs.txt
-          if grep -qi "CN=Android Debug" /tmp/certs.txt; then
-            echo "::error::APK ditandatangani debug key. keystore.properties tidak terbaca."
-            exit 1
-          fi
+          for varian in full lite; do
+            apk="app/build/outputs/apk/$varian/release/app-$varian-release.apk"
+            if [ ! -f "$apk" ]; then
+              echo "::error::APK $varian tidak ketemu di $apk"
+              exit 1
+            fi
+            echo "--- $varian ---"
+            "$BT/apksigner" verify --print-certs "$apk" | tee "/tmp/certs-$varian.txt"
+            if grep -qi "CN=Android Debug" "/tmp/certs-$varian.txt"; then
+              echo "::error::APK $varian ditandatangani debug key."
+              exit 1
+            fi
+          done
 
       - name: Beri nama berversi
         id: apk
         run: |
-          versi=$(python3 -c "import json;print(json.load(open('app/build/outputs/apk/release/output-metadata.json'))['elements'][0]['versionName'])")
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk "dist/spotivibe-$versi.apk"
+          versi=$(python3 -c "import json;print(json.load(open('app/build/outputs/apk/full/release/output-metadata.json'))['elements'][0]['versionName'])")
+          cp app/build/outputs/apk/full/release/app-full-release.apk "dist/spotivibe-$versi.apk"
+          cp app/build/outputs/apk/lite/release/app-lite-release.apk "dist/spotivibe-$versi-lite.apk"
           echo "versi=$versi" >> "$GITHUB_OUTPUT"
-          echo "path=dist/spotivibe-$versi.apk" >> "$GITHUB_OUTPUT"
           ls -la dist/
+          # Varian lite HARUS jauh lebih kecil. Kalau ukurannya mirip, kuromoji
+          # ikut terbawa dan seluruh guna varian ini hilang tanpa satu pun error.
+          penuh=$(stat -c%s "dist/spotivibe-$versi.apk")
+          ringan=$(stat -c%s "dist/spotivibe-$versi-lite.apk")
+          echo "full=$penuh lite=$ringan"
+          if [ "$ringan" -ge $((penuh / 2)) ]; then
+            echo "::error::APK lite ($ringan B) tidak jauh lebih kecil dari full ($penuh B). Kuromoji kemungkinan ikut terbawa."
+            exit 1
+          fi
 
       # APK selalu diunggah sebagai artifact, termasuk saat dijalankan manual
       # tanpa tag. Tanpa ini workflow_dispatch tidak menghasilkan apa-apa yang
@@ -131,7 +152,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: spotivibe-${{ steps.apk.outputs.versi }}
-          path: ${{ steps.apk.outputs.path }}
+          path: dist/*.apk
           retention-days: 90
 
       # gh CLI sudah terpasang di runner. Tidak perlu action pihak ketiga.
@@ -141,8 +162,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            "${{ steps.apk.outputs.path }}" \
+            dist/*.apk \
             --title "Spotivibe ${{ steps.apk.outputs.versi }}" \
+            --notes-file .github/release-notes.md \
             --generate-notes
 
       # Rahasia dihapus walau langkah sebelumnya gagal. Runner memang dibuang

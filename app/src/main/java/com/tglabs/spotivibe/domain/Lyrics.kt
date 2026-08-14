@@ -113,8 +113,25 @@ fun detectDocumentScript(lines: List<String>): Script {
 }
 
 /** Cek apakah ada minimal 1 baris yang non-Latin → bisa di-romanize */
-fun hasRomanizableText(lines: List<String>): Boolean =
-    lines.any { detectScript(it) != Script.LATIN }
+/**
+ * Script yang bisa diromanisasi kalau varian build-nya membawa semua mesinnya.
+ *
+ * LATIN tidak ada di sini: teks Latin tidak perlu diromanisasi.
+ */
+val ROMANIZABLE_ALL: Set<Script> = setOf(Script.JA, Script.KO, Script.ZH)
+
+/**
+ * Ada baris yang bisa diromanisasi oleh mesin yang TERSEDIA di varian ini.
+ *
+ * [supported] bukan hiasan. Varian `lite` tidak membawa kamus Jepang, dan tanpa
+ * penyaringan ini tombol romanisasi tetap muncul untuk lagu berbahasa Jepang
+ * lalu tidak melakukan apa pun saat ditekan. Kontrol yang ada tapi tidak
+ * berfungsi lebih membingungkan daripada kontrol yang tidak ada.
+ */
+fun hasRomanizableText(
+    lines: List<String>,
+    supported: Set<Script> = ROMANIZABLE_ALL,
+): Boolean = lines.any { detectScript(it) in supported }
 
 /** Tag metadata LRC yang bukan lirik: `[ar:...]`, `[ti:...]`, dan kawan-kawan. */
 private val METADATA_TAG = Regex(

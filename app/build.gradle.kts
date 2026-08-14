@@ -47,6 +47,34 @@ android {
         manifestPlaceholders["redirectHostName"] = "callback"
     }
 
+    /**
+     * Dua varian, dibedakan HANYA oleh dukungan Jepang.
+     *
+     * Kamus IPADIC milik kuromoji mengisi 12,71 dari 15,75 MB APK, yaitu 81%
+     * ukurannya untuk satu bahasa. Kanji tidak bisa diromanisasi tanpa kamus
+     * morfologis, jadi tidak ada versi ringan dari kemampuan itu: pilihannya
+     * memuat kamusnya atau tidak mendukung Jepang.
+     *
+     * Play Feature Delivery tidak dipakai karena distribusinya lewat GitHub
+     * Releases, bukan Play Store, dan modul on-demand butuh Play.
+     *
+     * applicationId keduanya SAMA, jadi lite menimpa full dan sebaliknya. Itu
+     * disengaja: dua app dengan nama sama yang terpasang berbarengan akan
+     * berebut redirect auth `spotivibe://callback`, dan itu persis bug yang
+     * pernah membuat login tidak bisa selesai.
+     */
+    flavorDimensions += "romanization"
+    productFlavors {
+        create("full") {
+            dimension = "romanization"
+            isDefault = true
+        }
+        create("lite") {
+            dimension = "romanization"
+            versionNameSuffix = "-lite"
+        }
+    }
+
     signingConfigs {
         create("release") {
             if (keystorePropsFile.exists()) {
@@ -143,7 +171,10 @@ dependencies {
     implementation(libs.moshi.kotlin)
 
     // Romanization — JA (kuromoji), ZH (pinyin4j), KO (manual port di RomanizationService)
-    implementation(libs.kuromoji.ipadic)
+    // kuromoji HANYA di varian full. Ini satu-satunya baris yang membuat APK
+    // lite turun dari 15,75 MB jadi sekitar 3 MB.
+    "fullImplementation"(libs.kuromoji.ipadic)
+    // pinyin4j ada di KEDUA varian: cuma 0,21 MB, tidak layak dibuang.
     implementation(libs.pinyin4j)
 
     // DataStore — persist toggle preferences

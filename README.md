@@ -16,7 +16,9 @@ Android native companion untuk Spotify — synced lyrics dengan romanization (JP
   - Jepang (kana + kanji) → Romaji Hepburn via [kuromoji-ipadic](https://github.com/atilika/kuromoji)
   - Korea (Hangul) → Revised Romanization (port internal dari rules pemerintah)
   - Mandarin (Hanzi) → Pinyin dengan tone marks via [pinyin4j](https://github.com/belerweb/pinyin4j)
-  - Tombol toggle cuma muncul saat lirik mengandung script non-Latin
+  - Tombol toggle cuma muncul saat lirik mengandung script non-Latin **yang
+    didukung varian ini**. Varian `lite` tidak membawa kamus Jepang, jadi
+    tombolnya tidak muncul untuk lagu Jepang di sana
   - Script ditentukan **sekali per lagu**, bukan per baris. Kana eksklusif milik
     Jepang dan hangul eksklusif milik Korea, tapi kanji dipakai bersama Jepang
     dan Mandarin. Kalau diputuskan per baris, baris Jepang yang isinya kanji saja
@@ -100,13 +102,14 @@ $keytool = "C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe"
 # lalu buat keystore.properties, lihat keystore.properties.example
 ```
 
-Setiap rilis, jalankan script-nya. Jangan `assembleRelease` langsung:
+Setiap rilis, jalankan script-nya. Jangan `assembleFullRelease` langsung:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\release.ps1
 ```
 
-Script yang menjalankan test, build, lalu menaruh APK di `dist/spotivibe-<versi>.apk`.
+Script yang menjalankan test kedua varian, build keduanya, lalu menaruh hasilnya
+di `dist/`.
 Nama berkas dan folder tujuan diturunkan dari `versionName` di `app/build.gradle.kts`,
 bukan diketik ulang, karena langkah salin manual sudah pernah salah tujuan sekali.
 Script juga mencari JDK Android Studio sendiri kalau `JAVA_HOME` belum diset, dan
@@ -117,14 +120,45 @@ jatuh ke debug signing.
 
 `dist/` masuk `.gitignore` (`*.apk`). APK tidak pernah di-commit.
 
+## Dua varian APK
+
+| Varian | Jepang | Korea | Mandarin | Ukuran |
+|---|---|---|---|---|
+| `full` | ya | ya | ya | ~15,8 MB |
+| `lite` | tidak | ya | ya | ~3 MB |
+
+Bedanya **hanya** dukungan romanisasi Jepang. Kamus IPADIC milik kuromoji
+mengisi 12,71 dari 15,75 MB APK, yaitu 81% ukurannya untuk satu bahasa. Kanji
+tidak bisa diromanisasi tanpa kamus morfologis, jadi tidak ada versi ringan dari
+kemampuan itu: pilihannya memuat kamusnya atau tidak mendukung Jepang.
+
+Korea dan Mandarin ada di **kedua** varian. Hangul dibaca per suku kata tanpa
+kamus, dan tabel pinyin4j cuma 0,21 MB.
+
+Play Feature Delivery tidak dipakai karena distribusinya lewat GitHub Releases,
+bukan Play Store, dan modul on-demand butuh Play.
+
+Pemisahannya bergantung pada satu syarat: tidak ada kode di `src/main/` yang
+menyebut `com.atilika.kuromoji`. Satu import saja membuat varian `lite` gagal
+compile. `FlavorGuardTest` memindai sumbernya dan menangkap itu lebih awal,
+sekaligus memastikan tiga deklarasi per-varian tetap sepakat satu sama lain.
+
+applicationId keduanya **sama**, jadi yang satu menimpa yang lain saat dipasang.
+Itu disengaja: dua app terpasang berbarengan akan berebut redirect auth
+`spotivibe://callback`.
+
 ## Rilis otomatis lewat GitHub Actions
 
-Dua workflow di `.github/workflows/`:
+Tiga workflow di `.github/workflows/`:
 
 | Workflow | Pemicu | Hasil |
 |---|---|---|
-| `ci.yml` | push ke `main`, PR | unit test + lint. Tanpa secret |
-| `release.yml` | tag `v*` | APK ditandatangani, terpasang di GitHub Release |
+| `ci.yml` | push ke `main`, PR | unit test kedua varian + lint. Tanpa secret, di bawah semenit |
+| `ui-tests.yml` | PR, harian, manual | test instrumentasi Compose di emulator API 26 dan 34 |
+| `release.yml` | tag `v*` | dua APK ditandatangani, terpasang di GitHub Release |
+
+Test instrumentasi sengaja **tidak** ikut di `ci.yml`. Emulator butuh menit,
+bukan detik, dan gate yang lambat pelan-pelan berhenti dibaca orang.
 
 ### Sekali saja: pasang secret
 

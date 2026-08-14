@@ -1,7 +1,6 @@
 package com.tglabs.spotivibe.data
 
 import android.util.Log
-import com.atilika.kuromoji.ipadic.Tokenizer
 import com.tglabs.spotivibe.domain.Script
 import com.tglabs.spotivibe.domain.detectDocumentScript
 import com.tglabs.spotivibe.domain.detectScript
@@ -107,12 +106,15 @@ class RomanizationService {
 
     // ---- JA (kuromoji + Hepburn) -------------------------------------------------
 
-    private val tokenizer: Tokenizer by lazy {
-        Log.d(TAG, "Initializing kuromoji tokenizer (one-time, ~1-2s)…")
-        Tokenizer.Builder().build().also {
-            Log.d(TAG, "kuromoji tokenizer ready")
-        }
-    }
+    /**
+     * null di varian `lite`, yang tidak membawa kamus Jepang.
+     *
+     * Sengaja tidak ada implementasi kosong sebagai gantinya. Dengan null,
+     * lapisan di atasnya tahu Jepang tidak didukung dan tidak menawarkan
+     * tombol romanisasi untuk lagu berbahasa Jepang; implementasi kosong akan
+     * membuat tombolnya ada tapi tidak melakukan apa pun.
+     */
+    private val japanese: JapaneseTokenizer? by lazy { createJapaneseTokenizer() }
 
     // ---- ZH (pinyin4j) -----------------------------------------------------------
 
@@ -147,7 +149,7 @@ class RomanizationService {
 
         val result = try {
             when (script) {
-                Script.JA -> romanizeJapanese(text).takeIf { it.isNotBlank() }
+                Script.JA -> romanizeJapanese(text)?.takeIf { it.isNotBlank() }
                 Script.KO -> romanizeKorean(text).takeIf { it.isNotBlank() }
                 Script.ZH -> romanizeChinese(text).takeIf { it.isNotBlank() }
                 Script.LATIN -> null
@@ -199,28 +201,27 @@ class RomanizationService {
     // ---- Japanese ----------------------------------------------------------------
 
     /**
-     * Tokenize via kuromoji, ambil katakana reading per token, convert
-     * katakana → hiragana → Hepburn romaji, lalu join dengan spasi.
+     * Ambil bacaan katakana per token, ubah katakana → hiragana → Hepburn,
+     * lalu gabung dengan spasi.
+     *
+     * Mengembalikan null kalau varian ini tidak mendukung Jepang, dan itu beda
+     * dari string kosong: null berarti "tidak bisa", kosong berarti "bisa, tapi
+     * tidak ada hasilnya".
      */
-    private fun romanizeJapanese(text: String): String {
-        val tokens = tokenizer.tokenize(text)
+    private fun romanizeJapanese(text: String): String? {
+        val mesin = japanese ?: return null
+        val tokens = mesin.tokenize(text)
         val sb = StringBuilder()
-        for ((i, tok) in tokens.withIndex()) {
-            val surface = tok.surface
-            // reading bisa null / "*" untuk token tidak dikenal (symbol, latin)
-            val readingKatakana = tok.reading?.takeIf { it.isNotBlank() && it != "*" }
-
-            val piece = if (readingKatakana != null) {
-                hepburnFromKana(katakanaToHiragana(readingKatakana))
-            } else {
-                // Token non-Japanese (punctuation, ASCII, dll) — pass through
-                surface
-            }
+        for (tok in tokens) {
+            // readingKatakana sudah dinormalkan di implementasi: null berarti
+            // token tidak dikenal, misalnya tanda baca atau huruf Latin, dan
+            // surface-nya dipakai apa adanya.
+            val piece = tok.readingKatakana
+                ?.let { hepburnFromKana(katakanaToHiragana(it)) }
+                ?: tok.surface
             if (piece.isBlank()) continue
             if (sb.isNotEmpty()) sb.append(' ')
             sb.append(piece)
-            // Suppress unused-i lint
-            @Suppress("UNUSED_VARIABLE") val _i = i
         }
         return sb.toString().trim()
     }

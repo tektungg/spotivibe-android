@@ -55,33 +55,53 @@ if (-not $env:JAVA_HOME -or -not (Test-Path (Join-Path $env:JAVA_HOME 'bin\java.
 
 if (-not $SkipTests) {
     Write-Host 'Menjalankan test...'
-    & (Join-Path $akar 'gradlew.bat') testDebugUnitTest --console=plain
+    # Kedua varian. Yang berbeda di antara keduanya justru romanisasi, jadi
+    # menguji satu saja membuat separuh matriksnya tidak pernah dijalankan.
+    & (Join-Path $akar 'gradlew.bat') testFullDebugUnitTest testLiteDebugUnitTest --console=plain
     if ($LASTEXITCODE -ne 0) { throw 'Test gagal. Rilis dibatalkan.' }
 }
 
-Write-Host 'Build release...'
-& (Join-Path $akar 'gradlew.bat') assembleRelease --console=plain
+Write-Host 'Build release kedua varian...'
+& (Join-Path $akar 'gradlew.bat') assembleFullRelease assembleLiteRelease --console=plain
 if ($LASTEXITCODE -ne 0) { throw 'Build release gagal.' }
-
-# Versi dibaca ULANG dari output Gradle, bukan dari yang tadi diparse. Kalau
-# build memakai varian lain, ketidakcocokannya ketahuan di sini, bukan setelah
-# APK dengan nama salah sudah dibagikan.
-$metaPath = Join-Path $akar 'app\build\outputs\apk\release\output-metadata.json'
-$meta = (Get-Content $metaPath -Raw | ConvertFrom-Json).elements[0]
-if ($meta.versionName -ne $versi) {
-    throw "APK bilang $($meta.versionName), build.gradle.kts bilang $versi."
-}
 
 $dist = Join-Path $akar 'dist'
 if (-not (Test-Path $dist)) { New-Item -ItemType Directory -Path $dist | Out-Null }
 
-$sumber = Join-Path $akar "app\build\outputs\apk\release\$($meta.outputFile)"
-$tujuan = Join-Path $dist "spotivibe-$versi.apk"
-Copy-Item $sumber $tujuan -Force
+# Versi dibaca ULANG dari output Gradle, bukan dari yang tadi diparse. Kalau
+# build memakai varian lain, ketidakcocokannya ketahuan di sini, bukan setelah
+# APK dengan nama salah sudah dibagikan.
+$hasil = @{}
+foreach ($varian in @('full', 'lite')) {
+    $metaPath = Join-Path $akar "app\build\outputs\apk\$varian\release\output-metadata.json"
+    if (-not (Test-Path $metaPath)) { throw "Metadata varian $varian tidak ada di $metaPath" }
+    $meta = (Get-Content $metaPath -Raw | ConvertFrom-Json).elements[0]
 
-$mb = [math]::Round((Get-Item $tujuan).Length / 1MB, 1)
+    # versionName varian lite membawa akhiran "-lite", jadi yang dicocokkan
+    # adalah awalannya, bukan seluruh string.
+    if (-not $meta.versionName.StartsWith($versi)) {
+        throw "APK $varian bilang $($meta.versionName), build.gradle.kts bilang $versi."
+    }
+
+    $nama = if ($varian -eq 'lite') { "spotivibe-$versi-lite.apk" } else { "spotivibe-$versi.apk" }
+    $sumber = Join-Path $akar "app\build\outputs\apk\$varian\release\$($meta.outputFile)"
+    Copy-Item $sumber (Join-Path $dist $nama) -Force
+    $hasil[$varian] = Join-Path $dist $nama
+}
+
+# Varian lite HARUS jauh lebih kecil. Kalau ukurannya mirip, kuromoji ikut
+# terbawa dan seluruh guna varian ini hilang tanpa satu pun error.
+$penuhB = (Get-Item $hasil['full']).Length
+$ringanB = (Get-Item $hasil['lite']).Length
+if ($ringanB -ge ($penuhB / 2)) {
+    throw "APK lite $([math]::Round($ringanB/1MB,1)) MB tidak jauh lebih kecil dari full $([math]::Round($penuhB/1MB,1)) MB. Kuromoji kemungkinan ikut terbawa."
+}
+
 Write-Host ''
-Write-Host "OK  $tujuan  ($mb MB)"
+foreach ($varian in @('full', 'lite')) {
+    $mb = [math]::Round((Get-Item $hasil[$varian]).Length / 1MB, 1)
+    Write-Host ("OK  {0,-5} {1}  ({2} MB)" -f $varian, $hasil[$varian], $mb)
+}
 Write-Host ''
 Write-Host 'Install:'
-Write-Host "  adb install -r `"$tujuan`""
+Write-Host "  adb install -r `"$($hasil['full'])`""

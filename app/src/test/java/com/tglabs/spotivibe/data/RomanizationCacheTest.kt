@@ -56,6 +56,17 @@ class RomanizationCacheTest {
         val zh = svc.romanize(teks, Script.ZH)
         val ja = svc.romanize(teks, Script.JA)
 
+        if (!SUPPORTS_JAPANESE) {
+            // Tanpa kamus Jepang tidak ada dua hasil untuk ditukar. Yang tetap
+            // harus dijaga: sisi Mandarin-nya utuh dan tidak ikut hilang.
+            assertNull(ja)
+            assertTrue("Mandarin harus tetap jalan di lite", !zh.isNullOrBlank())
+            assertEquals("hanya entri ZH yang masuk cache", 1, svc.stats().size)
+            assertEquals(zh, svc.romanize(teks, Script.ZH))
+            assertEquals(1, svc.stats().hits)
+            return@runTest
+        }
+
         assertNotEquals("hasilnya memang harus berbeda", zh, ja)
         assertEquals("keduanya harus jadi entry terpisah", 2, svc.stats().size)
         assertEquals(2, svc.stats().misses)
@@ -190,6 +201,16 @@ class RomanizationCacheTest {
         val teks = "こんにちは"
 
         val pertama = svc.romanize(teks, Script.JA)
+        if (!SUPPORTS_JAPANESE) {
+            // Varian lite tidak membawa kamus Jepang. Hasil null adalah
+            // perilaku yang BENAR di sini, dan null sengaja tidak di-cache
+            // supaya tidak ada ambiguitas antara "belum dihitung" dan "pernah
+            // dihitung, hasilnya null".
+            assertNull("lite tidak boleh menghasilkan romaji Jepang", pertama)
+            assertEquals(0, svc.stats().hits)
+            return@runTest
+        }
+
         assertTrue("harus menghasilkan romaji, dapat: $pertama", !pertama.isNullOrBlank())
         assertEquals(1, svc.stats().misses)
 

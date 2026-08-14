@@ -36,8 +36,11 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
-      - name: Unit test
-        run: ./gradlew testDebugUnitTest --console=plain
+      # KEDUA varian dijalankan. Varian lite tidak membawa kamus Jepang, jadi
+      # sebagian perilaku romanisasi memang berbeda di sana, dan menguji satu
+      # varian saja membuat separuh matriksnya tidak pernah dijalankan.
+      - name: Unit test kedua varian
+        run: ./gradlew testFullDebugUnitTest testLiteDebugUnitTest --console=plain
 
       # Laporan diunggah HANYA saat gagal. Log Gradle cuma menyebut nama test
       # yang gagal; pesan assertion-nya ada di HTML ini.
@@ -46,16 +49,16 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: laporan-test
-          path: app/build/reports/tests/testDebugUnitTest/
+          path: app/build/reports/tests/
           retention-days: 14
 
       - name: Lint
-        run: ./gradlew lintDebug --console=plain
+        run: ./gradlew lintFullDebug lintLiteDebug --console=plain
 
       - name: Unggah laporan lint
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: laporan-lint
-          path: app/build/reports/lint-results-debug.html
+          path: app/build/reports/lint-results-*.html
           retention-days: 14
