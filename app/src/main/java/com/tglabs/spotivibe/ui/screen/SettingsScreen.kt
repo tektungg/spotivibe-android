@@ -40,6 +40,18 @@ import com.tglabs.spotivibe.ui.component.HairlineIconButton
 import com.tglabs.spotivibe.ui.component.HairlineRule
 import com.tglabs.spotivibe.ui.component.MonoEyebrow
 import com.tglabs.spotivibe.ui.component.SegControl
+import com.tglabs.spotivibe.domain.FONT_SIZE_MAX
+import com.tglabs.spotivibe.domain.FONT_SIZE_MIN
+import com.tglabs.spotivibe.domain.FONT_SIZE_STEP
+import com.tglabs.spotivibe.domain.LINE_SPACING_MAX
+import com.tglabs.spotivibe.domain.LINE_SPACING_MIN
+import com.tglabs.spotivibe.domain.LINE_SPACING_STEP
+import com.tglabs.spotivibe.domain.LYRICS_OFFSET_MAX_MS
+import com.tglabs.spotivibe.domain.LYRICS_OFFSET_MIN_MS
+import com.tglabs.spotivibe.domain.LYRICS_OFFSET_STEP_MS
+import com.tglabs.spotivibe.domain.tickCountFor
+import com.tglabs.spotivibe.domain.tickIndexOf
+import com.tglabs.spotivibe.domain.tickValueOf
 import com.tglabs.spotivibe.ui.component.TickSlider
 import com.tglabs.spotivibe.ui.component.Toggle
 import com.tglabs.spotivibe.ui.theme.LocalSvColors
@@ -142,11 +154,12 @@ fun SettingsScreen(
                 label = "Lyrics font size",
                 trail = "${fontSize}sp · ${fontSizeDescription(fontSize)}",
                 content = {
+                    val garisFont = tickCountFor(FONT_SIZE_MIN, FONT_SIZE_MAX, FONT_SIZE_STEP)
                     TickSlider(
-                        value = ((fontSize - 12).coerceIn(0, 44)).toFloat() / 44f,
-                        onValueChange = { v ->
-                            val new = (12 + (v * 44).toInt()).coerceIn(12, 56)
-                            onSetFontSize(new)
+                        index = tickIndexOf(fontSize, FONT_SIZE_MIN, FONT_SIZE_MAX, garisFont),
+                        tickCount = garisFont,
+                        onIndexChange = { i ->
+                            onSetFontSize(tickValueOf(i, FONT_SIZE_MIN, FONT_SIZE_MAX, garisFont))
                         },
                     )
                     SliderUnitLabel(text = "12 → 56")
@@ -159,12 +172,21 @@ fun SettingsScreen(
                 label = "Sync offset",
                 trail = "${if (lyricsOffsetMs >= 0) "+" else ""}${lyricsOffsetMs} ms",
                 content = {
+                    val garisOffset = tickCountFor(
+                        LYRICS_OFFSET_MIN_MS, LYRICS_OFFSET_MAX_MS, LYRICS_OFFSET_STEP_MS,
+                    )
                     TickSlider(
-                        value = ((lyricsOffsetMs + 2000).coerceIn(0, 4000)).toFloat() / 4000f,
+                        index = tickIndexOf(
+                            lyricsOffsetMs, LYRICS_OFFSET_MIN_MS, LYRICS_OFFSET_MAX_MS, garisOffset,
+                        ),
+                        tickCount = garisOffset,
                         twoSided = true,
-                        onValueChange = { v ->
-                            val new = ((v - 0.5f) * 4000f).toInt().coerceIn(-2000, 2000)
-                            onSetLyricsOffsetMs(new)
+                        onIndexChange = { i ->
+                            onSetLyricsOffsetMs(
+                                tickValueOf(
+                                    i, LYRICS_OFFSET_MIN_MS, LYRICS_OFFSET_MAX_MS, garisOffset,
+                                ),
+                            )
                         },
                     )
                     SliderUnitLabel(text = "−2000 / 0 / +2000")
@@ -174,9 +196,19 @@ fun SettingsScreen(
                 label = "Line spacing",
                 trail = "${lineSpacing} dp",
                 content = {
+                    val garisSpasi = tickCountFor(
+                        LINE_SPACING_MIN, LINE_SPACING_MAX, LINE_SPACING_STEP,
+                    )
                     TickSlider(
-                        value = (lineSpacing.coerceIn(0, 20)).toFloat() / 20f,
-                        onValueChange = { v -> onSetLineSpacing((v * 20).toInt().coerceIn(0, 20)) },
+                        index = tickIndexOf(
+                            lineSpacing, LINE_SPACING_MIN, LINE_SPACING_MAX, garisSpasi,
+                        ),
+                        tickCount = garisSpasi,
+                        onIndexChange = { i ->
+                            onSetLineSpacing(
+                                tickValueOf(i, LINE_SPACING_MIN, LINE_SPACING_MAX, garisSpasi),
+                            )
+                        },
                     )
                     SliderUnitLabel(text = "0 → 20")
                 },

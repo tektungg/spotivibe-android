@@ -34,6 +34,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.tglabs.spotivibe.domain.tickIndexAt
 import com.tglabs.spotivibe.ui.theme.LocalSvColors
 import com.tglabs.spotivibe.ui.theme.SvMotion
 import com.tglabs.spotivibe.ui.theme.SvRadius
@@ -204,41 +205,58 @@ fun Toggle(
 
 // ─── TickSlider ────────────────────────────────────────────
 /**
- * 21 vertical tick marks. Filled portion = accent. Vertical 2×18 dp handle
- * bar. `twoSided = true` untuk slider yang centered at 0 (mis. sync offset
- * ±2000ms) — filled bar grows outward dari tengah.
+ * Slider bergaris yang bekerja dengan INDEKS garis, bukan pecahan kontinu.
  *
- * `value` 0.0-1.0 (normalized). Caller bertanggung jawab mapping ke
- * range domain (12-56sp font, ±2000ms offset, dll).
+ * ## Kenapa berbasis indeks
+ *
+ * Versi sebelumnya melaporkan pecahan 0..1 dan menyerahkan pemetaan ke
+ * pemanggil, sementara jumlah garis dipatok 21 tanpa hubungan apa pun dengan
+ * berapa nilai yang sebenarnya bisa dipilih. Sync offset punya 4001 nilai di
+ * balik 21 garis, jadi gagangnya berhenti di antara garis dan layar menampilkan
+ * angka seperti `+513 ms` yang tidak diwakili garis mana pun.
+ *
+ * ## Kenapa gagangnya adalah garis itu sendiri
+ *
+ * Gagang dulu digambar di Row terpisah lewat `fillMaxWidth(value)`, sementara
+ * garis digambar dengan `SpaceBetween`. Dua sistem koordinat berbeda untuk hal
+ * yang harus berimpit, jadi selisihnya selalu ada walau nilainya kebetulan pas.
+ * Ditambah `coerceIn(0f, 0.99f)` yang membuat gagang tidak pernah sampai garis
+ * terakhir.
+ *
+ * Sekarang gagang menggantikan garis pada [index] di Row yang SAMA. Perimpitan
+ * itu jadi sifat tata letaknya, bukan hasil perhitungan yang bisa meleset.
+ *
+ * @param twoSided untuk slider yang berpusat di nol, misalnya sync offset.
+ *   Bagian terisi tumbuh keluar dari tengah, bukan dari kiri.
  */
 @Composable
 fun TickSlider(
-    value: Float,
-    onValueChange: (Float) -> Unit,
+    index: Int,
+    tickCount: Int,
+    onIndexChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
     twoSided: Boolean = false,
-    tickCount: Int = 21,
 ) {
     val sv = LocalSvColors.current
+    val jumlah = tickCount.coerceAtLeast(2)
+    val aktif = index.coerceIn(0, jumlah - 1)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(28.dp)
-            .pointerInput(twoSided, tickCount) {
+            .pointerInput(jumlah) {
+                fun lapor(x: Float) {
+                    onIndexChange(tickIndexAt(x / size.width.toFloat(), jumlah))
+                }
                 detectHorizontalDragGestures(
-                    onDragStart = { /* tap-anywhere start */ },
-                    onHorizontalDrag = { change, _ ->
-                        val rel = (change.position.x / size.width).coerceIn(0f, 1f)
-                        onValueChange(rel)
-                    },
+                    // Sentuhan awal langsung dilaporkan. Tanpa ini, mengetuk
+                    // tanpa menggeser tidak mengubah apa pun, dan slider terasa
+                    // mati saat disentuh sekali.
+                    onDragStart = { pos -> lapor(pos.x) },
+                    onHorizontalDrag = { change, _ -> lapor(change.position.x) },
                 )
-            }
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = { /* swallow click — drag handles it */ },
-            ),
+            },
         contentAlignment = Alignment.Center,
     ) {
         // hairline base track
@@ -249,38 +267,36 @@ fun TickSlider(
                 .background(sv.rule),
         )
 
-        // Tick marks
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val centerIdx = (tickCount - 1) / 2
-            repeat(tickCount) { i ->
-                val filled = if (twoSided) {
-                    if (value >= 0.5f) i in centerIdx..(centerIdx + ((value - 0.5f) * (tickCount - 1)).roundToInt())
-                    else i in (centerIdx - ((0.5f - value) * (tickCount - 1)).roundToInt())..centerIdx
+            val tengah = (jumlah - 1) / 2
+            repeat(jumlah) { i ->
+                val terisi = if (twoSided) {
+                    if (aktif >= tengah) i in tengah..aktif else i in aktif..tengah
                 } else {
-                    i.toFloat() / (tickCount - 1) <= value
+                    i <= aktif
                 }
-                Box(
-                    modifier = Modifier
-                        .width(1.dp)
-                        .height(if (filled) 8.dp else 4.dp)
-                        .background(if (filled) sv.accent else sv.rule),
-                )
+                // Garis pada posisi aktif DIGANTI gagang. Satu Row, satu sistem
+                // koordinat, jadi keduanya tidak mungkin berselisih.
+                if (i == aktif) {
+                    Box(
+                        modifier = Modifier
+                            .width(2.dp)
+                            .height(18.dp)
+                            .background(sv.ink1),
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(if (terisi) 8.dp else 4.dp)
+                            .background(if (terisi) sv.accent else sv.rule),
+                    )
+                }
             }
-        }
-
-        // Vertical handle bar (2×18dp) — positioned via Box layout offset
-        Row(modifier = Modifier.fillMaxWidth()) {
-            Spacer(modifier = Modifier.fillMaxWidth(value.coerceIn(0f, 0.99f)))
-            Box(
-                modifier = Modifier
-                    .width(2.dp)
-                    .height(18.dp)
-                    .background(sv.ink1),
-            )
         }
     }
 }
