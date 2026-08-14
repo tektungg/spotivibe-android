@@ -205,7 +205,16 @@ private fun SyncedView(
                 }
             },
     ) {
-    val ukuran = lyricsPadding(maxHeight.value, chromeAtasDp, chromeBawahDp)
+    // Tinggi baris ikut ukuran font DAN keadaan romanisasi. Romanisasi
+    // menambah teks kedua di bawah tiap baris, jadi barisnya lebih tinggi dan
+    // jangkar yang dihitung untuk baris polos membuat baris aktif turun.
+    val adaRomanisasi = romaji.values.any { !it.isNullOrBlank() }
+    val ukuran = lyricsPadding(
+        viewportHeightDp = maxHeight.value,
+        chromeAboveDp = chromeAtasDp,
+        chromeBelowDp = chromeBawahDp,
+        lineHeightDp = lyricsTypicalLineDp(fontSize, adaRomanisasi),
+    )
     // scrollOffset satuannya PIKSEL. Nilai 200 yang lama berarti jarak yang
     // berbeda di tiap kerapatan layar; sekarang dp dikonversi eksplisit.
     val jangkarPx = with(LocalDensity.current) { ukuran.anchorDp.dp.roundToPx() }

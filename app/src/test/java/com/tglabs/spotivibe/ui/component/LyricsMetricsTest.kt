@@ -13,8 +13,12 @@ class LyricsMetricsTest {
     /** Panel kanan landscape di HP penguji: 375 dp layar minus padding + transport. */
     private val landscape = 285f
 
-    /** Baris lirik dua baris teks pada font default, kira-kira. */
+    /** Baris lirik dua baris teks pada font acuan, tanpa romanisasi. */
     private val tinggiBaris = LYRICS_TYPICAL_LINE_DP
+
+    /** Pusat baris sebagai pecahan viewport, untuk tinggi baris tertentu. */
+    private fun pusatUntukBaris(viewport: Float, tinggi: Float): Float =
+        (lyricsPadding(viewport, lineHeightDp = tinggi).anchorDp + tinggi / 2f) / viewport
 
     /** Posisi PUSAT baris aktif sebagai pecahan tinggi viewport. */
     private fun pusatRelatif(viewport: Float): Float =
@@ -294,5 +298,89 @@ class LyricsMetricsTest {
             val p = lyricsPadding(291f, a, b)
             assertTrue("atas=$a bawah=$b", p.leadingDp >= p.anchorDp)
         }
+    }
+
+    // ── Tinggi baris ikut font dan romanisasi ────────────────────
+
+    /**
+     * REGRESI: dilaporkan dari perangkat. Dengan romanisasi menyala, baris
+     * aktif turun sekitar 24 dp dari tengah.
+     *
+     * Sebabnya setiap baris membawa teks KEDUA di bawahnya, jadi barisnya jauh
+     * lebih tinggi sementara jangkar tetap dihitung untuk baris polos.
+     */
+    @Test
+    fun `romanisasi membuat baris jauh lebih tinggi`() {
+        val polos = lyricsTypicalLineDp(LYRICS_REF_FONT_SP, hasRomanization = false)
+        val beromanisasi = lyricsTypicalLineDp(LYRICS_REF_FONT_SP, hasRomanization = true)
+        assertTrue("harus lebih tinggi, $polos -> $beromanisasi", beromanisasi > polos)
+        assertEquals("tambahannya 3/4 tinggi baris plus jaraknya", 47f, beromanisasi - polos, 0.01f)
+    }
+
+    @Test
+    fun `baris tetap di tengah walau romanisasi menyala`() {
+        val tinggi = lyricsTypicalLineDp(LYRICS_REF_FONT_SP, hasRomanization = true)
+        assertEquals(0.5f, pusatUntukBaris(portrait, tinggi), 0.001f)
+        assertEquals(0.5f, pusatUntukBaris(landscape, tinggi), 0.001f)
+    }
+
+    @Test
+    fun `mengabaikan romanisasi membuatnya turun dari tengah`() {
+        val tinggiAsli = lyricsTypicalLineDp(LYRICS_REF_FONT_SP, hasRomanization = true)
+        // Model lama: jangkar dihitung untuk baris polos, tapi barisnya beromanisasi.
+        val jangkarSalah = lyricsPadding(portrait, lineHeightDp = LYRICS_TYPICAL_LINE_DP).anchorDp
+        val pusatSalah = (jangkarSalah + tinggiAsli / 2f) / portrait
+        assertTrue("harusnya turun jelas dari tengah, dapat $pusatSalah", pusatSalah > 0.53f)
+    }
+
+    /**
+     * Cacat yang sama untuk ukuran font, dan belum sempat dilaporkan: nilai
+     * acuan diukur pada 30 sp, jadi menaikkannya ke 56 sp menggeser pusat
+     * dengan cara yang persis sama.
+     */
+    @Test
+    fun `tinggi baris ikut ukuran font`() {
+        val kecil = lyricsTypicalLineDp(15, hasRomanization = false)
+        val acuan = lyricsTypicalLineDp(LYRICS_REF_FONT_SP, hasRomanization = false)
+        val besar = lyricsTypicalLineDp(60, hasRomanization = false)
+        assertEquals("setengah font acuan", acuan / 2f, kecil, 0.01f)
+        assertEquals("dua kali font acuan", acuan * 2f, besar, 0.01f)
+    }
+
+    @Test
+    fun `baris tetap di tengah pada ukuran font apa pun`() {
+        listOf(12, 17, 30, 44, 56).forEach { font ->
+            listOf(false, true).forEach { roma ->
+                val tinggi = lyricsTypicalLineDp(font, roma)
+                assertEquals(
+                    "font=$font romanisasi=$roma",
+                    0.5f,
+                    pusatUntukBaris(portrait, tinggi),
+                    0.001f,
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `font nol atau negatif tidak menghasilkan tinggi negatif`() {
+        listOf(0, -5, Int.MIN_VALUE).forEach { font ->
+            assertTrue("font=$font", lyricsTypicalLineDp(font, false) > 0f)
+            assertTrue("font=$font", lyricsTypicalLineDp(font, true) > 0f)
+        }
+    }
+
+    @Test
+    fun `tinggi baris negatif tidak menjatuhkan perhitungan`() {
+        val p = lyricsPadding(600f, lineHeightDp = -100f)
+        assertTrue(p.anchorDp >= 0f && p.leadingDp >= 0f && p.trailingDp >= 0f)
+    }
+
+    @Test
+    fun `nilai bawaan tetap sama seperti sebelumnya`() {
+        assertEquals(
+            lyricsPadding(portrait, lineHeightDp = LYRICS_TYPICAL_LINE_DP),
+            lyricsPadding(portrait),
+        )
     }
 }

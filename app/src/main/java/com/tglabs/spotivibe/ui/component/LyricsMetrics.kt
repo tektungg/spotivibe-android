@@ -54,6 +54,36 @@ data class LyricsPadding(
  */
 const val LYRICS_TYPICAL_LINE_DP = 60f
 
+/** Ukuran font lirik saat nilai acuan di atas diukur. */
+const val LYRICS_REF_FONT_SP = 30
+
+/** Jarak antara baris lirik dan romanisasi di bawahnya. */
+const val LYRICS_ROMAJI_GAP_DP = 2f
+
+/**
+ * Tinggi perkiraan satu baris untuk ukuran font dan keadaan romanisasi tertentu.
+ *
+ * Nilai tetap 60 dp tidak cukup, dan itu dilaporkan dari perangkat: dengan
+ * romanisasi menyala, baris aktif turun sekitar 24 dp dari tengah. Sebabnya
+ * setiap baris membawa teks KEDUA di bawahnya, jadi barisnya lebih tinggi
+ * sementara jangkar tetap dihitung untuk baris tanpa romanisasi.
+ *
+ * Ukuran font punya cacat yang sama dan belum sempat dilaporkan: 60 dp diukur
+ * pada font 30 sp, jadi menaikkannya ke 56 sp menggeser pusat dengan cara yang
+ * persis sama. Keduanya diperbaiki sekaligus di sini.
+ *
+ * Yang TIDAK dimodelkan: berapa baris teks hasil pembungkusan. Itu butuh
+ * mengukur teks sebelum tata letak, dan tidak tersedia di lapis ini. Bait yang
+ * jauh lebih panjang dari biasanya masih akan menggeser pusatnya sebesar
+ * separuh selisihnya.
+ */
+fun lyricsTypicalLineDp(fontSizeSp: Int, hasRomanization: Boolean): Float {
+    val skala = fontSizeSp.coerceAtLeast(1).toFloat() / LYRICS_REF_FONT_SP
+    val lirik = LYRICS_TYPICAL_LINE_DP * skala
+    if (!hasRomanization) return lirik
+    return lirik + lirik * ROMANIZATION_RATIO + LYRICS_ROMAJI_GAP_DP
+}
+
 /**
  * Banyaknya item LazyColumn SEBELUM baris lirik pertama.
  *
@@ -100,13 +130,15 @@ fun lyricsPadding(
     viewportHeightDp: Float,
     chromeAboveDp: Float = 0f,
     chromeBelowDp: Float = 0f,
+    lineHeightDp: Float = LYRICS_TYPICAL_LINE_DP,
 ): LyricsPadding {
     val tinggi = viewportHeightDp.coerceAtLeast(0f)
+    val tinggiBaris = lineHeightDp.coerceAtLeast(0f)
 
     // Setengah sisa ruang setelah baris itu sendiri. Ini yang membuat PUSAT
     // baris mendarat di 50% pada tinggi viewport mana pun, bukan cuma pada satu
     // yang kebetulan dipakai untuk menyetel angkanya.
-    val tengahViewport = (tinggi - LYRICS_TYPICAL_LINE_DP) / 2f
+    val tengahViewport = (tinggi - tinggiBaris) / 2f
 
     // Geser ke atas sebesar setengah kelebihan chrome atas. Setelah koreksi ini
     // pusat baris mendarat di tengah LAYAR, bukan tengah viewport.
