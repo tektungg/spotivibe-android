@@ -40,6 +40,9 @@ fun outcomeOf(state: LyricsState): LyricsOutcome = when (state) {
         else LyricsOutcome.PlainOnly
     LyricsState.NotFound -> LyricsOutcome.NotFound
     is LyricsState.Unavailable -> LyricsOutcome.Unavailable
+    // Offline dicatat sebagai Unavailable: dari sisi coverage, keduanya sama-sama
+    // "lirik ada mungkin, tapi tidak bisa kita jangkau sekarang".
+    LyricsState.Offline -> LyricsOutcome.Unavailable
     LyricsState.Loading -> LyricsOutcome.Unavailable
 }
 

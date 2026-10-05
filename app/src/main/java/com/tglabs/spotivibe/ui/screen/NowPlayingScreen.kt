@@ -258,6 +258,7 @@ fun NowPlayingScreen(
                     onSearchLyrics = onSearchLyrics,
                     showForgetOverride = hasRememberedOverride,
                     onForgetOverride = onForgetOverride,
+                    offline = !state.isOnline,
                 )
             }
 

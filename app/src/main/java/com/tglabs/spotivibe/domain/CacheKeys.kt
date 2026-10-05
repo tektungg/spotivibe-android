@@ -24,6 +24,17 @@ const val POSITIVE_TTL_MS = 30L * HARI_MS
  */
 const val NEGATIVE_TTL_MS = 1L * HARI_MS
 
+/**
+ * Berapa lama berkas lirik boleh menetap di disk sejak terakhir DIPAKAI.
+ *
+ * Ini bukan TTL. TTL ([POSITIVE_TTL_MS]) menentukan kapan lirik perlu ditanyakan
+ * ulang ke LRCLIB; retensi menentukan kapan berkasnya benar-benar dibuang.
+ * Dulu keduanya sama-sama 30 hari, dan akibatnya lirik yang sudah basi tidak
+ * pernah tersedia sebagai cadangan saat offline. Batas 500 entri / 8 MB tetap
+ * menjadi pengaman ukuran yang utama.
+ */
+const val STALE_RETENTION_MS = 180L * HARI_MS
+
 fun cacheTtlMs(punyaIsi: Boolean): Long = if (punyaIsi) POSITIVE_TTL_MS else NEGATIVE_TTL_MS
 
 fun isCacheExpired(cachedAtMs: Long, nowMs: Long, punyaIsi: Boolean): Boolean =

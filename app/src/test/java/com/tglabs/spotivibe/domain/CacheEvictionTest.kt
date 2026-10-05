@@ -166,4 +166,17 @@ class CacheEvictionTest {
         val files = listOf(f("a", 1), f("b", 2))
         assertEquals(2, evict(files, maxEntries = 0, maxBytes = 0).size)
     }
+
+    // ── Retensi offline ──────────────────────────────────────────
+
+    /**
+     * Dengan batas usia produksi, lirik yang sudah lewat TTL 30 hari tapi
+     * belum lewat retensi tetap ada di disk sebagai cadangan offline.
+     */
+    @Test
+    fun `dengan retensi produksi berkas basi bertahan sampai 180 hari`() {
+        val files = listOf(f("basi", 179), f("terlalu_tua", 181), f("segar", 2))
+        val buang = filesToEvict(files, now, STALE_RETENTION_MS, 500, 8L * 1024 * 1024)
+        assertEquals(listOf("terlalu_tua"), buang)
+    }
 }

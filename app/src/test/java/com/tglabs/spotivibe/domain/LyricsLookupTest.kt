@@ -196,4 +196,59 @@ class LyricsLookupTest {
             cacheEntryFor(trackId, lookup),
         )
     }
+
+    // ── resolveWithStale ─────────────────────────────────────────
+
+    private val basiKosong = LyricsResult(trackId = "t", synced = null, plain = null)
+
+    /** REGRESI: inti mode offline. Lirik lama lebih berguna daripada layar error. */
+    @Test
+    fun `offline memakai lirik basi yang berisi`() {
+        assertEquals(LyricsState.Ready(synced), resolveWithStale(LyricsState.Offline, synced))
+    }
+
+    @Test
+    fun `gagal jaringan saat online juga memakai lirik basi`() {
+        assertEquals(
+            LyricsState.Ready(plainOnly),
+            resolveWithStale(LyricsState.Unavailable("timeout"), plainOnly),
+        )
+    }
+
+    /**
+     * NotFound adalah jawaban pasti dari LRCLIB yang baru saja ditanyakan.
+     * Lirik basi tidak boleh menimpanya: kalau entri LRCLIB dihapus karena
+     * salah lagu, lirik lama yang salah itu justru yang akan terus tampil.
+     */
+    @Test
+    fun `jawaban pasti tidak ditimpa lirik basi`() {
+        assertEquals(LyricsState.NotFound, resolveWithStale(LyricsState.NotFound, synced))
+    }
+
+    @Test
+    fun `hasil segar tidak ditimpa lirik basi`() {
+        val segar = LyricsState.Ready(plainOnly)
+        assertEquals(segar, resolveWithStale(segar, synced))
+    }
+
+    @Test
+    fun `loading tidak disentuh`() {
+        assertEquals(LyricsState.Loading, resolveWithStale(LyricsState.Loading, synced))
+    }
+
+    /**
+     * Entri negatif basi ("dulu tidak ada") tidak menjelaskan apa pun tentang
+     * sekarang. Alasan aslinya tetap ditampilkan supaya UI bisa bilang "offline".
+     */
+    @Test
+    fun `entri negatif basi tidak dipakai`() {
+        assertEquals(LyricsState.Offline, resolveWithStale(LyricsState.Offline, basiKosong))
+        val gagal = LyricsState.Unavailable("timeout")
+        assertEquals(gagal, resolveWithStale(gagal, basiKosong))
+    }
+
+    @Test
+    fun `tanpa cadangan alasan aslinya dipertahankan`() {
+        assertEquals(LyricsState.Offline, resolveWithStale(LyricsState.Offline, null))
+    }
 }

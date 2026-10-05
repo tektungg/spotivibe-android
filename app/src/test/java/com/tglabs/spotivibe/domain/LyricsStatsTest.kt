@@ -228,4 +228,13 @@ class LyricsStatsTest {
             outcomeOf(LyricsState.Unavailable("timeout")),
         )
     }
+
+    /**
+     * Offline bukan "tidak ada lirik". Menghitungnya sebagai NotFound akan
+     * menurunkan angka coverage LRCLIB setiap kali user naik pesawat.
+     */
+    @Test
+    fun `Offline dihitung Unavailable bukan NotFound`() {
+        assertEquals(LyricsOutcome.Unavailable, outcomeOf(LyricsState.Offline))
+    }
 }

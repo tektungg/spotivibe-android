@@ -75,6 +75,8 @@ fun NPHeader(
     showRomajiIcon: Boolean = true,
     romajiEnabled: Boolean = false,
     overlayEnabled: Boolean = false,
+    /** Perangkat offline: eyebrow berubah jadi penanda status beraksen. */
+    offline: Boolean = false,
 ) {
     val sv = LocalSvColors.current
     Row(
@@ -95,8 +97,8 @@ fun NPHeader(
                 // duration), jadi tidak ditampilkan daripada hardcode salah.
                 // ink2 (bukan ink3) + maxLines 1 supaya tetap legible di atas
                 // album art terang + tidak wrap jadi 2 baris yang berantakan.
-                text = album.ifBlank { "NOW PLAYING" },
-                color = sv.ink2,
+                text = headerEyebrowText(album, offline),
+                color = if (offline) sv.accent else sv.ink2,
                 maxLines = 1,
                 modifier = Modifier.padding(bottom = 2.dp),
             )
@@ -243,4 +245,14 @@ private fun HeaderToggleIcon(
         iconSize = 16.dp,
         tint = if (enabled) sv.accent else sv.ink2,
     )
+}
+
+/**
+ * Teks eyebrow header. Saat offline, penanda ditaruh DI DEPAN album supaya
+ * tetap terlihat walau nama album panjang terpotong ellipsis di satu baris.
+ * Pola "STATUS · DETAIL" sama dengan eyebrow lain di app ini.
+ */
+internal fun headerEyebrowText(album: String, offline: Boolean): String {
+    val detail = album.ifBlank { "NOW PLAYING" }
+    return if (offline) "OFFLINE · $detail" else detail
 }

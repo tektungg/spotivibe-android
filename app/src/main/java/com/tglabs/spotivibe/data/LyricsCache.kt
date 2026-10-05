@@ -1,6 +1,6 @@
 package com.tglabs.spotivibe.data
 
-import com.tglabs.spotivibe.domain.POSITIVE_TTL_MS
+import com.tglabs.spotivibe.domain.STALE_RETENTION_MS
 import com.tglabs.spotivibe.domain.cacheFileName
 import com.tglabs.spotivibe.domain.isCacheExpired
 import android.content.Context
@@ -23,29 +23,53 @@ import java.util.concurrent.atomic.AtomicInteger
  * berulang kali jadi tempat bug bersembunyi di project ini.
  */
 interface LyricsDiskCache {
+    /** Entri yang masih dalam masa TTL. Null kalau tidak ada atau sudah basi. */
     fun get(trackId: String): LyricsResult?
     fun put(result: LyricsResult)
+
+    /**
+     * Entri BERISI berapa pun umurnya, untuk cadangan saat jaringan tidak bisa
+     * menjawab. Default tidak punya cadangan supaya implementasi lama tetap sah.
+     */
+    fun getStale(trackId: String): LyricsResult? = null
 }
 
 /**
  * JSON file-based cache untuk hasil lookup LRCLIB.
  *
- * Disimpan di `context.cacheDir/lyrics-cache/<sanitized-trackId>.json`.
+ * Disimpan di `context.filesDir/lyrics-cache/<sanitized-trackId>.json`.
+ * Dulu di `cacheDir`, yang boleh dikosongkan Android kapan saja saat storage
+ * sesak, dan itu persis saat yang salah untuk kehilangan lirik offline. Isi
+ * lokasi lama dipindahkan sekali, malas, di akses pertama (lihat
+ * [migrateLegacyLyricsCache]).
  *
- * TTL:
+ * TTL (kapan lirik ditanyakan ulang ke LRCLIB):
  * - Positive (track ketemu, [LyricsResult.hasContent] true) → 30 hari.
  * - Negative (kosong, biar nggak spam LRCLIB tiap kali user replay track yang
  *   memang tidak punya lirik) → 1 hari.
  *
- * Dibatasi 500 entry atau 8 MB, dibuang secara LRU. Lihat [sweep].
+ * Entri yang lewat TTL TIDAK dihapus saat dibaca. [get] menganggapnya miss,
+ * tapi [getStale] masih bisa menyajikannya sebagai cadangan offline. Berkas
+ * baru dibuang oleh [sweep] (500 entry / 8 MB, LRU, atau tidak dipakai lebih
+ * dari [STALE_RETENTION_MS]) atau tertimpa [put] berikutnya.
  *
  * Implementasi sengaja sederhana — satu file per track, no index, no lock.
  * Race condition write-write paling-paling overwrite dengan data identik.
  */
-class LyricsCache(context: Context) : LyricsDiskCache {
+class LyricsCache internal constructor(
+    private val dir: File,
+    /** Lokasi lama di `cacheDir`, dipindahkan sekali. Null = tidak ada migrasi. */
+    private val legacyDir: File?,
+    private val nowMs: () -> Long = System::currentTimeMillis,
+) : LyricsDiskCache {
 
-    private val dir: File = File(context.cacheDir, "lyrics-cache").apply {
-        if (!exists()) mkdirs()
+    constructor(context: Context) : this(
+        dir = File(context.filesDir, DIR_NAME),
+        legacyDir = File(context.cacheDir, DIR_NAME),
+    )
+
+    init {
+        if (!dir.exists()) dir.mkdirs()
     }
 
     private val moshi: Moshi = Moshi.Builder()
@@ -56,8 +80,46 @@ class LyricsCache(context: Context) : LyricsDiskCache {
     /** Mulai dari 0 supaya penulisan PERTAMA sesi ini langsung memicu sapuan. */
     private val writesSinceSweep = AtomicInteger(0)
 
-    /** Ambil cache kalau ada dan belum expired. Return null kalau miss/expired/corrupt. */
+    /**
+     * Migrasi dijalankan di akses pertama, bukan di konstruktor. Konstruktor
+     * terpanggil dari `by lazy` di thread utama; [get] dan [put] selalu
+     * dipanggil dari `Dispatchers.IO` oleh [LyricsRepository].
+     */
+    @Volatile private var migrated = legacyDir == null
+
+    private fun ensureMigrated() {
+        if (migrated) return
+        synchronized(this) {
+            if (migrated) return
+            val legacy = legacyDir ?: return
+            val n = migrateLegacyLyricsCache(legacy, dir)
+            if (n > 0) Log.d(TAG, "Migrasi cache lirik: $n file dari cacheDir ke filesDir")
+            migrated = true
+        }
+    }
+
+    /** Ambil cache kalau ada dan belum lewat TTL. Return null kalau miss/basi/corrupt. */
     override fun get(trackId: String): LyricsResult? {
+        val entry = read(trackId) ?: return null
+        if (isCacheExpired(entry.cachedAt, nowMs(), entry.hasContent)) {
+            // Sengaja TIDAK dihapus: berkas ini cadangan untuk getStale() saat
+            // offline. Dulu dihapus di sini, dan lagu yang liriknya sudah lama
+            // tersimpan justru kehilangan liriknya saat sinyal hilang.
+            Log.d(TAG, "Cache basi untuk $trackId (disimpan sebagai cadangan)")
+            return null
+        }
+        return entry.toLyricsResult(trackId)
+    }
+
+    /** Entri berisi, berapa pun umurnya. Entri negatif tidak pernah jadi cadangan. */
+    override fun getStale(trackId: String): LyricsResult? {
+        val entry = read(trackId) ?: return null
+        if (!entry.hasContent) return null
+        return entry.toLyricsResult(trackId)
+    }
+
+    private fun read(trackId: String): CachedEntry? {
+        ensureMigrated()
         val file = fileFor(trackId)
         if (!file.exists()) return null
         // Sentuh stempel waktunya supaya pembatasan berperilaku LRU, bukan FIFO:
@@ -68,16 +130,9 @@ class LyricsCache(context: Context) : LyricsDiskCache {
         // Android. Kalau gagal, kebijakannya merosot jadi FIFO, yang masih
         // terbatas dan tetap benar, cuma kurang pintar. Karena itu hasilnya
         // sengaja tidak diperiksa.
-        runCatching { file.setLastModified(System.currentTimeMillis()) }
+        runCatching { file.setLastModified(nowMs()) }
         return try {
-            val json = file.readText()
-            val entry = adapter.fromJson(json) ?: return null
-            if (isCacheExpired(entry.cachedAt, System.currentTimeMillis(), entry.hasContent)) {
-                Log.d(TAG, "Cache expired for $trackId")
-                file.delete()
-                return null
-            }
-            entry.toLyricsResult(trackId)
+            adapter.fromJson(file.readText())
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to read cache for $trackId: ${t.message}")
             runCatching { file.delete() }
@@ -87,6 +142,7 @@ class LyricsCache(context: Context) : LyricsDiskCache {
 
     /** Simpan hasil ke disk. Tidak throw — log saja kalau gagal. */
     override fun put(result: LyricsResult) {
+        ensureMigrated()
         try {
             val entry = CachedEntry(
                 synced = result.synced?.map { line ->
@@ -100,7 +156,7 @@ class LyricsCache(context: Context) : LyricsDiskCache {
                 },
                 plain = result.plain,
                 hasContent = result.hasContent,
-                cachedAt = System.currentTimeMillis(),
+                cachedAt = nowMs(),
             )
             fileFor(result.trackId).writeText(adapter.toJson(entry))
             maybeSweep()
@@ -136,8 +192,8 @@ class LyricsCache(context: Context) : LyricsDiskCache {
                     lastAccessMs = it.lastModified(),
                 )
             },
-            nowMs = System.currentTimeMillis(),
-            maxAgeMs = POSITIVE_TTL_MS,
+            nowMs = nowMs(),
+            maxAgeMs = STALE_RETENTION_MS,
             maxEntries = MAX_ENTRIES,
             maxBytes = MAX_BYTES,
         )
@@ -194,6 +250,7 @@ class LyricsCache(context: Context) : LyricsDiskCache {
 
     companion object {
         private const val TAG = "LyricsCache"
+        private const val DIR_NAME = "lyrics-cache"
 
         /**
          * Cukup untuk beberapa playlist besar tanpa membuang yang masih mungkin
@@ -207,4 +264,41 @@ class LyricsCache(context: Context) : LyricsDiskCache {
         /** Sapu tiap sekian penulisan, bukan tiap penulisan. */
         private const val SWEEP_EVERY = 25
     }
+}
+
+/**
+ * Pindahkan berkas cache lirik dari [legacy] ke [target], lalu hapus [legacy].
+ *
+ * Idempoten: aman dipanggil berulang, dan kalau dihentikan di tengah jalan
+ * (proses dibunuh) sisanya dipindahkan di panggilan berikutnya. Berkas yang
+ * sudah ada di [target] menang, karena ia ditulis lebih baru oleh versi app
+ * ini. `renameTo` gagal kalau dua lokasi beda volume; saat itu jatuh ke copy
+ * lalu delete. Semua kegagalan ditelan: kehilangan cache hanya berarti lirik
+ * diambil ulang dari jaringan, bukan crash.
+ *
+ * @return jumlah berkas yang berhasil dipindahkan.
+ */
+internal fun migrateLegacyLyricsCache(legacy: File, target: File): Int {
+    if (!legacy.isDirectory) return 0
+    if (!target.exists()) target.mkdirs()
+    var moved = 0
+    legacy.listFiles()?.filter { it.isFile }?.forEach { f ->
+        runCatching {
+            val dest = File(target, f.name)
+            when {
+                dest.exists() -> f.delete()
+                f.renameTo(dest) -> moved++
+                else -> {
+                    f.copyTo(dest, overwrite = false)
+                    // Stempel waktu dipertahankan supaya urutan LRU tidak
+                    // teracak oleh migrasi.
+                    dest.setLastModified(f.lastModified())
+                    f.delete()
+                    moved++
+                }
+            }
+        }
+    }
+    runCatching { legacy.delete() }
+    return moved
 }

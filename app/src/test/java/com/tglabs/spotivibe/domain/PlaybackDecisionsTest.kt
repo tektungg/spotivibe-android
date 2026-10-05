@@ -117,19 +117,30 @@ class PlaybackDecisionsTest {
      * memboroskan panggilan dan mendekatkan ke batas rate limit.
      */
     @Test
-    fun `product hanya dicek selama belum ada jawaban`() {
-        assertTrue(shouldCheckProduct(null))
-        assertFalse(shouldCheckProduct("premium"))
-        assertFalse(shouldCheckProduct("free"))
+    fun `product hanya dicek sekali per sesi`() {
+        assertTrue(shouldCheckProduct(verifiedThisSession = false, online = true))
+        assertFalse(shouldCheckProduct(verifiedThisSession = true, online = true))
     }
 
     /**
-     * String kosong tetap dianggap jawaban. Kalau tidak, jawaban kosong dari
-     * server akan memicu pengecekan ulang tanpa henti tiap ganti lagu.
+     * REGRESI: dulu syaratnya "product masih null". Sejak product disimpan ke
+     * disk, nilai hasil restore bukan null tapi juga belum tentu segar. Kalau
+     * syarat lama dipakai, user yang baru upgrade ke Premium tidak pernah dicek
+     * ulang dan terus melihat banner "Premium required".
      */
     @Test
-    fun `jawaban kosong tetap dianggap jawaban`() {
-        assertFalse(shouldCheckProduct(""))
+    fun `nilai hasil restore tetap dicek ulang sekali saat online`() {
+        assertTrue(shouldCheckProduct(verifiedThisSession = false, online = true))
+    }
+
+    /**
+     * Offline: panggilannya pasti gagal, dan menunggunya berarti menahan
+     * timeout koneksi setiap ganti lagu.
+     */
+    @Test
+    fun `product tidak dicek saat offline`() {
+        assertFalse(shouldCheckProduct(verifiedThisSession = false, online = false))
+        assertFalse(shouldCheckProduct(verifiedThisSession = true, online = false))
     }
 
     // ── Accent dari album art ────────────────────────────────────

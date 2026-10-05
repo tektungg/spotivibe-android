@@ -51,6 +51,8 @@ sealed interface UiState {
         val highContrast: Boolean = false,
         val smoothScroll: Boolean = true,
         val hapticEnabled: Boolean = true,
+        /** false = perangkat offline; header menampilkan penanda "OFFLINE". */
+        val isOnline: Boolean = true,
     ) : UiState {
         /** Konten lirik saja, untuk kode yang tidak peduli kenapa kosong. */
         val lyrics: LyricsResult? get() = (lyricsState as? LyricsState.Ready)?.result

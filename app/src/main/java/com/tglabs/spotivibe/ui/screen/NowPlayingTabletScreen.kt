@@ -305,7 +305,10 @@ fun NowPlayingTabletScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    MonoEyebrow(text = "LYRICS")
+                    MonoEyebrow(
+                        text = if (state.isOnline) "LYRICS" else "LYRICS · OFFLINE",
+                        color = if (state.isOnline) null else sv.accent,
+                    )
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(SvSpace.s2),
                         verticalAlignment = Alignment.CenterVertically,

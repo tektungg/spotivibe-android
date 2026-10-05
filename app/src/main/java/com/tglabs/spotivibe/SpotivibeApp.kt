@@ -1,10 +1,12 @@
 package com.tglabs.spotivibe
 
 import android.app.Application
+import com.tglabs.spotivibe.data.AndroidNetworkMonitor
 import com.tglabs.spotivibe.data.FileLyricsOverrideStore
 import com.tglabs.spotivibe.data.LyricsCache
 import com.tglabs.spotivibe.data.LyricsOverrideRepository
 import com.tglabs.spotivibe.data.LyricsRepository
+import com.tglabs.spotivibe.data.NetworkStatusSource
 import com.tglabs.spotivibe.data.PlaybackController
 import com.tglabs.spotivibe.data.PreferencesRepository
 import com.tglabs.spotivibe.data.RomanizationService
@@ -32,6 +34,9 @@ class SpotivibeApp : Application() {
     )
 
     val preferencesRepository: PreferencesRepository by lazy { PreferencesRepository(this) }
+
+    /** Status jaringan untuk mode offline. Satu callback seumur proses. */
+    val networkMonitor: NetworkStatusSource by lazy { AndroidNetworkMonitor(this) }
 
     /**
      * Sumber kebenaran tunggal untuk kredensial Spotify. Semua pembacaan token
@@ -71,6 +76,7 @@ class SpotivibeApp : Application() {
             diskCache = LyricsCache(this),
             statsRecorder = { event -> preferencesRepository.recordLyricsLookup(event) },
             overrides = { trackId -> lyricsOverrideRepository.overrideFor(trackId) },
+            network = networkMonitor,
         )
     }
     val romanizationService: RomanizationService by lazy { RomanizationService() }
@@ -86,6 +92,7 @@ class SpotivibeApp : Application() {
             preferencesRepository = preferencesRepository,
             webApiClient = webApiClient,
             scope = applicationScope,
+            network = networkMonitor,
         )
     }
 

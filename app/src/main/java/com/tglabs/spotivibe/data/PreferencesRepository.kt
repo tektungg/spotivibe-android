@@ -69,6 +69,14 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
     private val smoothScrollKey = booleanPreferencesKey("smooth_scroll")
     private val hapticEnabledKey = booleanPreferencesKey("haptic_enabled")
 
+    /**
+     * Field `product` terakhir dari Spotify Web API `/me` ("premium", "free").
+     * Disimpan supaya cold start offline tidak mulai dari Unknown. Ikut dihapus
+     * bersama token di [clearTokens], karena nilai ini milik AKUN, dan login
+     * berikutnya bisa saja akun lain.
+     */
+    private val lastKnownProductKey = stringPreferencesKey("last_known_product")
+
     val romanizationEnabled: Flow<Boolean> = context.dataStore.data
         .map { prefs -> prefs[romanizationKey] ?: false }
 
@@ -177,7 +185,15 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
             prefs.remove(spotifyRefreshTokenKey)
             prefs.remove(spotifyTokenExpiresAtKey)
             prefs.remove(legacyAuthorizedKey)
+            prefs.remove(lastKnownProductKey)
         }
+    }
+
+    val lastKnownProduct: Flow<String?> = context.dataStore.data
+        .map { prefs -> prefs[lastKnownProductKey] }
+
+    suspend fun setLastKnownProduct(product: String) {
+        context.dataStore.edit { it[lastKnownProductKey] = product }
     }
 
     override suspend fun savePendingAuth(pending: PendingAuth) {

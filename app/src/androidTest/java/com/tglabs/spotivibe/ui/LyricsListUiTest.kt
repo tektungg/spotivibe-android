@@ -81,6 +81,18 @@ class LyricsListUiTest {
         ).assertIsDisplayed()
     }
 
+    /**
+     * Offline berbeda dari gagal: tidak menyuruh replay, karena lirik diambil
+     * sendiri begitu jaringan kembali.
+     */
+    @Test
+    fun offlineTidakMenyuruhReplay() {
+        pasang(LyricsState.Offline)
+        compose.onNodeWithText(
+            "You're offline. Lyrics for this song aren't saved yet.",
+        ).assertIsDisplayed()
+    }
+
     // ── Menggambar lirik ─────────────────────────────────────────
 
     @Test

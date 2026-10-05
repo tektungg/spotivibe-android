@@ -24,6 +24,7 @@ class ManifestPermissionTest {
         ".vibrate(" to "android.permission.VIBRATE",
         "startForeground(" to "android.permission.FOREGROUND_SERVICE",
         "TYPE_APPLICATION_OVERLAY" to "android.permission.SYSTEM_ALERT_WINDOW",
+        "registerDefaultNetworkCallback" to "android.permission.ACCESS_NETWORK_STATE",
     )
 
     private fun akar(): File = listOf(File("src/main"), File("app/src/main"))

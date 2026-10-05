@@ -5,6 +5,12 @@
     <!-- Network access for LRCLIB + Spotify Web API -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Status jaringan untuk mode offline (NetworkMonitor). Tanpa ini
+         registerDefaultNetworkCallback melempar SecurityException, monitor
+         jatuh ke "selalu online", dan offline kembali menunggu timeout tiap
+         ganti lagu. Permission normal, tidak butuh grant runtime. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <!-- Foreground service untuk lyrics notification (specialUse — bukan media
          player karena Spotify yang main musik, kita cuma companion display) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

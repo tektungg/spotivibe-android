@@ -20,6 +20,7 @@ import com.tglabs.spotivibe.domain.outcomeOf
 import com.tglabs.spotivibe.domain.combineProbes
 import com.tglabs.spotivibe.domain.parseLrc
 import com.tglabs.spotivibe.domain.probeFromHttpFailure
+import com.tglabs.spotivibe.domain.resolveWithStale
 import com.tglabs.spotivibe.domain.retryBackoffMs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -39,13 +40,19 @@ import java.util.concurrent.TimeUnit
  * 1. **In-memory** ([memCache]) — paling cepat, hanya valid per session.
  * 2. **Disk** ([diskCache]) — JSON file, survive process restart, dengan TTL
  *    30 hari (positive) / 1 hari (negative).
- * 3. **Network** — LRCLIB API. Fire `/get` dan `/search` PARALEL via
+ * 3. **Network** — LRCLIB API, hanya kalau [network] bilang online. Fire `/get` dan `/search` PARALEL via
  *    [coroutineScope] + [async]. Prefer `/get` kalau selesai dalam
  *    [PREFER_GET_TIMEOUT_MS]ms dengan hasil ber-content, else pakai mana saja
  *    yang berhasil duluan dan ber-content.
  *
  * Semua exception ditelan — return [LyricsResult] kosong (hasContent=false)
  * kalau gagal. Caller cukup cek [LyricsResult.hasContent].
+ *
+ * Mode offline: kalau jaringan tidak bisa menjawab (offline, atau online tapi
+ * semua percobaan gagal), entri disk yang sudah lewat TTL dipakai sebagai
+ * cadangan lewat [resolveWithStale]. Saat offline jaringan tidak disentuh sama
+ * sekali, jadi lirik tersimpan tampil seketika, bukan setelah tiga percobaan
+ * yang masing-masing menunggu timeout.
  */
 class LyricsRepository(
     private val diskCache: LyricsDiskCache,
@@ -60,6 +67,13 @@ class LyricsRepository(
      * ini tetap sah.
      */
     private val overrides: LyricsOverrideSource = LyricsOverrideSource.None,
+    /**
+     * Status konektivitas. Default selalu online supaya konstruksi tanpa
+     * monitor tetap sah dan perilakunya sama persis dengan sebelum mode offline.
+     */
+    private val network: NetworkStatusSource = NetworkStatusSource.AlwaysOnline,
+    /** Seam untuk test. Null = bangun klien Retrofit LRCLIB sungguhan. */
+    lrclibApi: LrclibApi? = null,
 ) {
 
     // LRU bounded — max 50 tracks. Eviction otomatis dengan LinkedHashMap accessOrder.
@@ -95,7 +109,7 @@ class LyricsRepository(
         .readTimeout(10, TimeUnit.SECONDS)
         .build()
 
-    private val api: LrclibApi = Retrofit.Builder()
+    private val api: LrclibApi = lrclibApi ?: Retrofit.Builder()
         .baseUrl(BASE_URL)
         .client(httpClient)
         .addConverterFactory(MoshiConverterFactory.create(moshi))
@@ -150,11 +164,21 @@ class LyricsRepository(
                 .also { s -> record(LyricsSource.DiskCache, s, null) }
         }
 
-        // Layer 3: network — /get + /search, dengan retry untuk gangguan sesaat
+        // Layer 3a: offline. Jaringan sengaja tidak disentuh sama sekali; yang
+        // tersisa cuma cadangan basi dari disk.
+        if (!network.isOnline.value) {
+            return@withContext offlineFallback(trackId, LyricsState.Offline)
+        }
+
+        // Layer 3b: network — /get + /search, dengan retry untuk gangguan sesaat
         val maxAttempts = if (allowRetry) MAX_ATTEMPTS else 1
         var lookup = probeNetwork(trackId, title, artist, album, durationMs)
         var attempt = 1
-        while (lookup is LyricsLookup.Unavailable && attempt < maxAttempts) {
+        // Berhenti retry begitu jaringan hilang: percobaan berikutnya pasti
+        // gagal, dan user menunggu lirik yang sebenarnya bisa datang dari disk.
+        while (lookup is LyricsLookup.Unavailable && attempt < maxAttempts &&
+            network.isOnline.value
+        ) {
             val backoff = retryBackoffMs(attempt)
             Log.d(TAG, "Retry $attempt untuk $trackId dalam ${backoff}ms (${lookup.reason})")
             delay(backoff)
@@ -175,11 +199,43 @@ class LyricsRepository(
             LyricsLookup.NotFound -> LyricsState.NotFound
             is LyricsLookup.Unavailable -> {
                 Log.w(TAG, "Lirik tidak tersedia untuk $trackId: ${l.reason}")
-                LyricsState.Unavailable(l.reason)
+                // Jaringan hilang di tengah percobaan: tampilkan sebagai
+                // offline, supaya UI jujur dan fetch ulang terpicu saat online.
+                if (network.isOnline.value) LyricsState.Unavailable(l.reason)
+                else LyricsState.Offline
             }
+        }
+        if (state is LyricsState.Unavailable || state is LyricsState.Offline) {
+            return@withContext offlineFallback(trackId, state)
         }
         record(LyricsSource.Network, state, (lookup as? LyricsLookup.Found)?.probe)
         state
+    }
+
+    /**
+     * Jaringan tidak bisa menjawab: pakai lirik basi dari disk kalau ada.
+     *
+     * Hasil basi SENGAJA tidak dimasukkan ke mem cache. Mem cache dicek lebih
+     * dulu dari jaringan, jadi memasukkannya berarti lirik basi itu menang
+     * terus sepanjang sesi walaupun jaringan sudah kembali.
+     *
+     * Statistik: cadangan basi dicatat sebagai [LyricsSource.DiskCache], karena
+     * itulah sumber yang benar-benar menyajikan liriknya. Offline tanpa cadangan
+     * TIDAK dicatat sama sekali; statistik mengukur coverage LRCLIB, dan lookup
+     * yang tidak pernah bertanya ke LRCLIB tidak bilang apa-apa soal coverage.
+     * Kegagalan jaringan saat online tetap dicatat seperti sebelumnya.
+     */
+    private suspend fun offlineFallback(trackId: String, reason: LyricsState): LyricsState {
+        val state = resolveWithStale(reason, diskCache.getStale(trackId))
+        when {
+            state is LyricsState.Ready -> {
+                Log.d(TAG, "stale disk hit: $trackId (alasan: $reason)")
+                record(LyricsSource.DiskCache, state, null)
+            }
+            state is LyricsState.Unavailable -> record(LyricsSource.Network, state, null)
+            else -> Log.d(TAG, "offline tanpa cadangan: $trackId")
+        }
+        return state
     }
 
     /**
@@ -198,6 +254,9 @@ class LyricsRepository(
     suspend fun searchLyrics(title: String, artist: String): LyricsSearchState =
         withContext(Dispatchers.IO) {
             if (title.isBlank() && artist.isBlank()) return@withContext LyricsSearchState.Empty
+            // Langsung gagal saat offline daripada membuat user menatap spinner
+            // sampai timeout koneksi.
+            if (!network.isOnline.value) return@withContext LyricsSearchState.Failed("offline")
             try {
                 val resp = api.search(trackName = title, artistName = artist)
                 if (!resp.isSuccessful) {

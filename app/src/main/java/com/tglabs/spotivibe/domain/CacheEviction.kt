@@ -9,6 +9,10 @@ package com.tglabs.spotivibe.domain
  * menghapusnya, tapi baru saat penyimpanan sesak, dan saat itu terjadi sistem
  * membuang SELURUH isinya sekaligus, bukan yang paling tidak berguna.
  *
+ * Sejak mode offline, cache pindah ke `filesDir`: sistem tidak lagi boleh
+ * mengosongkannya diam-diam, jadi kebijakan di sinilah satu-satunya yang
+ * menjaga ukurannya.
+ *
  * Dipisah jadi fungsi murni supaya kebijakannya bisa diuji tanpa menyentuh
  * filesystem, termasuk kasus yang merepotkan disiapkan secara nyata seperti
  * cache yang sudah membengkak berbulan-bulan.
@@ -38,10 +42,11 @@ data class CacheFileInfo(
  *    ukurannya melebihi [maxBytes], buang yang paling lama tidak dipakai sampai
  *    keduanya terpenuhi.
  *
- * Batas usia di sini sengaja longgar, dipasang sama dengan TTL positif. TTL
- * negatif yang jauh lebih pendek tetap ditegakkan saat pembacaan, karena
- * menentukannya butuh membuka isi file dan itu terlalu mahal untuk dilakukan ke
- * seluruh direktori.
+ * Batas usia di sini sengaja longgar, dipasang ke `STALE_RETENTION_MS`, jauh
+ * di atas TTL. Berkas yang sudah lewat TTL tetap disimpan sebagai cadangan
+ * offline (lihat `resolveWithStale`); TTL hanya menentukan kapan lirik
+ * ditanyakan ulang ke LRCLIB, dan itu ditegakkan saat pembacaan karena butuh
+ * membuka isi file, yang terlalu mahal untuk dilakukan ke seluruh direktori.
  */
 fun filesToEvict(
     files: List<CacheFileInfo>,

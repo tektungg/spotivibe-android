@@ -12,6 +12,7 @@ import com.tglabs.spotivibe.domain.shouldCheckProduct
 import com.tglabs.spotivibe.domain.shouldPreload
 import com.tglabs.spotivibe.domain.shouldPublishLineIndex
 import com.tglabs.spotivibe.domain.shouldRecomputeAccent
+import com.tglabs.spotivibe.domain.shouldRefetchOnReconnect
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.LyricsState
 import com.tglabs.spotivibe.domain.NowPlaying
@@ -54,7 +55,11 @@ class PlaybackController(
     private val preferencesRepository: PreferencesRepository,
     private val webApiClient: WebApiClient,
     private val scope: CoroutineScope,
+    private val network: NetworkStatusSource = NetworkStatusSource.AlwaysOnline,
 ) {
+    /** Diteruskan ke UI untuk badge "Offline". */
+    val isOnline: StateFlow<Boolean> = network.isOnline
+
     // ── Pass-through dari SpotifyConnection ──────────────────────
     val track: StateFlow<NowPlaying?> = connection.nowPlaying
     val albumBitmap = connection.albumBitmap
@@ -109,7 +114,13 @@ class PlaybackController(
     // memulai hidup sebagai `false`, dan karena token implicit-grant tidak bisa
     // di-refresh, pengecekan /me tidak pernah berhasil setelah satu jam,
     // sehingga user Premium permanen dianggap bukan Premium.
+    //
+    // Nilainya cermin dari DataStore (lihat init), supaya cold start offline
+    // langsung memakai jawaban terakhir dan logout otomatis mengosongkannya.
+    // productVerified terpisah: nilai hasil restore belum tentu segar, jadi
+    // tetap dicek ulang sekali per sesi begitu online.
     private val _product = MutableStateFlow<String?>(null)
+    @Volatile private var productVerified = false
 
     val capability: StateFlow<PlaybackCapability> = combine(
         _product,
@@ -133,6 +144,28 @@ class PlaybackController(
     private val syncEngine = LyricsSyncEngine()
 
     init {
+        // 0. Status Premium tersimpan. Nilai null berarti token dihapus (logout
+        //    atau refresh ditolak permanen), jadi verifikasi sesi ikut gugur.
+        scope.launch {
+            preferencesRepository.lastKnownProduct.collect { stored ->
+                _product.value = stored
+                if (stored == null) productVerified = false
+            }
+        }
+
+        // 0b. Jaringan kembali: ambil ulang yang tadi gagal karena offline.
+        scope.launch {
+            var wasOnline = network.isOnline.value
+            network.isOnline.collect { online ->
+                if (shouldRefetchOnReconnect(wasOnline, online, _lyricsState.value)) {
+                    Log.d(TAG, "Online lagi, ambil ulang lirik lagu aktif")
+                    reloadLyrics()
+                }
+                if (!wasOnline && online) checkProduct()
+                wasOnline = online
+            }
+        }
+
         // 1. Fetch lyrics tiap track ID berubah + preload queue
         scope.launch {
             connection.nowPlaying
@@ -161,19 +194,10 @@ class PlaybackController(
                     // Cek /me sampai dapat jawaban. Gagal di sini tidak lagi
                     // menyembunyikan kontrol: capability tetap Unknown, dan
                     // Unknown menampilkan transport.
-                    if (shouldCheckProduct(_product.value)) {
-                        scope.launch {
-                            val product = webApiClient.getProduct()
-                            if (product != null) {
-                                _product.value = product
-                                Log.d(TAG, "Product check: $product -> ${capability.value}")
-                            } else {
-                                Log.d(TAG, "Product check null — retry saat track berikutnya")
-                            }
-                        }
-                    }
-                    // Preload queue — fetch lyrics untuk 3 track berikutnya
-                    scope.launch {
+                    checkProduct()
+                    // Preload queue — fetch lyrics untuk 3 track berikutnya.
+                    // Offline dilewati: /queue dan LRCLIB sama-sama pasti gagal.
+                    if (network.isOnline.value) scope.launch {
                         val queue = webApiClient.getQueue(limit = 3)
                         queue.forEach { next ->
                             if (!shouldPreload(next.id)) return@forEach
@@ -308,6 +332,28 @@ class PlaybackController(
                 allowRetry = false,
             )
             if (shouldApplyFetchedLyrics(t.id, connection.nowPlaying.value?.id)) applyLyrics(fetched)
+        }
+    }
+
+    /**
+     * Cek `/me` kalau sesi ini belum memverifikasi dan sedang online.
+     *
+     * Gagal di sini tidak menyembunyikan kontrol: nilai tersimpan (atau
+     * Unknown) tetap berlaku, dan pengecekan dicoba lagi saat ganti lagu atau
+     * saat jaringan kembali.
+     */
+    private fun checkProduct() {
+        if (!shouldCheckProduct(productVerified, network.isOnline.value)) return
+        scope.launch {
+            val product = webApiClient.getProduct()
+            if (product != null) {
+                productVerified = true
+                _product.value = product
+                preferencesRepository.setLastKnownProduct(product)
+                Log.d(TAG, "Product check: $product -> ${capability.value}")
+            } else {
+                Log.d(TAG, "Product check null — retry saat track berikutnya")
+            }
         }
     }
 

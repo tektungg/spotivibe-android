@@ -25,6 +25,15 @@ sealed interface LyricsState {
 
     /** Tidak bisa ditanyakan sekarang: jaringan mati, timeout, 5xx, rate limit. */
     data class Unavailable(val reason: String) : LyricsState
+
+    /**
+     * Perangkat sedang offline dan lagu ini belum punya lirik tersimpan.
+     *
+     * Dipisah dari [Unavailable] karena penyebab dan obatnya beda. Unavailable
+     * berarti kita SUDAH bertanya dan gagal; Offline berarti kita sengaja tidak
+     * bertanya, dan lirik akan diambil sendiri begitu jaringan kembali.
+     */
+    data object Offline : LyricsState
 }
 
 /** Hasil satu kali lookup, sebelum diputuskan mau di-cache atau tidak. */
@@ -123,4 +132,26 @@ fun retryBackoffMs(attempt: Int): Long {
     require(attempt >= 1) { "attempt mulai dari 1, dapat $attempt" }
     val exponent = (attempt - 1).coerceAtMost(8)
     return (400L shl exponent).coerceAtMost(3_000L)
+}
+
+/**
+ * Pakai lirik basi kalau jawaban segar tidak bisa didapat.
+ *
+ * Stale-if-error: lirik lagu jarang berubah, jadi lirik berumur dua bulan jauh
+ * lebih berguna daripada layar "tidak bisa dimuat". Sebelumnya `LyricsCache`
+ * menghapus entri yang lewat TTL saat dibaca, sehingga lagu yang sudah lama
+ * tersimpan justru kehilangan liriknya tepat saat offline.
+ *
+ * Aturannya:
+ * - Hanya [LyricsState.Unavailable] dan [LyricsState.Offline] yang boleh
+ *   digantikan. [LyricsState.NotFound] adalah jawaban PASTI dari LRCLIB, dan
+ *   [LyricsState.Ready] sudah segar; keduanya tidak boleh ditimpa data lama.
+ * - Hanya entri BERISI yang dipakai. Entri negatif basi ("dulu tidak ada")
+ *   tidak menjelaskan apa pun tentang sekarang, jadi lebih jujur tetap
+ *   menampilkan alasan aslinya.
+ */
+fun resolveWithStale(fresh: LyricsState, stale: LyricsResult?): LyricsState = when (fresh) {
+    is LyricsState.Unavailable, LyricsState.Offline ->
+        if (stale != null && stale.hasContent) LyricsState.Ready(stale) else fresh
+    else -> fresh
 }

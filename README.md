@@ -28,6 +28,10 @@ Android native companion untuk Spotify — synced lyrics dengan romanization (JP
 - **Dynamic accent color** — Palette API extract dari album cover (clamped HSV agar readable di dark theme)
 - **Auth OAuth 2.0 Authorization Code + PKCE** — connect sekali, sesi hidup terus lewat refresh token. Tidak ada client secret di APK
 - **Disk-based lyrics cache** — 30 hari positive / 1 hari negative TTL, LRU memory cache bounded 50 entries
+- **Offline mode** — lirik yang pernah dimuat tetap tampil tanpa internet berapa
+  pun umurnya, nol panggilan jaringan saat offline, eyebrow header "OFFLINE",
+  dan lirik yang gagal dimuat diambil sendiri begitu jaringan kembali. Detail di
+  [Offline](#offline)
 - **Glassmorphism Tokyo** theme — dark navy gradient + frosted surface
 
 ## Stack
@@ -315,10 +319,17 @@ tahu kenapa berhenti bergerak.
 
 ### Cache lirik
 
-Tiga lapis: memory LRU 50, file JSON di `cacheDir`, lalu jaringan.
+Tiga lapis: memory LRU 50, file JSON di `filesDir/lyrics-cache`, lalu jaringan.
+Dulu di `cacheDir`; isinya dipindahkan sekali saat akses pertama setelah update.
+`cacheDir` boleh dikosongkan Android kapan saja, dan itu persis saat yang salah
+untuk kehilangan lirik offline.
 
 Lapis disk dibatasi **500 entry atau 8 MB**, mana yang lebih dulu tercapai, plus
-buang otomatis apa pun yang lebih tua dari 30 hari. Sebelumnya tidak ada batas
+buang otomatis apa pun yang tidak dipakai lebih dari 180 hari
+(`STALE_RETENTION_MS`). TTL dan retensi sengaja beda: TTL menentukan kapan lirik
+ditanyakan ulang ke LRCLIB, retensi menentukan kapan berkasnya dibuang. Entri
+yang lewat TTL tidak dihapus saat dibaca, karena ia jadi cadangan saat jaringan
+tidak bisa menjawab. Sebelumnya tidak ada batas
 sama sekali: file hanya terhapus kalau kebetulan dibaca lagi setelah
 kedaluwarsa, jadi lagu yang diputar sekali lalu tidak pernah disentuh menetap
 selamanya.
@@ -354,8 +365,43 @@ Kegagalan sementara diulang sampai 3 kali dengan backoff 400 ms, 800 ms, 1.6 s.
 Preload antrean selalu satu percobaan saja, supaya tidak berebut jaringan
 dengan lagu yang sedang diputar.
 
-UI membedakan keduanya: "Lirik tidak ditemukan untuk track ini" versus "Gagal
-memuat lirik. Cek koneksi, lalu putar ulang lagunya."
+UI membedakan tiga keadaan kosong: "No lyrics found for this track" (LRCLIB
+memastikan tidak ada), "Couldn't load lyrics. Check your connection, then replay
+the song." (online tapi gagal), dan "You're offline. Lyrics for this song aren't
+saved yet." (offline, belum ada cadangan; diambil sendiri saat online lagi).
+
+### Offline
+
+Aturannya satu: panggilan jaringan yang gagal memakai nilai terakhir yang
+diketahui, dan state tidak pernah turun ke "gagal" hanya karena offline.
+Keputusan lengkap dan alternatif yang ditolak ada di
+[`docs/superpowers/specs/2026-10-05-offline-mode-design.md`](docs/superpowers/specs/2026-10-05-offline-mode-design.md).
+
+| Data | Sumber | Saat offline |
+|---|---|---|
+| Info lagu, posisi, kontrol, cover | App Remote (IPC ke app Spotify) | Jalan normal |
+| Romanisasi | Lokal | Jalan normal |
+| Lirik | Disk cache, lalu LRCLIB | Cache segar atau basi, tanpa panggilan jaringan |
+| Status Premium | Web API `/me` | Nilai terakhir dari DataStore, dicek ulang sekali per sesi saat online |
+| Preload antrean | Web API `/me/player/queue` | Dilewati |
+| Token | `accounts.spotify.com` | Kredensial dipertahankan, refresh dicoba lagi nanti |
+
+`NetworkMonitor` mengikuti default network lewat
+`registerDefaultNetworkCallback`. Online berarti punya `NET_CAPABILITY_INTERNET`
+dan tidak terdeteksi captive portal. `NET_CAPABILITY_VALIDATED` sengaja tidak
+disyaratkan: endpoint validasi Google diblokir di sebagian jaringan, dan salah
+mengira offline membuat app berhenti mengambil lirik sama sekali.
+
+Saat jaringan kembali, `PlaybackController` mengambil ulang lirik lagu aktif
+kalau tadi `Offline` atau `Unavailable`, lalu mengecek `/me` kalau sesi ini
+belum memverifikasinya.
+
+Yang tetap butuh internet: login pertama, dan lirik lagu yang belum pernah
+diputar atau masuk antrean saat online. Musik offline sendiri tetap urusan fitur
+download di app Spotify.
+
+Trace di logcat: `adb logcat -s NetworkMonitor LyricsRepository PlaybackController`
+menampilkan `online=<bool>`, `stale disk hit`, dan `offline tanpa cadangan`.
 
 ### Statistik lirik
 
@@ -418,13 +464,15 @@ berikutnya yang menyala.
 SpotivibeApp (Application)
 ├── applicationScope (SupervisorJob + Main.immediate)
 ├── preferencesRepository (DataStore, sekaligus AuthStorage)
+├── networkMonitor ─ default network callback → isOnline
 ├── authRepository ─ PKCE + token refresh (single-flight)
 ├── spotifyConnection ─ AppRemote IPC
-├── lyricsRepository ─ LRCLIB + 3-layer cache (mem LRU 50, disk JSON, network)
+├── lyricsRepository ─ LRCLIB + 3-layer cache (mem LRU 50, disk JSON, network), stale-if-offline
 ├── romanizationService ─ JA/KR/ZH lazy-init
 └── playbackController ─ orchestrator
         ├── observe nowPlaying (Spotify event stream)
-        ├── fetch lyrics on track change
+        ├── fetch lyrics on track change, ulang saat online kembali
+        ├── status Premium tersimpan, /me sekali per sesi saat online
         ├── lyricsSyncEngine → currentLineIndex (tick adaptif, offset-aware)
         ├── compute romaji reactive (off main)
         └── compute accent (Palette, off main)
@@ -438,9 +486,11 @@ ViewModel + UI      NotificationService    OverlayManager
 ## Permissions
 
 - `INTERNET` — LRCLIB fetch
+- `ACCESS_NETWORK_STATE` — `NetworkMonitor` untuk mode offline
 - `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_SPECIAL_USE` — notification service hidup di background
 - `POST_NOTIFICATIONS` — Android 13+ runtime
 - `SYSTEM_ALERT_WINDOW` — floating overlay (granted via Settings)
+- `VIBRATE` — haptic tick saat baris lirik berganti
 
 ## Tested on
 

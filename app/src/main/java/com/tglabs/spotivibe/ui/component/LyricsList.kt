@@ -129,6 +129,13 @@ fun LyricsList(
 
             !plain.isNullOrBlank() -> PlainView(plain, fontSize, sv.ink2)
 
+            // Offline dicoba ulang otomatis saat jaringan kembali
+            // (PlaybackController), jadi pesannya tidak menyuruh replay.
+            // Unavailable tetap: online tapi LRCLIB gagal tidak memicu
+            // transisi jaringan apa pun, jadi replay memang jalan keluarnya.
+            lyricsState is LyricsState.Offline ->
+                StatusText("You're offline. Lyrics for this song aren't saved yet.")
+
             lyricsState is LyricsState.Unavailable ->
                 StatusText("Couldn't load lyrics. Check your connection, then replay the song.")
 

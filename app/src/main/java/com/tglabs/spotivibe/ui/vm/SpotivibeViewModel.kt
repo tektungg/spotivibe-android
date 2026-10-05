@@ -118,6 +118,7 @@ class SpotivibeViewModel(
             preferencesRepository.highContrast,
             preferencesRepository.smoothScroll,
             preferencesRepository.hapticEnabled,
+            controller.isOnline,
         )
     ) { values ->
         @Suppress("UNCHECKED_CAST")
@@ -138,6 +139,7 @@ class SpotivibeViewModel(
         val highContrast = values[14] as Boolean
         val smoothScroll = values[15] as Boolean
         val haptic = values[16] as Boolean
+        val isOnline = values[17] as Boolean
 
         when (connState) {
             ConnectionState.Disconnected -> UiState.Disconnected
@@ -168,6 +170,7 @@ class SpotivibeViewModel(
                     highContrast = highContrast,
                     smoothScroll = smoothScroll,
                     hapticEnabled = haptic,
+                    isOnline = isOnline,
                 )
             } ?: UiState.Idle
             is ConnectionState.Error -> UiState.Error(connState.message)
