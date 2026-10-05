@@ -4,6 +4,9 @@ import android.util.Log
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import com.tglabs.spotivibe.domain.LrclibProbe
+import com.tglabs.spotivibe.domain.LyricsCandidate
+import com.tglabs.spotivibe.domain.isUnbeatable
+import com.tglabs.spotivibe.domain.pickBestCandidate
 import com.tglabs.spotivibe.domain.LyricsLookup
 import com.tglabs.spotivibe.domain.LrclibSearchEntry
 import com.tglabs.spotivibe.domain.LyricsLookupEvent
@@ -306,11 +309,12 @@ class LyricsRepository(
     /**
      * Tanya `/get` dan `/search` paralel, lalu gabungkan jadi satu keputusan.
      *
-     * Strategi: tunggu `/get` sampai [PREFER_GET_TIMEOUT_MS]ms. Kalau sudah
-     * ber-content, pakai itu dan jangan tunggu `/search`. Kalau tidak, tunggu
-     * keduanya, karena [combineProbes] butuh tahu apakah probe yang lain
-     * BERHASIL bilang tidak ada, atau justru gagal dijangkau. Beda itu yang
-     * menentukan boleh tidaknya hasilnya di-cache.
+     * Strategi: tunggu `/get` sampai [PREFER_GET_TIMEOUT_MS]ms. Kalau hasilnya
+     * synced dan durasinya nyaris persis ([isUnbeatable]), pakai itu dan jangan
+     * tunggu `/search`. Selain itu tunggu keduanya: `/search` mungkin punya
+     * versi synced yang lebih cocok, dan [combineProbes] juga butuh tahu
+     * apakah probe yang lain BERHASIL bilang tidak ada atau justru gagal
+     * dijangkau. Beda itu yang menentukan boleh tidaknya hasilnya di-cache.
      */
     private suspend fun probeNetwork(
         trackId: String,
@@ -319,12 +323,18 @@ class LyricsRepository(
         album: String,
         durationMs: Long,
     ): LyricsLookup = coroutineScope {
+        val targetSec = durationMs.takeIf { it > 0 }?.let { it / 1000.0 }
         val getDeferred = async { probeGet(trackId, title, artist, album, durationMs) }
-        val searchDeferred = async { probeSearch(trackId, title, artist) }
+        val searchDeferred = async { probeSearch(trackId, title, artist, targetSec) }
 
-        // Jalur cepat: /get sudah punya konten, tidak perlu menunggu /search.
+        // Jalur cepat: /get synced dengan durasi nyaris persis tidak mungkin
+        // dikalahkan /search, jadi tidak perlu menunggunya. Dulu SEMUA konten
+        // /get lewat jalur ini, termasuk plain lyrics yang mestinya kalah dari
+        // versi synced di /search.
         val getQuick = withTimeoutOrNull(PREFER_GET_TIMEOUT_MS) { getDeferred.await() }
-        if (getQuick is LrclibProbe.Content) {
+        if (getQuick is LrclibProbe.Content &&
+            isUnbeatable(LyricsCandidate(getQuick.result, getQuick.durationSec, ProbeSource.Get), targetSec)
+        ) {
             Log.d(TAG, "/get menang (jalur cepat) untuk $trackId")
             // Biarkan /search selesai supaya tidak menggantung, hasilnya dibuang.
             runCatching { searchDeferred.await() }
@@ -336,7 +346,7 @@ class LyricsRepository(
         val searchProbe = runCatching { searchDeferred.await() }
             .getOrElse { LrclibProbe.Failed(it.message ?: "search gagal") }
 
-        combineProbes(getProbe, searchProbe).also {
+        combineProbes(getProbe, searchProbe, targetSec).also {
             Log.d(TAG, "Lookup $trackId: get=$getProbe search=$searchProbe -> $it")
         }
     }
@@ -362,34 +372,44 @@ class LyricsRepository(
         )
         if (!resp.isSuccessful) return@runCatching probeFromHttpFailure(resp.code())
         val dto = resp.body() ?: return@runCatching LrclibProbe.Absent
-        dto.toLyricsResult(trackId).asProbe()
+        dto.toLyricsResult(trackId).asProbe(dto.duration)
     }.getOrElse { t ->
         // IOException, timeout, parse error: semuanya sementara.
         Log.w(TAG, "/get error untuk $trackId: ${t.message}")
         LrclibProbe.Failed(t.message ?: "get gagal")
     }
 
-    /** Hit `/api/search`. Array kosong adalah jawaban sungguhan "tidak ada". */
+    /**
+     * Hit `/api/search`. Array kosong adalah jawaban sungguhan "tidak ada".
+     *
+     * Dari semua item dipilih lewat [pickBestCandidate]: synced dulu, durasi
+     * paling mirip dengan [targetSec]. Dulu yang diambil item synced PERTAMA,
+     * yang bisa saja versi live atau extended dengan timing berbeda.
+     */
     private suspend fun probeSearch(
         trackId: String,
         title: String,
         artist: String,
+        targetSec: Double?,
     ): LrclibProbe = runCatching {
         val resp = api.search(trackName = title, artistName = artist)
         if (!resp.isSuccessful) return@runCatching probeFromHttpFailure(resp.code())
         val items = resp.body().orEmpty()
         if (items.isEmpty()) return@runCatching LrclibProbe.Absent
-        // Prefer item dengan syncedLyrics; fallback ke item pertama
-        val pick = items.firstOrNull { !it.syncedLyrics.isNullOrBlank() } ?: items.first()
-        pick.toLyricsResult(trackId).asProbe()
+        val kandidat = items.map { dto ->
+            LyricsCandidate(dto.toLyricsResult(trackId), dto.duration, ProbeSource.Search)
+        }
+        val pick = pickBestCandidate(kandidat, targetSec)
+            ?: return@runCatching LrclibProbe.Absent
+        LrclibProbe.Content(pick.result, pick.durationSec)
     }.getOrElse { t ->
         Log.w(TAG, "/search error untuk $trackId: ${t.message}")
         LrclibProbe.Failed(t.message ?: "search gagal")
     }
 
     /** Hasil tanpa isi sama artinya dengan "tidak ada", bukan konten kosong. */
-    private fun LyricsResult.asProbe(): LrclibProbe =
-        if (hasContent) LrclibProbe.Content(this) else LrclibProbe.Absent
+    private fun LyricsResult.asProbe(durationSec: Double?): LrclibProbe =
+        if (hasContent) LrclibProbe.Content(this, durationSec) else LrclibProbe.Absent
 
     private fun LrclibDto.toLyricsResult(trackId: String): LyricsResult {
         val synced = syncedLyrics?.takeIf { it.isNotBlank() }?.let { parseLrc(it) }

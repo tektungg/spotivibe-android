@@ -55,8 +55,13 @@ sealed interface LyricsLookup {
 
 /** Hasil satu probe ke satu endpoint LRCLIB. */
 sealed interface LrclibProbe {
-    /** Endpoint mengembalikan lirik yang benar-benar ada isinya. */
-    data class Content(val result: LyricsResult) : LrclibProbe
+    /**
+     * Endpoint mengembalikan lirik yang benar-benar ada isinya.
+     *
+     * [durationSec] adalah durasi versi itu menurut LRCLIB, dipakai
+     * [pickBestCandidate] untuk membandingkan `/get` dengan `/search`.
+     */
+    data class Content(val result: LyricsResult, val durationSec: Double? = null) : LrclibProbe
 
     /** Endpoint menjawab dengan sukses, dan jawabannya "tidak ada". */
     data object Absent : LrclibProbe
@@ -70,15 +75,34 @@ sealed interface LrclibProbe {
  *
  * Aturan yang menentukan:
  *
- * - Ada konten di salah satu, pakai itu. `/get` menang karena lebih akurat
- *   (dicocokkan dengan album + durasi).
+ * - Ada konten di salah satu, pakai itu. Kalau KEDUANYA punya, pemenangnya
+ *   ditentukan [pickBestCandidate]: synced dulu, durasi paling mirip dengan
+ *   [targetSec], baru `/get` sebagai pemecah seri. Dulu `/get` selalu menang,
+ *   sehingga plain lyrics dari `/get` mengalahkan versi synced dari `/search`.
  * - [LyricsLookup.NotFound] HANYA kalau KEDUA probe berhasil dan sama-sama
  *   bilang tidak ada. Kalau salah satunya gagal, kita tidak benar-benar tahu:
  *   yang gagal itu mungkin punya liriknya. Menyimpannya sebagai "tidak ada"
  *   akan menyembunyikan lirik selama masa TTL negatif.
  * - Sisanya [LyricsLookup.Unavailable], dan itu tidak boleh di-cache.
  */
-fun combineProbes(get: LrclibProbe, search: LrclibProbe): LyricsLookup = when {
+fun combineProbes(
+    get: LrclibProbe,
+    search: LrclibProbe,
+    targetSec: Double? = null,
+): LyricsLookup = when {
+    get is LrclibProbe.Content && search is LrclibProbe.Content -> {
+        val menang = pickBestCandidate(
+            listOf(
+                LyricsCandidate(get.result, get.durationSec, ProbeSource.Get),
+                LyricsCandidate(search.result, search.durationSec, ProbeSource.Search),
+            ),
+            targetSec,
+        )
+        // Content dijamin berisi, jadi menang tidak pernah null; fallback ke
+        // /get hanya jaring kalau invarian itu suatu saat dilanggar.
+        if (menang == null) LyricsLookup.Found(get.result, ProbeSource.Get)
+        else LyricsLookup.Found(menang.result, menang.source)
+    }
     get is LrclibProbe.Content -> LyricsLookup.Found(get.result, ProbeSource.Get)
     search is LrclibProbe.Content -> LyricsLookup.Found(search.result, ProbeSource.Search)
     get is LrclibProbe.Absent && search is LrclibProbe.Absent -> LyricsLookup.NotFound

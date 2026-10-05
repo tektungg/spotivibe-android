@@ -147,4 +147,29 @@ class LyricsCacheTest {
         assertEquals(0, migrateLegacyLyricsCache(lama, baru))
         assertEquals(1, baru.listFiles()!!.size)
     }
+
+    // ── Versi aturan seleksi ─────────────────────────────────────
+
+    /**
+     * Entri yang dipilih dengan aturan lama (berkas tanpa selectionVersion)
+     * dipilih ulang saat online, tapi tetap jadi cadangan saat offline.
+     */
+    @Test
+    fun `entri dari aturan seleksi lama dipilih ulang tapi tetap jadi cadangan`() {
+        val dir = tmp.root.resolve("baru")
+        val c = cache(dir)
+        File(dir, cacheFileName("spotify:track:a")).writeText(
+            """{"synced":[{"timeMs":0,"text":"lama"}],"plain":null,"hasContent":true,"cachedAt":$sekarang}""",
+        )
+        assertNull(c.get("spotify:track:a"))
+        assertEquals("lama", c.getStale("spotify:track:a")?.synced?.single()?.text)
+    }
+
+    @Test
+    fun `entri baru tercatat dengan versi seleksi sekarang`() {
+        val dir = tmp.root.resolve("baru")
+        cache(dir).put(lirik())
+        val isi = File(dir, cacheFileName("spotify:track:a")).readText()
+        assertTrue(isi, isi.contains("\"selectionVersion\":1"))
+    }
 }

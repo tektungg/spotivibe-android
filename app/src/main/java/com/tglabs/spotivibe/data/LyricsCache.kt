@@ -2,7 +2,9 @@ package com.tglabs.spotivibe.data
 
 import com.tglabs.spotivibe.domain.STALE_RETENTION_MS
 import com.tglabs.spotivibe.domain.cacheFileName
+import com.tglabs.spotivibe.domain.LYRICS_SELECTION_VERSION
 import com.tglabs.spotivibe.domain.isCacheExpired
+import com.tglabs.spotivibe.domain.isSelectionOutdated
 import android.content.Context
 import android.util.Log
 import com.squareup.moshi.JsonClass
@@ -108,6 +110,12 @@ class LyricsCache internal constructor(
             Log.d(TAG, "Cache basi untuk $trackId (disimpan sebagai cadangan)")
             return null
         }
+        if (isSelectionOutdated(entry.selectionVersion)) {
+            // Dipilih dengan aturan lama. Sama seperti basi: tidak dipakai saat
+            // online supaya dipilih ulang, tapi tetap ada untuk getStale().
+            Log.d(TAG, "Cache versi seleksi ${entry.selectionVersion} untuk $trackId, pilih ulang")
+            return null
+        }
         return entry.toLyricsResult(trackId)
     }
 
@@ -157,6 +165,7 @@ class LyricsCache internal constructor(
                 plain = result.plain,
                 hasContent = result.hasContent,
                 cachedAt = nowMs(),
+                selectionVersion = LYRICS_SELECTION_VERSION,
             )
             fileFor(result.trackId).writeText(adapter.toJson(entry))
             maybeSweep()
@@ -231,6 +240,11 @@ class LyricsCache internal constructor(
         val plain: String?,
         val hasContent: Boolean,
         val cachedAt: Long,
+        /**
+         * Versi aturan pemilihan saat entri ini dipilih. Default 0 supaya
+         * berkas lama tetap terbaca, lalu diperlakukan basi oleh [get].
+         */
+        val selectionVersion: Int = 0,
     ) {
         fun toLyricsResult(trackId: String): LyricsResult = LyricsResult(
             trackId = trackId,

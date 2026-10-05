@@ -251,4 +251,41 @@ class LyricsLookupTest {
     fun `tanpa cadangan alasan aslinya dipertahankan`() {
         assertEquals(LyricsState.Offline, resolveWithStale(LyricsState.Offline, null))
     }
+
+    // ── combineProbes: synced dan durasi ─────────────────────────
+
+    /**
+     * REGRESI: dulu konten /get selalu menang. Plain lyrics dari /get
+     * mengalahkan versi synced dari /search untuk lagu yang sama.
+     */
+    @Test
+    fun `search synced menang atas get plain kalau durasinya cocok`() {
+        val hasil = combineProbes(
+            LrclibProbe.Content(plainOnly, durationSec = 200.0),
+            LrclibProbe.Content(synced, durationSec = 202.0),
+            targetSec = 200.0,
+        )
+        assertEquals(LyricsLookup.Found(synced, ProbeSource.Search), hasil)
+    }
+
+    @Test
+    fun `get synced tetap menang atas search synced yang durasinya lebih jauh`() {
+        val searchSynced = synced.copy(synced = listOf(SyncedLine(id = 0, timeMs = 0, text = "search")))
+        val hasil = combineProbes(
+            LrclibProbe.Content(synced, durationSec = 200.5),
+            LrclibProbe.Content(searchSynced, durationSec = 203.0),
+            targetSec = 200.0,
+        )
+        assertEquals(LyricsLookup.Found(synced, ProbeSource.Get), hasil)
+    }
+
+    @Test
+    fun `search synced yang durasinya jauh kalah dari get plain yang cocok`() {
+        val hasil = combineProbes(
+            LrclibProbe.Content(plainOnly, durationSec = 200.0),
+            LrclibProbe.Content(synced, durationSec = 260.0),
+            targetSec = 200.0,
+        )
+        assertEquals(LyricsLookup.Found(plainOnly, ProbeSource.Get), hasil)
+    }
 }

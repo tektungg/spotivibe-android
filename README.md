@@ -361,6 +361,28 @@ tidak ada.** Kalau salah satunya gagal dijangkau, kita tidak benar-benar tahu,
 karena yang gagal itu mungkin justru punya liriknya. 404 dari `/get` dihitung
 sebagai jawaban sungguhan; 429 dan 5xx tidak.
 
+**Memilih lirik: synced dulu, durasi paling mirip.** Semua kandidat (`/get` dan
+setiap item `/search`) diberi peringkat oleh `pickBestCandidate`
+(`domain/LyricsSelection.kt`):
+
+| Urutan | Kunci |
+|---|---|
+| 1 | Synced dengan selisih durasi ≤ 5 s, lalu plain ≤ 5 s, lalu synced di luar toleransi, lalu plain di luar toleransi |
+| 2 | Selisih durasi terhadap lagu di Spotify, terkecil dulu |
+| 3 | `/get` sebelum `/search` (ikut dicocokkan dengan album) |
+
+Dulu konten `/get` selalu menang walau cuma plain, dan dari `/search` diambil
+item synced pertama tanpa melihat durasi, sehingga versi live atau extended bisa
+terpilih. Toleransi 5 s ada karena synced dari versi berdurasi lain punya
+timestamp yang meleset di sepanjang lagu; `/get` LRCLIB sendiri hanya
+menoleransi ±2 s. Jalur cepat (tidak menunggu `/search`) kini hanya untuk `/get`
+yang synced dengan selisih durasi ≤ 1 s.
+
+Setiap entri cache mencatat `selectionVersion`. Entri dari aturan lama dianggap
+basi: saat online lagunya dipilih ulang, saat offline tetap tersaji sebagai
+cadangan. Naikkan `LYRICS_SELECTION_VERSION` setiap kali aturan peringkat
+berubah.
+
 Kegagalan sementara diulang sampai 3 kali dengan backoff 400 ms, 800 ms, 1.6 s.
 Preload antrean selalu satu percobaan saja, supaya tidak berebut jaringan
 dengan lagu yang sedang diputar.
