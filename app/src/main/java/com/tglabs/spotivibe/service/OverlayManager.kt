@@ -12,6 +12,12 @@ import android.view.animation.DecelerateInterpolator
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.animation.doOnEnd
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.doOnLayout
+import com.tglabs.spotivibe.domain.clampOverlayY
+import com.tglabs.spotivibe.domain.overlayHorizontalBounds
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -127,6 +133,10 @@ class OverlayManager(
 
             owner.onStart()
             windowManager.addView(view, layout)
+            // Insets dan tinggi view baru diketahui setelah layout pertama.
+            // Posisi tersimpan (default Y 0, di bawah status bar) dijepit ke
+            // area aman di sini, sebelum user sempat melihat posisi salahnya.
+            view.doOnLayout { applySafeBounds() }
             isShown = true
             Log.d(TAG, "Overlay shown at ($currentX, $currentY)")
             true
@@ -179,13 +189,16 @@ class OverlayManager(
     private fun handleDrag(dx: Int, dy: Int) {
         val p = params ?: return
         val view = composeView ?: return
-        val (_, sh) = screenSize()
+        val (sw, sh) = screenSize()
         val vh = view.height.coerceAtLeast(1)
+        val ins = safeInsets(view)
 
-        // X selalu 0 (full-width overlay)
-        p.x = 0
-        p.y = com.tglabs.spotivibe.domain.clampOverlayY(p.y, dy, sh, vh)
-        currentX = 0
+        // X tidak bisa digeser: overlay selebar area aman.
+        val h = overlayHorizontalBounds(sw, ins.left, ins.right)
+        p.x = h.x
+        p.width = h.width
+        p.y = clampOverlayY(p.y, dy, sh, vh, ins.top, ins.bottom)
+        currentX = h.x
         currentY = p.y
 
         try {
@@ -205,7 +218,8 @@ class OverlayManager(
         val view = composeView ?: return
         val (_, sh) = screenSize()
         val vh = view.height.coerceAtLeast(1)
-        val targetY = com.tglabs.spotivibe.domain.clampOverlayY(currentY, 0, sh, vh)
+        val ins = safeInsets(view)
+        val targetY = clampOverlayY(currentY, 0, sh, vh, ins.top, ins.bottom)
 
         // Kalau Y sudah dalam bounds, langsung persist tanpa animasi
         if (!com.tglabs.spotivibe.domain.needsSettleAnimation(targetY, currentY)) {
@@ -220,7 +234,6 @@ class OverlayManager(
             addUpdateListener { anim ->
                 val t = anim.animatedValue as Float
                 currentY = (startY + (targetY - startY) * t).toInt()
-                p.x = 0
                 p.y = currentY
                 try {
                     windowManager.updateViewLayout(view, p)
@@ -235,16 +248,67 @@ class OverlayManager(
         }
     }
 
-    /** Get display size dalam pixel — gunakan currentWindowMetrics (API 30+) atau fallback. */
+    /**
+     * Ukuran display PENUH dalam piksel, termasuk area bar sistem.
+     *
+     * Harus penuh karena insets dari [safeInsets] diukur dari tepi display.
+     * `displayMetrics` di bawah API 30 sudah mengurangi navigation bar, jadi
+     * memakainya bersama inset bawah berarti mengurangi bar itu dua kali.
+     */
     private fun screenSize(): Pair<Int, Int> {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val metrics = windowManager.currentWindowMetrics
             val bounds = metrics.bounds
             bounds.width() to bounds.height()
         } else {
-            val dm = context.resources.displayMetrics
+            val dm = android.util.DisplayMetrics()
+            @Suppress("DEPRECATION")
+            windowManager.defaultDisplay.getRealMetrics(dm)
             dm.widthPixels to dm.heightPixels
         }
+    }
+
+    /**
+     * Bar sistem + cutout yang ditimpa jendela overlay, piksel.
+     *
+     * Dibaca dari root insets view overlay sendiri, yang jalan di semua level
+     * API (head unit banyak yang masih Android 9/10). "IgnoringVisibility"
+     * supaya bar yang sedang tersembunyi sementara tetap dihindari; bar itu
+     * muncul lagi begitu disentuh dan akan menutupi overlay.
+     *
+     * Belum ter-attach atau OEM tidak melaporkan insets: [Insets.NONE], yang
+     * berarti batasnya seluruh layar, persis perilaku sebelum safe area.
+     */
+    private fun safeInsets(view: android.view.View): Insets =
+        ViewCompat.getRootWindowInsets(view)
+            ?.getInsetsIgnoringVisibility(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
+            )
+            ?: Insets.NONE
+
+    /** Jepit posisi dan lebar overlay ke area aman, lalu simpan kalau Y berubah. */
+    private fun applySafeBounds() {
+        val p = params ?: return
+        val view = composeView ?: return
+        val (sw, sh) = screenSize()
+        val ins = safeInsets(view)
+        val h = overlayHorizontalBounds(sw, ins.left, ins.right)
+        val y = clampOverlayY(currentY, 0, sh, view.height.coerceAtLeast(1), ins.top, ins.bottom)
+        if (p.x == h.x && p.width == h.width && p.y == y) return
+        val yBerubah = y != currentY
+        p.x = h.x
+        p.width = h.width
+        p.y = y
+        currentX = h.x
+        currentY = y
+        Log.d(TAG, "Safe area overlay: insets=$ins -> x=${h.x} w=${h.width} y=$y")
+        try {
+            windowManager.updateViewLayout(view, p)
+        } catch (t: Throwable) {
+            Log.w(TAG, "updateViewLayout (safe area) failed: ${t.message}")
+            return
+        }
+        if (yBerubah) onPositionChange(0, y)
     }
 
     private fun handlePlayPause() {

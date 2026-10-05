@@ -1,5 +1,6 @@
 package com.tglabs.spotivibe.ui.screen
 
+import com.tglabs.spotivibe.ui.theme.svSafeContent
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -103,13 +104,14 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(sv.bg0),
+            .background(sv.bg0)
+            .svSafeContent(),
     ) {
         // ── Header ─────────────────────────────────
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = SvSpace.s5, end = SvSpace.s5, top = SvSpace.s8, bottom = SvSpace.s4),
+                .padding(start = SvSpace.s5, end = SvSpace.s5, top = SvSpace.s3, bottom = SvSpace.s4),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 HairlineIconButton(

@@ -1,5 +1,7 @@
 package com.tglabs.spotivibe.ui.screen
 
+import com.tglabs.spotivibe.ui.theme.svSafeContent
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -100,6 +102,9 @@ fun KaraokeView(
         Column(
             modifier = Modifier
                 .align(Alignment.TopStart)
+                // Bar disembunyikan di mode ini, jadi insets tinggal cutout
+                // (dan bar transien saat diusap). Padding desain tetap.
+                .svSafeContent(WindowInsetsSides.Top + WindowInsetsSides.Start)
                 .padding(top = SvSpace.s12, start = SvSpace.s5),
         ) {
             MonoEyebrow(
@@ -120,6 +125,7 @@ fun KaraokeView(
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
+                .svSafeContent(WindowInsetsSides.Top + WindowInsetsSides.End)
                 .padding(top = SvSpace.s12, end = SvSpace.s5)
                 .size(36.dp)
                 .clip(CircleShape)
@@ -141,6 +147,7 @@ fun KaraokeView(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
+                .svSafeContent(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)
                 .padding(start = SvSpace.s5, end = SvSpace.s5, bottom = SvSpace.s8),
         ) {
             if (durationMs > 0L) {

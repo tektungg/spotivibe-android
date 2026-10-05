@@ -86,4 +86,84 @@ class ResponsiveGuardTest {
             pelanggar.isEmpty(),
         )
     }
+
+    // ── Safe area ────────────────────────────────────────────────
+
+    /** Baris kode tanpa komentar baris dan tanpa isi KDoc. */
+    private fun kodeDari(baris: String): String {
+        val t = baris.trim()
+        if (t.startsWith("*") || t.startsWith("/*")) return ""
+        return baris.substringBefore("//")
+    }
+
+    /**
+     * REGRESI: dulu tidak ada satu layar pun yang memakai insets, dan header
+     * tertimpa navigation bar di head unit. Setiap layar penuh di ui/screen
+     * wajib lewat svSafeContent. MainScreen dikecualikan karena ia hanya
+     * router: insets di sana akan ikut memotong latar full-bleed layar anak.
+     */
+    @Test
+    fun `setiap layar memakai safe area`() {
+        val layar = sumberUi()
+            .filter { it.parentFile?.name == "screen" && it.name != "MainScreen.kt" }
+            .filter { berkas -> berkas.readLines().any { "@Composable" in kodeDari(it) } }
+        assertTrue("harus menemukan layar, dapat ${layar.size}", layar.size >= 6)
+
+        val tanpaInsets = layar
+            .filterNot { berkas -> berkas.readLines().any { "svSafeContent(" in kodeDari(it) } }
+            .map { it.name }
+
+        assertTrue(
+            "Layar tanpa safe area. Pasang .background(...).svSafeContent() di " +
+                "container kontennya (lihat SvInsets.kt):\n" + tanpaInsets.joinToString("\n"),
+            tanpaInsets.isEmpty(),
+        )
+    }
+
+    /**
+     * Semua insets lewat svSafeInsets() supaya test bisa menyuntikkan insets
+     * palsu lewat LocalSvSafeInsets. Pemanggilan langsung melewati seam itu,
+     * dan UI test safe area jadi diam-diam tidak menguji apa pun.
+     */
+    @Test
+    fun `insets sistem hanya dibaca di SvInsets`() {
+        val pelanggar = sumberUi()
+            .filter { it.name != "SvInsets.kt" }
+            .flatMap { berkas ->
+                berkas.readLines().withIndex()
+                    .filter { (_, baris) ->
+                        val kode = kodeDari(baris)
+                        Regex("""WindowInsets\.(safeDrawing|safeContent|systemBars|statusBars|navigationBars)\b""")
+                            .containsMatchIn(kode)
+                    }
+                    .map { (i, baris) -> "${berkas.name}:${i + 1}  ${baris.trim()}" }
+            }
+
+        assertTrue(
+            "Baca insets lewat svSafeInsets() / svSafeContent():\n" + pelanggar.joinToString("\n"),
+            pelanggar.isEmpty(),
+        )
+    }
+
+    /**
+     * Pola lama: jarak atas tetap 16/32 dp sebagai pengganti clearance status
+     * bar. Cukup untuk HP, tidak untuk head unit. Clearance harus dari insets.
+     */
+    @Test
+    fun `tidak ada clearance status bar palsu`() {
+        val pelanggar = sumberUi()
+            .flatMap { berkas ->
+                berkas.readLines().withIndex()
+                    .filter { (_, baris) ->
+                        Regex("""padding\(top\s*=\s*if\s*\(isLandscape\)""").containsMatchIn(kodeDari(baris))
+                    }
+                    .map { (i, baris) -> "${berkas.name}:${i + 1}  ${baris.trim()}" }
+            }
+
+        assertTrue(
+            "Jarak atas berbasis orientasi untuk menghindari status bar. Pakai svSafeContent():\n" +
+                pelanggar.joinToString("\n"),
+            pelanggar.isEmpty(),
+        )
+    }
 }

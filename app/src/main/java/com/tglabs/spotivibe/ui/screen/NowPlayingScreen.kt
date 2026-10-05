@@ -1,5 +1,6 @@
 package com.tglabs.spotivibe.ui.screen
 
+import com.tglabs.spotivibe.ui.theme.svSafeContent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -40,7 +41,6 @@ import com.tglabs.spotivibe.ui.component.SelectionHeader
 import com.tglabs.spotivibe.ui.component.Transport
 import com.tglabs.spotivibe.ui.theme.AccentDefault
 import com.tglabs.spotivibe.ui.theme.LocalSvColors
-import com.tglabs.spotivibe.ui.theme.LocalSvWindow
 import com.tglabs.spotivibe.ui.theme.SvSpace
 import com.tglabs.spotivibe.ui.theme.SvType
 import com.tglabs.spotivibe.ui.theme.SpotivibeTheme
@@ -91,9 +91,6 @@ fun NowPlayingScreen(
     val sv = LocalSvColors.current
     val track = state.track
     val context = LocalContext.current
-    // Padding atas dikurangi saat tingginya sempit, bukan saat landscape:
-    // tablet landscape tingginya lega dan tidak perlu dirapatkan.
-    val isLandscape = LocalSvWindow.current.isShort
 
     // ── Progress extrapolation (per fix di NowPlaying.extrapolatedProgressMs) ──
     val displayProgressMs by produceState(
@@ -230,10 +227,15 @@ fun NowPlayingScreen(
         )
 
         // ── Content stack ──
+        // Clearance dari bar sistem datang dari insets, bukan angka tetap.
+        // Dulu 16/32 dp di sini, cukup untuk status bar HP tapi tidak untuk
+        // head unit yang barnya lebih tebal atau berada di samping. Latar dan
+        // scrim di atas sengaja tetap full-bleed.
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = if (isLandscape) SvSpace.s4 else SvSpace.s8),
+                .svSafeContent()
+                .padding(top = SvSpace.s2),
         ) {
             // Header: switches to selection mode header when selecting
             if (isSelecting) {

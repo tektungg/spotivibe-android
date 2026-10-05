@@ -1,5 +1,6 @@
 package com.tglabs.spotivibe.ui.screen
 
+import com.tglabs.spotivibe.ui.theme.svSafeContent
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -89,9 +90,11 @@ fun LyricsSearchScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(sv.bg0)
+            // Latar dulu, insets kemudian: lihat SvInsets.kt.
+            .svSafeContent()
             .padding(horizontal = SvSpace.s5),
     ) {
-        Spacer(modifier = Modifier.height(SvSpace.s8))
+        Spacer(modifier = Modifier.height(SvSpace.s3))
         SearchHeader(onBack = onBack)
         Spacer(modifier = Modifier.height(SvSpace.s3))
         HairlineRule(soft = true)

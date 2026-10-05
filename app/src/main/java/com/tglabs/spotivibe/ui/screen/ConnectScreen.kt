@@ -1,5 +1,6 @@
 package com.tglabs.spotivibe.ui.screen
 
+import com.tglabs.spotivibe.ui.theme.svSafeContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,9 +48,11 @@ fun ConnectScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(sv.bg0)
+            // Latar dulu, insets kemudian: lihat SvInsets.kt.
+            .svSafeContent()
             .padding(horizontal = SvSpace.s5),
     ) {
-        Spacer(modifier = Modifier.height(SvSpace.s8))
+        Spacer(modifier = Modifier.height(SvSpace.s3))
 
         // ── Masthead ──
         Row(

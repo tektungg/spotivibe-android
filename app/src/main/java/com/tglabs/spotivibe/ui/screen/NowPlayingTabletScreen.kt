@@ -1,5 +1,7 @@
 package com.tglabs.spotivibe.ui.screen
 
+import com.tglabs.spotivibe.ui.theme.svSafeContent
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -154,7 +156,12 @@ fun NowPlayingTabletScreen(
                 modifier = Modifier
                     .fillMaxHeight()
                     .weight(1f)
-                    .background(sv.bg0.copy(alpha = if (sv.isDark) 0.25f else 0.35f)),
+                    .background(sv.bg0.copy(alpha = if (sv.isDark) 0.25f else 0.35f))
+                    // Setelah background: tint panel tetap sampai tepi, tapi
+                    // BoxWithConstraints mengukur ruang yang SUDAH aman, jadi
+                    // album tidak dibesarkan ke bawah bar sistem. Hanya sisi
+                    // kiri + vertikal; bar di sisi kanan urusan panel kanan.
+                    .svSafeContent(WindowInsetsSides.Start + WindowInsetsSides.Vertical),
             ) {
                 // Album HARUS dibatasi tinggi, bukan cuma lebar. Versi lama cuma
                 // memakai widthIn + aspectRatio, jadi di HP landscape album
@@ -296,7 +303,8 @@ fun NowPlayingTabletScreen(
                 modifier = Modifier
                     .fillMaxHeight()
                     .weight(1.4f)
-                    .padding(top = SvSpace.s8, bottom = SvSpace.s4),
+                    .svSafeContent(WindowInsetsSides.End + WindowInsetsSides.Vertical)
+                    .padding(top = SvSpace.s2, bottom = SvSpace.s4),
             ) {
                 Row(
                     modifier = Modifier

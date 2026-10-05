@@ -36,17 +36,56 @@ fun overlayAction(enabled: Boolean, sudahAda: Boolean): OverlayAction = when {
 fun shouldDisableOverlayAfterFailure(tampilBerhasil: Boolean): Boolean = !tampilBerhasil
 
 /**
- * Posisi Y baru setelah digeser, dijepit ke dalam layar.
+ * Posisi Y baru setelah digeser, dijepit ke dalam AREA AMAN layar.
  *
- * X sengaja tidak ikut: overlay selebar layar penuh, jadi menggesernya
- * mendatar hanya akan menyisakan pita kosong di satu sisi.
+ * X sengaja tidak ikut: overlay selebar area aman, jadi menggesernya mendatar
+ * hanya akan menyisakan pita kosong di satu sisi.
+ *
+ * Dulu batasnya seluruh layar, 0 sampai tinggi layar. Posisi awal default 0
+ * berarti overlay muncul DI BAWAH status bar, dan di head unit bisa diseret ke
+ * bawah navigation bar sampai tombolnya tidak bisa ditekan.
+ *
+ * Kalau overlay lebih tinggi dari area aman, ia menempel di batas atas: bagian
+ * atas (judul + tombol tutup) lebih penting tetap terlihat daripada bawahnya.
  *
  * @param tinggiLayar tinggi layar dalam piksel.
  * @param tinggiOverlay tinggi jendela overlay dalam piksel.
+ * @param insetAtas tinggi bar sistem / cutout di atas, piksel. Default 0
+ *   sama persis dengan perilaku lama.
+ * @param insetBawah tinggi bar sistem di bawah, piksel.
  */
-fun clampOverlayY(ySekarang: Int, delta: Int, tinggiLayar: Int, tinggiOverlay: Int): Int {
-    val maxY = (tinggiLayar - tinggiOverlay).coerceAtLeast(0)
-    return (ySekarang + delta).coerceIn(0, maxY)
+fun clampOverlayY(
+    ySekarang: Int,
+    delta: Int,
+    tinggiLayar: Int,
+    tinggiOverlay: Int,
+    insetAtas: Int = 0,
+    insetBawah: Int = 0,
+): Int {
+    val minY = insetAtas.coerceAtLeast(0)
+    val maxY = (tinggiLayar - tinggiOverlay - insetBawah.coerceAtLeast(0)).coerceAtLeast(minY)
+    return (ySekarang + delta).coerceIn(minY, maxY)
+}
+
+/** Posisi X dan lebar jendela overlay, piksel. */
+data class OverlayHorizontalBounds(val x: Int, val width: Int)
+
+/**
+ * Overlay mengisi lebar area aman, bukan seluruh layar.
+ *
+ * Head unit sering menaruh navigation bar di sisi KIRI layar landscape.
+ * Dengan lebar `MATCH_PARENT` di x 0, tombol previous di ujung kiri overlay
+ * berada tepat di bawah bar itu.
+ *
+ * Inset yang tidak masuk akal (jumlahnya menghabiskan seluruh lebar) diabaikan:
+ * overlay selebar layar masih lebih berguna daripada jendela selebar 0.
+ */
+fun overlayHorizontalBounds(lebarLayar: Int, insetKiri: Int, insetKanan: Int): OverlayHorizontalBounds {
+    val kiri = insetKiri.coerceAtLeast(0)
+    val kanan = insetKanan.coerceAtLeast(0)
+    val lebar = lebarLayar - kiri - kanan
+    if (lebar <= 0) return OverlayHorizontalBounds(x = 0, width = lebarLayar.coerceAtLeast(0))
+    return OverlayHorizontalBounds(x = kiri, width = lebar)
 }
 
 /**

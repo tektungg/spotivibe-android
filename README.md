@@ -458,6 +458,58 @@ Tap baris untuk seek mengompensasi offset (`seekTargetMs`). Tanpa itu, dengan
 offset non-nol tap baris mendarat di posisi yang justru membuat baris
 berikutnya yang menyala.
 
+### Layout: responsif dan safe area
+
+Tiga lapis, masing-masing punya satu pemilik di `ui/theme/`:
+
+| Lapis | File | Tugas |
+|---|---|---|
+| Kelas ukuran | `SvWindow.kt` | Keputusan struktur: satu kolom atau dua panel, album besar atau kecil. Ambang mengikuti breakpoint resmi Android |
+| Skala terjepit | `SvScale.kt` | `.svDp` / `.svSp`, padanan `.w` / `.sp` flutter_screenutil, tapi faktornya dijepit 0,85 sampai 1,25 supaya elemen tidak membengkak saat landscape |
+| Safe area | `SvInsets.kt` | `svSafeContent()` mendorong konten keluar dari bawah status bar, navigation bar (di sisi mana pun), cutout, dan keyboard |
+
+Safe area dibuat karena `enableEdgeToEdge()` (dan `targetSdk` 35+ yang memaksanya)
+membuat app menggambar di belakang bar sistem, sementara dulu tidak ada layar
+yang memakai insets. Jarak atas cuma angka tetap 16/32 dp. Itu cukup untuk
+status bar HP, tapi di head unit mobil bar sistemnya lebih tebal atau berada di
+samping, sehingga header tertimpa navigasi.
+
+Aturannya:
+
+- **Latar dulu, insets kemudian:** `.background(...).svSafeContent()`. Urutan
+  modifier itu yang membuat `AmbientBg`, scrim, dan tint panel tetap sampai tepi
+  layar sementara kontennya masuk ke area aman.
+- **Panel landscape memakai sisi parsial.** Panel kiri `Start + Vertical`, panel
+  kanan `End + Vertical`, supaya navigasi kiri head unit tidak ikut memakan ruang
+  panel kanan.
+- **Insets di container, bukan di `contentPadding` list.** `LyricsList` mengukur
+  posisi chrome lewat `positionInRoot`, jadi padding di parent sudah masuk
+  hitungan anchor baris aktif.
+- **Jangan baca `WindowInsets.safeDrawing` langsung.** Semua lewat
+  `svSafeInsets()`, supaya test bisa menyuntikkan insets palsu lewat
+  `LocalSvSafeInsets`.
+
+`ResponsiveGuardTest` menjaga aturan ini di gate lane: setiap layar di
+`ui/screen/` (kecuali router `MainScreen`) wajib memanggil `svSafeContent`, insets
+sistem hanya boleh dibaca di `SvInsets.kt`, dan pola lama
+`padding(top = if (isLandscape) ...)` tidak boleh kembali. `SafeAreaUiTest`
+(instrumentasi) memasang insets ala head unit (atas 64 dp, kiri 80 dp, bawah 48
+dp) lalu memastikan judul lagu dan tombol transport berada di dalam area aman.
+
+Floating overlay hidup di window terpisah, jadi insets-nya dibaca dari root
+insets view overlay sendiri (`OverlayManager.safeInsets`, jalan juga di Android
+9/10 yang umum di head unit). Posisi Y dijepit di antara bar atas dan bawah
+(`clampOverlayY`), dan lebarnya mengikuti area aman (`overlayHorizontalBounds`),
+bukan `MATCH_PARENT`. Perangkat yang tidak melaporkan insets jatuh ke perilaku
+lama.
+
+Cek di head unit: buka app, header tidak tertimpa. Putar lagu, transport tidak
+tertimpa. Di landscape, tombol previous tidak berada di bawah navigasi kiri.
+Nyalakan overlay, lalu pastikan ia tidak bisa diseret ke bawah bar sistem. Kalau
+masih tertimpa, kemungkinan bar navigasinya digambar oleh launcher pihak ketiga,
+bukan system bar sungguhan. Android tidak melaporkannya sebagai insets, dan tidak
+ada API yang bisa melihatnya.
+
 ### Container
 
 ```

@@ -138,4 +138,73 @@ class OverlayDecisionsTest {
         assertFalse(needsSettleAnimation(yTarget = 500, ySekarang = 500))
         assertTrue(needsSettleAnimation(yTarget = 500, ySekarang = 480))
     }
+
+    // ── Area aman ────────────────────────────────────────────────
+
+    /**
+     * REGRESI: posisi awal default Y 0 dulu membuat overlay muncul di bawah
+     * status bar. Dengan inset atas, Y 0 dijepit ke bawah bar.
+     */
+    @Test
+    fun `posisi awal nol didorong ke bawah bar atas`() {
+        assertEquals(96, clampOverlayY(0, 0, 2000, 300, insetAtas = 96, insetBawah = 0))
+    }
+
+    /** Head unit: navigation bar di bawah tidak boleh menutupi tombol overlay. */
+    @Test
+    fun `tidak bisa digeser ke bawah navigation bar`() {
+        assertEquals(1580, clampOverlayY(100, 5000, 2000, 300, insetAtas = 96, insetBawah = 120))
+    }
+
+    @Test
+    fun `di dalam area aman delta tetap diikuti`() {
+        assertEquals(650, clampOverlayY(600, 50, 2000, 300, insetAtas = 96, insetBawah = 120))
+    }
+
+    /** Bagian atas overlay (judul, tombol tutup) lebih penting tetap terlihat. */
+    @Test
+    fun `overlay lebih tinggi dari area aman menempel di batas atas`() {
+        assertEquals(96, clampOverlayY(500, 0, 600, 500, insetAtas = 96, insetBawah = 120))
+    }
+
+    @Test
+    fun `inset negatif dari OEM aneh diperlakukan sebagai nol`() {
+        assertEquals(0, clampOverlayY(0, -10, 2000, 300, insetAtas = -5, insetBawah = -5))
+        assertEquals(1700, clampOverlayY(0, 5000, 2000, 300, insetAtas = -5, insetBawah = -5))
+    }
+
+    @Test
+    fun `tanpa inset perilakunya sama dengan sebelum safe area`() {
+        for (y in listOf(-100, 0, 500, 1700, 9000)) {
+            assertEquals(clampOverlayY(y, 0, 2000, 300), clampOverlayY(y, 0, 2000, 300, 0, 0))
+        }
+    }
+
+    // ── Lebar overlay ────────────────────────────────────────────
+
+    /** Navigation bar di kiri layar landscape, pola umum head unit. */
+    @Test
+    fun `navigation bar kiri menggeser overlay dan mempersempitnya`() {
+        assertEquals(OverlayHorizontalBounds(x = 120, width = 1800), overlayHorizontalBounds(1920, 120, 0))
+    }
+
+    @Test
+    fun `inset kiri dan kanan sama-sama dikurangi`() {
+        assertEquals(OverlayHorizontalBounds(x = 50, width = 980), overlayHorizontalBounds(1080, 50, 50))
+    }
+
+    @Test
+    fun `tanpa inset overlay selebar layar seperti dulu`() {
+        assertEquals(OverlayHorizontalBounds(x = 0, width = 1080), overlayHorizontalBounds(1080, 0, 0))
+    }
+
+    @Test
+    fun `inset yang menghabiskan seluruh lebar diabaikan`() {
+        assertEquals(OverlayHorizontalBounds(x = 0, width = 1080), overlayHorizontalBounds(1080, 600, 600))
+    }
+
+    @Test
+    fun `inset negatif diperlakukan sebagai nol`() {
+        assertEquals(OverlayHorizontalBounds(x = 0, width = 1080), overlayHorizontalBounds(1080, -10, -10))
+    }
 }
