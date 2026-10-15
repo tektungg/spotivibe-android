@@ -114,23 +114,12 @@ class MediaPlaybackTest {
         assertEquals(10_000L, positionNowMs(posisi(PlayerState.Playing), nowElapsedMs = 0))
     }
 
-    // ── Pause ────────────────────────────────────────────────────
-
-    /** Buffering sebentar tidak boleh membuat lirik berhenti lalu jalan lagi. */
-    @Test
-    fun `keadaan sementara mempertahankan pause sebelumnya`() {
-        assertFalse(isPausedFor(PlayerState.Transient, wasPaused = false))
-        assertTrue(isPausedFor(PlayerState.Transient, wasPaused = true))
-        assertFalse(isPausedFor(PlayerState.Playing, wasPaused = true))
-        assertTrue(isPausedFor(PlayerState.Stopped, wasPaused = false))
-    }
-
     // ── Konversi ─────────────────────────────────────────────────
 
     @Test
-    fun `snapshot jadi NowPlaying dengan posisi saat ini`() {
+    fun `snapshot jadi NowPlaying dengan posisi dari jam`() {
         val s = posisi(PlayerState.Playing).copy(title = "Judul", artist = "Artis", album = "Album")
-        val np = s.toNowPlaying(nowElapsedMs = 2_000, nowWallMs = 50_000, wasPaused = true)
+        val np = s.toNowPlaying(ClockReading(positionMs = 11_000, isPaused = false), nowWallMs = 50_000)
         assertEquals(11_000L, np.progressMs)
         assertEquals(50_000L, np.capturedAtMs)
         assertFalse(np.isPaused)

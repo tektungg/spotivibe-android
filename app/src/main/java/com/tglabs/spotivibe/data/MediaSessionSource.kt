@@ -15,6 +15,7 @@ import android.util.Log
 import androidx.core.graphics.scale
 import com.tglabs.spotivibe.domain.MediaSnapshot
 import com.tglabs.spotivibe.domain.NowPlaying
+import com.tglabs.spotivibe.domain.PlaybackClock
 import com.tglabs.spotivibe.domain.PlayerControls
 import com.tglabs.spotivibe.domain.PlayerState
 import com.tglabs.spotivibe.domain.QueuedTrack
@@ -93,6 +94,9 @@ class AndroidMediaSessionSource(private val context: Context) : PlaybackSource {
 
     private var observing = false
     private var current: MediaController? = null
+
+    /** Jam koreksi untuk sesi yang sedang diikuti. Dibuat ulang setiap pindah player. */
+    private var clock = PlaybackClock()
 
     /** Callback kecil di SETIAP sesi aktif, supaya app lain yang mulai memutar langsung terdeteksi. */
     private val watchers = mutableMapOf<android.media.session.MediaSession.Token, Pair<MediaController, MediaController.Callback>>()
@@ -186,6 +190,7 @@ class AndroidMediaSessionSource(private val context: Context) : PlaybackSource {
         }
         current?.unregisterCallback(mainCallback)
         current = controller
+        clock = PlaybackClock()
         controller?.registerCallback(mainCallback, handler)
         _playerLabel.value = controller?.let { appLabel(it.packageName) }
         Log.d(TAG, "Mengikuti ${controller?.packageName}")
@@ -201,8 +206,8 @@ class AndroidMediaSessionSource(private val context: Context) : PlaybackSource {
             if (metadataChanged) _albumBitmap.value = null
             return
         }
-        val wasPaused = _nowPlaying.value?.isPaused ?: true
-        _nowPlaying.value = snapshot.toNowPlaying(SystemClock.elapsedRealtime(), System.currentTimeMillis(), wasPaused)
+        val reading = clock.onReport(snapshot, SystemClock.elapsedRealtime())
+        _nowPlaying.value = snapshot.toNowPlaying(reading, System.currentTimeMillis())
         _controls.value = snapshot.controls
         if (metadataChanged) _albumBitmap.value = controller.metadata?.artwork()
     }
@@ -222,7 +227,10 @@ class AndroidMediaSessionSource(private val context: Context) : PlaybackSource {
     /** Ditolak di sini kalau player tidak mengizinkan seek, daripada perintahnya diabaikan diam-diam. */
     override fun seekTo(positionMs: Long) {
         if (!_controls.value.canSeek) return
-        control { it.seekTo(positionMs.coerceAtLeast(0L)) }
+        val target = positionMs.coerceAtLeast(0L)
+        // Jam langsung pindah: lirik tidak menunggu laporan player berikutnya.
+        clock.onSeek(target, SystemClock.elapsedRealtime())
+        control { it.seekTo(target) }
     }
 
     private fun control(block: (MediaController.TransportControls) -> Unit) {

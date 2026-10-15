@@ -147,19 +147,6 @@ fun positionNowMs(snapshot: MediaSnapshot, nowElapsedMs: Long): Long {
 }
 
 /**
- * Apakah lagu dianggap berhenti, mengingat keadaan sebelumnya.
- *
- * Buffering dan pindah lagu berlangsung sebentar. Kalau ikut dianggap pause,
- * lirik berhenti lalu jalan lagi tiap kali jaringan tersendat, dan baris aktif
- * berkedip. Keadaan sementara mempertahankan nilai sebelumnya.
- */
-fun isPausedFor(state: PlayerState, wasPaused: Boolean): Boolean = when (state) {
-    PlayerState.Playing -> false
-    PlayerState.Transient -> wasPaused
-    PlayerState.Paused, PlayerState.Stopped, PlayerState.Error, PlayerState.None -> true
-}
-
-/**
  * Sesi yang layak ditampilkan: sudah punya judul. Player sering menerbitkan
  * sesi kosong dulu lalu mengisi metadata sesudahnya, dan lagu tanpa judul
  * tidak bisa dicari liriknya.
@@ -167,12 +154,12 @@ fun isPausedFor(state: PlayerState, wasPaused: Boolean): Boolean = when (state) 
 fun isDisplayable(snapshot: MediaSnapshot): Boolean = snapshot.title.isNotBlank()
 
 /**
- * [snapshot] sebagai [NowPlaying].
+ * [snapshot] sebagai [NowPlaying], dengan posisi dan status dari [PlaybackClock].
  *
- * Posisi dihitung ke saat ini dulu, lalu dicap dengan jam dinding [nowWallMs],
- * karena [NowPlaying.extrapolatedProgressMs] mengekstrapolasi dari jam dinding.
+ * Dicap dengan jam dinding [nowWallMs], karena [NowPlaying.extrapolatedProgressMs]
+ * mengekstrapolasi dari jam dinding.
  */
-fun MediaSnapshot.toNowPlaying(nowElapsedMs: Long, nowWallMs: Long, wasPaused: Boolean): NowPlaying =
+fun MediaSnapshot.toNowPlaying(reading: ClockReading, nowWallMs: Long): NowPlaying =
     NowPlaying(
         id = trackIdFor(this),
         title = title,
@@ -180,8 +167,8 @@ fun MediaSnapshot.toNowPlaying(nowElapsedMs: Long, nowWallMs: Long, wasPaused: B
         album = album,
         imageUri = null,
         durationMs = durationMs.coerceAtLeast(0L),
-        progressMs = positionNowMs(this, nowElapsedMs),
-        isPaused = isPausedFor(state, wasPaused),
+        progressMs = reading.positionMs,
+        isPaused = reading.isPaused,
         capturedAtMs = nowWallMs,
     )
 

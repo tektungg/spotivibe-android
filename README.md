@@ -230,6 +230,13 @@ sebagai artifact, hanya tidak membuat Release.
 - **Posisi** (`positionNowMs`): posisi terakhir + (sekarang − waktu laporan) ×
   kecepatan, beku saat tidak memutar, dijepit ke durasi. Buffering dan pindah
   lagu mempertahankan status pause sebelumnya supaya lirik tidak berkedip.
+- **Koreksi jam** (`domain/PlaybackClock.kt`): laporan player tidak dipakai
+  mentah. Jitter < 15 ms diabaikan, lompatan >= 1 s dianggap seek. Laporan pause
+  yang 0-150 ms di belakang jam (fade) diabaikan; 150 ms-5 s di belakang (pause
+  basi YouTube Music, sekitar 1,3 s) diabaikan DAN selisihnya dipakai sebagai
+  bias kalau player melanjutkan dari angka basinya. Buffering membekukan jam,
+  kecuali di 2 s terakhir lagu (Spotify menyiapkan lagu berikutnya). Satu jam
+  per player, dibuat ulang saat pindah player.
 - **Kontrol**: `transportControls` milik player. Tombol dan slider mengikuti
   bit `PlaybackState.actions`; tombol yang tidak diizinkan tampil redup, dan
   seek yang tidak diizinkan ditolak sebelum dikirim.
