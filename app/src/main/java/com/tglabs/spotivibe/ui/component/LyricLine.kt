@@ -60,6 +60,8 @@ internal data class LyricsDisplayPrefs(
     val highContrast: Boolean,
     val smoothScroll: Boolean,
     val hapticEnabled: Boolean,
+    /** Karaoke penuh (sapuan, skala, cahaya). Mati = highlight per kata sederhana. */
+    val lyricEffects: Boolean = true,
 )
 
 /** Interaksi baris: tap untuk seek, tekan lama untuk memilih. */
@@ -89,8 +91,17 @@ private const val BACKGROUND_SIZE_RATIO = 0.72f
 private const val BACKGROUND_ALPHA = 0.7f
 private const val BACKGROUND_PENDING_ALPHA = 0.4f
 
+/** Kata yang belum dinyanyikan di baris aktif. */
+private const val PENDING_ALPHA = 0.55f
+
 private fun alignFor(line: SyncedLine): TextAlign =
     if (line.oppositeAligned) TextAlign.End else TextAlign.Start
+
+/**
+ * Cara mewarnai satu baris. [color] beranimasi tanpa alpha keadaan, dipakai
+ * karaoke; [tint] sudah termasuk redupnya keadaan baris.
+ */
+private data class LinePaint(val color: Color, val tint: Color, val effects: Boolean)
 
 /** Warna target dan alpha tambahan untuk satu keadaan baris. */
 private data class LineTint(val color: Color, val alpha: Float)
@@ -132,7 +143,7 @@ internal fun LyricLineItem(
     model: LyricLineModel,
     prefs: LyricsDisplayPrefs,
     interaction: LineInteraction,
-    progressMs: Long,
+    clock: LyricsClock,
 ) {
     val sv = LocalSvColors.current
     val target = lineTint(model.state, prefs.highContrast, sv)
@@ -141,7 +152,7 @@ internal fun LyricLineItem(
         animationSpec = tween(SvMotion.DurLine, easing = SvMotion.EaseOut),
         label = "lineColor",
     )
-    val tint = color.copy(alpha = color.alpha * target.alpha)
+    val paint = LinePaint(color = color, tint = color.copy(alpha = color.alpha * target.alpha), effects = prefs.lyricEffects)
     // Perataan ikut di style, jadi semua teks baris ini (utama, latar,
     // romanisasi) sepakat tanpa parameter tambahan.
     val textStyle = lineTextStyle(model.state, prefs.fontSize).copy(textAlign = alignFor(model.line))
@@ -162,9 +173,9 @@ internal fun LyricLineItem(
                 .padding(start = if (model.line.oppositeAligned) edge + DUET_INSET else edge, end = edge),
             horizontalAlignment = if (model.line.oppositeAligned) Alignment.End else Alignment.Start,
         ) {
-            LyricLineBody(model, textStyle, color, tint, progressMs)
-            BackgroundVocalText(model, textStyle, color, tint, progressMs)
-            RomanizationText(model, textStyle, tint)
+            LyricLineBody(model, textStyle, paint, clock)
+            BackgroundVocalText(model, textStyle, paint, clock)
+            RomanizationText(model, textStyle, paint.tint)
         }
     }
 }
@@ -211,40 +222,31 @@ private fun SelectionGutter(isSelected: Boolean) {
     }
 }
 
-/**
- * Isi baris. [color] adalah warna beranimasi tanpa alpha keadaan, dipakai
- * karaoke per kata; [tint] sudah termasuk redupnya keadaan baris.
- */
+/** Isi baris: titik jeda, karaoke per kata (baris aktif), atau teks biasa. */
 @Composable
-private fun LyricLineBody(
-    model: LyricLineModel,
-    textStyle: TextStyle,
-    color: Color,
-    tint: Color,
-    progressMs: Long,
-) {
+private fun LyricLineBody(model: LyricLineModel, textStyle: TextStyle, paint: LinePaint, clock: LyricsClock) {
     val sv = LocalSvColors.current
     val line = model.line
     when {
         // Penanda jeda: titik-titik, bukan "♪" yang diam. Hanya baris aktif
         // yang beranimasi; sisanya titik redup.
         line.isInterlude -> InterludeDots(
-            elapsedMs = if (model.state == LyricLineState.Active) progressMs - line.timeMs else null,
+            elapsedMs = if (model.state == LyricLineState.Active) clock.progressMs - line.timeMs else null,
             gapMs = model.interludeGapMs,
-            color = tint,
+            color = paint.tint,
             dotSize = interludeDotSize(textStyle.fontSize.value),
             modifier = Modifier.padding(vertical = SvSpace.s2),
         )
 
-        model.state == LyricLineState.Active && line.words.isNotEmpty() -> WordHighlightText(
-            words = line.words,
-            progressMs = progressMs,
-            activeColor = color,
-            pendingColor = sv.ink3.copy(alpha = 0.55f),
+        model.state == LyricLineState.Active && line.words.isNotEmpty() -> ActiveWords(
+            words = KaraokeWords(line.words, line.endMs),
+            clock = clock,
+            colors = KaraokeColors(sung = paint.color, pending = sv.ink3.copy(alpha = PENDING_ALPHA)),
             style = textStyle,
+            effects = paint.effects,
         )
 
-        else -> Text(text = line.text, style = textStyle, color = tint)
+        else -> Text(text = line.text, style = textStyle, color = paint.tint)
     }
 }
 
@@ -254,13 +256,7 @@ private fun LyricLineBody(
  * per kata saat barisnya aktif.
  */
 @Composable
-private fun BackgroundVocalText(
-    model: LyricLineModel,
-    textStyle: TextStyle,
-    color: Color,
-    tint: Color,
-    progressMs: Long,
-) {
+private fun BackgroundVocalText(model: LyricLineModel, textStyle: TextStyle, paint: LinePaint, clock: LyricsClock) {
     val bg = model.line.background ?: return
     if (model.state == LyricLineState.Distant) return
     val sv = LocalSvColors.current
@@ -273,16 +269,24 @@ private fun BackgroundVocalText(
     val modifier = Modifier.padding(top = 2.dp)
     if (model.state == LyricLineState.Active && bg.words.isNotEmpty()) {
         Box(modifier) {
-            WordHighlightText(
-                words = bg.words,
-                progressMs = progressMs,
-                activeColor = color.copy(alpha = color.alpha * BACKGROUND_ALPHA),
-                pendingColor = sv.ink3.copy(alpha = BACKGROUND_PENDING_ALPHA),
+            ActiveWords(
+                words = KaraokeWords(bg.words, model.line.endMs),
+                clock = clock,
+                colors = KaraokeColors(
+                    sung = paint.color.copy(alpha = paint.color.alpha * BACKGROUND_ALPHA),
+                    pending = sv.ink3.copy(alpha = BACKGROUND_PENDING_ALPHA),
+                ),
                 style = style,
+                effects = paint.effects,
             )
         }
     } else {
-        Text(text = bg.text, style = style, color = tint.copy(alpha = tint.alpha * BACKGROUND_ALPHA), modifier = modifier)
+        Text(
+            text = bg.text,
+            style = style,
+            color = paint.tint.copy(alpha = paint.tint.alpha * BACKGROUND_ALPHA),
+            modifier = modifier,
+        )
     }
 }
 
@@ -308,6 +312,22 @@ private fun RomanizationText(model: LyricLineModel, textStyle: TextStyle, tint: 
         color = tint,
         modifier = Modifier.padding(top = 2.dp),
     )
+}
+
+/** Kata bertimer baris aktif: karaoke penuh, atau highlight sederhana kalau efek dimatikan. */
+@Composable
+private fun ActiveWords(
+    words: KaraokeWords,
+    clock: LyricsClock,
+    colors: KaraokeColors,
+    style: TextStyle,
+    effects: Boolean,
+) {
+    if (effects) {
+        KaraokeText(words, clock, colors, style)
+    } else {
+        WordHighlightText(words.words, clock.progressMs, colors.sung, colors.pending, style)
+    }
 }
 
 /**

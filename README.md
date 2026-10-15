@@ -30,6 +30,11 @@ Android native companion untuk Spotify — synced lyrics dengan romanization (JP
 - **Sync offset tiga lapis** — global, per perangkat output (mobil, earbud,
   speaker HP masing-masing punya jedanya sendiri), dan per lagu lewat menu
   "Sync this song". Detail di [Sync lirik](#sync-lirik)
+- **Karaoke per suku kata** — di baris aktif warna menyapu tiap suku kata dari
+  kiri, kata sedikit membesar, terangkat, dan bercahaya saat dinyanyikan, lalu
+  memantul kembali lewat pegas. Kata yang ditahan >= 1 detik menyapu per huruf.
+  Settings → **Lyric effects** mematikannya untuk head unit yang lemah. Detail
+  di [Animasi karaoke](#animasi-karaoke)
 - **Titik-titik jeda instrumental** — intro dan interlude >= 3 detik menampilkan
   tiga titik yang menyala bergantian lalu menyusut tepat sebelum baris
   berikutnya (`domain/Interlude.kt`), menggantikan "♪" yang diam
@@ -361,6 +366,29 @@ salah terbaca sebagai penanda jeda.
 Parser memakai `javax.xml.parsers` (DOM), bukan `XmlPullParser`: yang kedua
 cuma stub di unit test JVM. Dokumen ber-DOCTYPE ditolak sebelum diparse, yang
 menutup XXE dan entity expansion di implementasi parser mana pun.
+
+### Animasi karaoke
+
+`domain/WordMotion.kt` (murni, diuji) dan `ui/component/KaraokeLine.kt`.
+
+- **Potongan.** `karaokeGlyphs` mengubah kata bertimer jadi potongan: suku kata
+  tanpa spasi menyambung satu kata (tidak dipisah ke baris lain di `FlowRow`),
+  dan suku kata >= 1000 ms dipecah per code point dengan jatah waktu rata.
+- **Akhir kata.** `endMs` sendiri (TTML, LRCMux), atau awal kata berikutnya
+  (enhanced LRC cuma punya waktu mulai), atau akhir baris, atau 500 ms.
+- **Kurva.** Natural cubic spline lewat titik kunci: skala 0.95 → 1.0505 (di
+  70%) → 1, cahaya 0 → 1 (15%..60%) → 0, angkat 0.01em → −1/60em → 0.
+- **Pegas.** Ditulis gaya spr.lua (frekuensi, redaman) lalu dikonversi
+  `stiffness = (2πf)²` untuk `spring()` Compose: skala 0.88/0.64, angkat
+  1.45/0.4, cahaya 1.18/0.56.
+- **Sapuan.** `Brush.horizontalGradient` dengan tepi selebar 20%, posisinya
+  `−0.2 + 1.2·p`.
+- **Jam per frame.** Posisi dari layar datang tiap 200 ms; di antaranya
+  diekstrapolasi dari `withFrameMillis` selama lagu jalan, maksimal 400 ms di
+  depan supaya seek atau buffering tidak membuat sapuan kabur ke depan.
+
+Hanya baris aktif yang memakai jalur ini; baris lain tetap `Text` biasa. Efek
+mati (`lyric_effects = false`) kembali ke highlight per kata lama.
 
 ### Siklus koneksi
 

@@ -372,6 +372,8 @@ fun NowPlayingTabletScreen(
                         highContrast = state.highContrast,
                         smoothScroll = state.smoothScroll,
                         hapticEnabled = state.hapticEnabled,
+                        isPlaying = !track.isPaused,
+                        lyricEffects = state.lyricEffects,
                         onSeekToLine = { line ->
                             if (isSelecting) toggleSelect(line.id)
                             else onSeek(

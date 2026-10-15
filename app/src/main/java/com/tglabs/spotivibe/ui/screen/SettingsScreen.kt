@@ -51,6 +51,7 @@ import com.tglabs.spotivibe.domain.LINE_SPACING_STEP
 import com.tglabs.spotivibe.domain.tickCountFor
 import com.tglabs.spotivibe.domain.tickIndexOf
 import com.tglabs.spotivibe.domain.tickValueOf
+import com.tglabs.spotivibe.ui.component.SettingsToggleRow
 import com.tglabs.spotivibe.ui.component.SyncOffsetRows
 import com.tglabs.spotivibe.ui.component.TickSlider
 import com.tglabs.spotivibe.ui.component.Toggle
@@ -84,6 +85,7 @@ fun SettingsScreen(
     onToggleHighContrast: () -> Unit = {},
     onToggleSmoothScroll: () -> Unit = {},
     onToggleHaptic: () -> Unit = {},
+    onToggleLyricEffects: () -> Unit = {},
     communitySources: Boolean = true,
     onToggleCommunitySources: () -> Unit = {},
     lyricsStats: LyricsStats = LyricsStats(),
@@ -100,6 +102,7 @@ fun SettingsScreen(
     val highContrast = playing?.highContrast ?: false
     val smoothScroll = playing?.smoothScroll ?: true
     val hapticEnabled = playing?.hapticEnabled ?: true
+    val lyricEffects = playing?.lyricEffects ?: true
 
     BackHandler(onBack = onBack)
 
@@ -227,15 +230,12 @@ fun SettingsScreen(
                 },
                 inlineTrailing = true,
             )
+            // Sapuan per suku kata digambar tiap frame. Head unit yang lemah
+            // bisa mematikannya dan kembali ke highlight per kata biasa.
+            SettingsToggleRow("Lyric effects", lyricEffects, onToggleLyricEffects)
             // Mati = hanya LRCLIB. Berguna kalau sumber komunitas sedang
             // lambat atau user tidak ingin request ke banyak server.
-            SettingsRow(
-                label = "Community lyrics (AMLL, lrc.red, LRCMux)",
-                content = {
-                    Toggle(on = communitySources, onChange = { onToggleCommunitySources() })
-                },
-                inlineTrailing = true,
-            )
+            SettingsToggleRow("Community lyrics (AMLL, lrc.red, LRCMux)", communitySources, onToggleCommunitySources)
 
             // ── 03 SPOTIFY ──
             SectionHeader(number = "03", title = "Spotify", hint = "Connection")

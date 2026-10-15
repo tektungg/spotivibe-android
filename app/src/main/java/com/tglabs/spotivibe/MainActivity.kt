@@ -163,6 +163,7 @@ class MainActivity : ComponentActivity() {
                         onToggleHighContrast = { viewModel.toggleHighContrast() },
                         onToggleSmoothScroll = { viewModel.toggleSmoothScroll() },
                         onToggleHaptic = { viewModel.toggleHaptic() },
+                        onToggleLyricEffects = { viewModel.toggleLyricEffects() },
                         communitySources = viewModel.communitySources
                             .collectAsStateWithLifecycle().value,
                         onToggleCommunitySources = { viewModel.toggleCommunitySources() },

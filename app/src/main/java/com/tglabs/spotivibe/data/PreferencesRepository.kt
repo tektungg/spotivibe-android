@@ -75,6 +75,7 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
     private val highContrastKey = booleanPreferencesKey("high_contrast")
     private val smoothScrollKey = booleanPreferencesKey("smooth_scroll")
     private val hapticEnabledKey = booleanPreferencesKey("haptic_enabled")
+    private val lyricEffectsKey = booleanPreferencesKey("lyric_effects")
 
     /**
      * Field `product` terakhir dari Spotify Web API `/me` ("premium", "free").
@@ -351,6 +352,17 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
 
     suspend fun setSmoothScroll(enabled: Boolean) {
         context.dataStore.edit { it[smoothScrollKey] = enabled }
+    }
+
+    /**
+     * Karaoke penuh per suku kata (sapuan, skala, cahaya). Default true.
+     * Dimatikan untuk head unit yang terlalu lemah menggambarnya tiap frame.
+     */
+    val lyricEffects: Flow<Boolean> = context.dataStore.data
+        .map { prefs -> prefs[lyricEffectsKey] ?: true }
+
+    suspend fun setLyricEffects(enabled: Boolean) {
+        context.dataStore.edit { it[lyricEffectsKey] = enabled }
     }
 
     suspend fun setHapticEnabled(enabled: Boolean) {

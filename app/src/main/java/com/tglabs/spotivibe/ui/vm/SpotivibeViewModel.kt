@@ -120,6 +120,7 @@ class SpotivibeViewModel(
             preferencesRepository.smoothScroll,
             preferencesRepository.hapticEnabled,
             controller.isOnline,
+            preferencesRepository.lyricEffects,
         )
     ) { values ->
         @Suppress("UNCHECKED_CAST")
@@ -141,6 +142,7 @@ class SpotivibeViewModel(
         val smoothScroll = values[15] as Boolean
         val haptic = values[16] as Boolean
         val isOnline = values[17] as Boolean
+        val lyricEffects = values[18] as Boolean
 
         when (connState) {
             ConnectionState.Disconnected -> UiState.Disconnected
@@ -172,6 +174,7 @@ class SpotivibeViewModel(
                     smoothScroll = smoothScroll,
                     hapticEnabled = haptic,
                     isOnline = isOnline,
+                    lyricEffects = lyricEffects,
                 )
             } ?: UiState.Idle
             is ConnectionState.Error -> UiState.Error(connState.message)
@@ -314,6 +317,13 @@ class SpotivibeViewModel(
     fun toggleCommunitySources() {
         viewModelScope.launch {
             preferencesRepository.setCommunitySources(!communitySources.value)
+        }
+    }
+
+    fun toggleLyricEffects() {
+        viewModelScope.launch {
+            val current = (uiState.value as? UiState.Playing)?.lyricEffects ?: true
+            preferencesRepository.setLyricEffects(!current)
         }
     }
 

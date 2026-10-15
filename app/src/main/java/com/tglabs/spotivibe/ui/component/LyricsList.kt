@@ -90,6 +90,10 @@ fun LyricsList(
     selectedIds: Set<Int> = emptySet(),
     isSelecting: Boolean = false,
     modifier: Modifier = Modifier,
+    /** Lagu sedang jalan. Karaoke hanya mengekstrapolasi posisi per frame selama ini true. */
+    isPlaying: Boolean = true,
+    /** Karaoke penuh per suku kata. Mati untuk head unit yang lemah. */
+    lyricEffects: Boolean = true,
 ) {
     val sv = LocalSvColors.current
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -102,8 +106,8 @@ fun LyricsList(
                 SyncedView(
                     content = SyncedContent(synced, romaji),
                     activeIndex = activeIndex,
-                    progressMs = progressMs,
-                    prefs = LyricsDisplayPrefs(fontSize, lineSpacing, highContrast, smoothScroll, hapticEnabled),
+                    clock = LyricsClock(progressMs, isPlaying),
+                    prefs = LyricsDisplayPrefs(fontSize, lineSpacing, highContrast, smoothScroll, hapticEnabled, lyricEffects),
                     interaction = LineInteraction(onSeekToLine, onLongPressShare, selectedIds, isSelecting),
                 )
 
@@ -171,7 +175,7 @@ private fun Modifier.measureChrome(density: Density, onMeasured: (ChromeInsets) 
 private fun SyncedView(
     content: SyncedContent,
     activeIndex: Int,
-    progressMs: Long,
+    clock: LyricsClock,
     prefs: LyricsDisplayPrefs,
     interaction: LineInteraction,
 ) {
@@ -205,8 +209,8 @@ private fun SyncedView(
             contentPadding = PaddingValues(horizontal = 0.dp, vertical = SvSpace.s3),
             verticalArrangement = Arrangement.spacedBy(prefs.lineSpacing.coerceIn(0, 40).dp),
         ) {
-            item { IntroItem(content.lines, ukuran.leadingDp, activeIndex, progressMs, prefs.fontSize) }
-            lineItems(content, activeIndex, progressMs, prefs, interaction)
+            item { IntroItem(content.lines, ukuran.leadingDp, activeIndex, clock.progressMs, prefs.fontSize) }
+            lineItems(content, activeIndex, clock, prefs, interaction)
             item { Spacer(modifier = Modifier.height(ukuran.trailingDp.dp)) }
         }
     }
@@ -227,7 +231,7 @@ private fun IntroItem(lines: List<SyncedLine>, leadingDp: Float, activeIndex: In
 private fun LazyListScope.lineItems(
     content: SyncedContent,
     activeIndex: Int,
-    progressMs: Long,
+    clock: LyricsClock,
     prefs: LyricsDisplayPrefs,
     interaction: LineInteraction,
 ) {
@@ -244,7 +248,7 @@ private fun LazyListScope.lineItems(
             ),
             prefs = prefs,
             interaction = interaction,
-            progressMs = progressMs,
+            clock = clock,
         )
     }
 }

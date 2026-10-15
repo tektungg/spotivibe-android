@@ -54,6 +54,8 @@ sealed interface UiState {
         val highContrast: Boolean = false,
         val smoothScroll: Boolean = true,
         val hapticEnabled: Boolean = true,
+        /** Karaoke penuh per suku kata. Lihat `PreferencesRepository.lyricEffects`. */
+        val lyricEffects: Boolean = true,
         /** false = perangkat offline; header menampilkan penanda "OFFLINE". */
         val isOnline: Boolean = true,
     ) : UiState {
