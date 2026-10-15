@@ -50,6 +50,7 @@ import com.tglabs.spotivibe.domain.LINE_SPACING_STEP
 import com.tglabs.spotivibe.domain.tickCountFor
 import com.tglabs.spotivibe.domain.tickIndexOf
 import com.tglabs.spotivibe.domain.tickValueOf
+import com.tglabs.spotivibe.ui.component.PlayerSectionActions
 import com.tglabs.spotivibe.ui.component.PlayerStatusSection
 import com.tglabs.spotivibe.ui.component.SettingsToggleRow
 import com.tglabs.spotivibe.ui.component.SyncOffsetRows
@@ -78,8 +79,8 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onToggleDarkMode: () -> Unit,
     onSetFontSize: (Int) -> Unit,
-    /** Buka Settings → Notification access milik sistem. */
-    onOpenAccess: () -> Unit,
+    /** Izin notification access dan debug report: semuanya keluar ke sistem. */
+    playerActions: PlayerSectionActions,
     onSetLyricsOffsetMs: (Int) -> Unit = {},
     onSetDeviceOffsetMs: (Int) -> Unit = {},
     onSetLineSpacing: (Int) -> Unit = {},
@@ -240,7 +241,7 @@ fun SettingsScreen(
 
             // ── 03 PLAYER ──
             SectionHeader(number = "03", title = "Player", hint = "Any music app")
-            PlayerStatusSection(playing = playing, onOpenAccess = onOpenAccess)
+            PlayerStatusSection(playing = playing, actions = playerActions)
 
             // ── 04 STATISTIK LIRIK ──
             // Metrik inti produk ini. Ditampilkan, bukan cuma dicatat, karena

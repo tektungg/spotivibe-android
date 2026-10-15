@@ -15,7 +15,9 @@ import android.util.Log
 import androidx.core.graphics.scale
 import com.tglabs.spotivibe.domain.MediaSnapshot
 import com.tglabs.spotivibe.domain.NowPlaying
+import com.tglabs.spotivibe.domain.ClockReading
 import com.tglabs.spotivibe.domain.PlaybackClock
+import com.tglabs.spotivibe.domain.SyncTrace
 import com.tglabs.spotivibe.domain.SeekOutcome
 import com.tglabs.spotivibe.domain.SeekVerifier
 import com.tglabs.spotivibe.domain.positionNowMs
@@ -50,6 +52,9 @@ interface PlaybackSource {
     /** Nama app yang sedang diikuti ("Spotify", "YouTube Music"), null kalau belum ada. */
     val playerLabel: StateFlow<String?>
 
+    /** Paket app yang sedang diikuti, untuk debug report. */
+    val playerPackage: StateFlow<String?>
+
     /**
      * Nama player setiap kali ia diam-diam mengabaikan seek dari Spotivibe
      * (lihat [SeekVerifier]). Paling banyak sekali per lagu.
@@ -83,7 +88,11 @@ interface PlaybackSource {
  * singleton seumur proses, jadi listener-nya tidak pernah dilepas kecuali izin
  * dicabut.
  */
-class AndroidMediaSessionSource(private val context: Context) : PlaybackSource {
+class AndroidMediaSessionSource(
+    private val context: Context,
+    /** Jejak kejadian untuk debug report. */
+    private val trace: SyncTrace = SyncTrace(),
+) : PlaybackSource {
 
     private val sessionManager = context.getSystemService(MediaSessionManager::class.java)
     private val listenerComponent = ComponentName(context, SessionAccessService::class.java)
@@ -103,6 +112,12 @@ class AndroidMediaSessionSource(private val context: Context) : PlaybackSource {
 
     private val _playerLabel = MutableStateFlow<String?>(null)
     override val playerLabel: StateFlow<String?> = _playerLabel.asStateFlow()
+
+    private val _playerPackage = MutableStateFlow<String?>(null)
+    override val playerPackage: StateFlow<String?> = _playerPackage.asStateFlow()
+
+    /** Keadaan terakhir yang dicatat ke jejak, supaya hanya perubahan yang tercatat. */
+    private var lastTracedState: PlayerState? = null
 
     private val _seekRefused = MutableSharedFlow<String>(extraBufferCapacity = 1)
     override val seekRefused: SharedFlow<String> = _seekRefused.asSharedFlow()
@@ -214,6 +229,9 @@ class AndroidMediaSessionSource(private val context: Context) : PlaybackSource {
         seekVerifier.reset()
         controller?.registerCallback(mainCallback, handler)
         _playerLabel.value = controller?.let { appLabel(it.packageName) }
+        _playerPackage.value = controller?.packageName
+        lastTracedState = null
+        trace.record(SystemClock.elapsedRealtime(), "follow ${controller?.packageName ?: "no player"}")
         Log.d(TAG, "Mengikuti ${controller?.packageName}")
         publish(metadataChanged = true)
     }
@@ -230,9 +248,17 @@ class AndroidMediaSessionSource(private val context: Context) : PlaybackSource {
         val now = SystemClock.elapsedRealtime()
         seekVerifier.onReport(positionNowMs(snapshot, now), now)?.let(::onSeekOutcome)
         val reading = clock.onReport(snapshot, now)
+        traceState(snapshot, reading, now)
         _nowPlaying.value = snapshot.toNowPlaying(reading, System.currentTimeMillis())
         _controls.value = snapshot.controls
         if (metadataChanged) _albumBitmap.value = controller.metadata?.artwork()
+    }
+
+    /** Catat perubahan keadaan beserta laporan mentah dan hasil jam, untuk debug report. */
+    private fun traceState(snapshot: MediaSnapshot, reading: ClockReading, now: Long) {
+        if (snapshot.state == lastTracedState) return
+        lastTracedState = snapshot.state
+        trace.record(now, "${snapshot.state} reported ${positionNowMs(snapshot, now)} ms → clock ${reading.positionMs} ms")
     }
 
     private fun appLabel(packageName: String): String = runCatching {
@@ -255,6 +281,7 @@ class AndroidMediaSessionSource(private val context: Context) : PlaybackSource {
         // Jam langsung pindah: lirik tidak menunggu laporan player berikutnya.
         clock.onSeek(target, now)
         seekVerifier.onSeek(target, now)
+        trace.record(now, "seek → $target ms")
         // Player yang mengabaikan seek sering tidak mengirim laporan apa pun,
         // jadi tenggatnya diperiksa sendiri, tidak menunggu callback.
         handler.postDelayed({
@@ -266,6 +293,7 @@ class AndroidMediaSessionSource(private val context: Context) : PlaybackSource {
     private fun onSeekOutcome(outcome: SeekOutcome) {
         val trackId = _nowPlaying.value?.id
         Log.d(TAG, "Seek ${outcome.name} oleh ${current?.packageName}")
+        trace.record(SystemClock.elapsedRealtime(), "seek ${outcome.name.lowercase()}")
         if (outcome != SeekOutcome.Refused || trackId == refusalAnnouncedFor) return
         refusalAnnouncedFor = trackId
         _seekRefused.tryEmit(_playerLabel.value ?: current?.packageName.orEmpty())

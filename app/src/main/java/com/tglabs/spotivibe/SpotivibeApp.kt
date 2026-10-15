@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import com.tglabs.spotivibe.data.AndroidAudioOutputMonitor
 import com.tglabs.spotivibe.data.AndroidMediaSessionSource
+import com.tglabs.spotivibe.data.DebugReportCollector
 import com.tglabs.spotivibe.data.AndroidNetworkMonitor
 import com.tglabs.spotivibe.data.AudioOutputSource
 import com.tglabs.spotivibe.data.FileLyricsOverrideStore
@@ -19,6 +20,7 @@ import com.tglabs.spotivibe.data.RomanizationService
 import com.tglabs.spotivibe.data.provider.AmllProvider
 import com.tglabs.spotivibe.data.provider.LrcMuxProvider
 import com.tglabs.spotivibe.data.provider.LrcRedProvider
+import com.tglabs.spotivibe.domain.SyncTrace
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -89,7 +91,20 @@ class SpotivibeApp : Application() {
      * Lagu yang sedang diputar app mana pun, lewat MediaSession sistem. Satu
      * listener seumur proses; butuh izin notification access dari user.
      */
-    val playbackSource: PlaybackSource by lazy { AndroidMediaSessionSource(this) }
+    val playbackSource: PlaybackSource by lazy { AndroidMediaSessionSource(this, syncTrace) }
+
+    /** Kejadian terakhir di jalur playback dan lirik, untuk debug report. Hanya di memori. */
+    val syncTrace: SyncTrace = SyncTrace()
+
+    val debugReportCollector: DebugReportCollector by lazy {
+        DebugReportCollector(
+            context = this,
+            controller = playbackController,
+            source = playbackSource,
+            trace = syncTrace,
+            communitySources = { communitySources.value },
+        )
+    }
 
     val playbackController: PlaybackController by lazy {
         PlaybackController(
@@ -100,6 +115,7 @@ class SpotivibeApp : Application() {
             scope = applicationScope,
             network = networkMonitor,
             audioOutput = audioOutputMonitor,
+            trace = syncTrace,
         )
     }
 

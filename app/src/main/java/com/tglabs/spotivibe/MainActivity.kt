@@ -1,6 +1,8 @@
 package com.tglabs.spotivibe
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -81,6 +83,8 @@ class MainActivity : ComponentActivity() {
                 actions = ActivityActions(
                     openNotificationAccess = ::openNotificationAccess,
                     toggleOverlay = ::handleOverlayToggle,
+                    copyDebugReport = ::copyDebugReport,
+                    shareDebugReport = ::shareDebugReport,
                 ),
             )
         }
@@ -107,6 +111,24 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun debugReport(): String = (application as SpotivibeApp).debugReportCollector.collect()
+
+    private fun copyDebugReport() {
+        val clipboard = getSystemService(ClipboardManager::class.java) ?: return
+        clipboard.setPrimaryClip(ClipData.newPlainText(DEBUG_REPORT_LABEL, debugReport()))
+        Toast.makeText(this, "Debug report copied", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun shareDebugReport() {
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, DEBUG_REPORT_LABEL)
+            putExtra(Intent.EXTRA_TEXT, debugReport())
+        }
+        runCatching { startActivity(Intent.createChooser(send, DEBUG_REPORT_LABEL)) }
+            .onFailure { Log.w(TAG, "Share sheet tidak bisa dibuka: ${it.message}") }
     }
 
     /** Nyalakan foreground service lirik. Idempoten. */
@@ -167,5 +189,6 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
+        private const val DEBUG_REPORT_LABEL = "Spotivibe debug report"
     }
 }

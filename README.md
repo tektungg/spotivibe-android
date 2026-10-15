@@ -250,6 +250,12 @@ sebagai artifact, hanya tidak membuat Release.
   (`shouldRematchForDuration`).
 - **AMLL** mencocokkan lewat ID Spotify untuk lagu Spotify, dan lewat judul +
   artis untuk player lain.
+- **Debug report** (Settings → Player → COPY DEBUG REPORT / SHARE): versi app
+  dan Android, player yang diikuti (paket + versi), lagu dan id-nya, kontrol,
+  offset tiga lapis, jawaban tiap sumber lirik, dan 50 kejadian sync terakhir
+  (`domain/SyncTrace.kt`, hanya di memori). Disusun murni oleh
+  `buildDebugReport`; query string URL dan nilai key/token disensor sebelum
+  keluar dari app.
 - **Antrean** dari `MediaController.queue` (kalau player membaginya) untuk
   preload lirik 3 lagu berikutnya.
 

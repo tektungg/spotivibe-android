@@ -1,5 +1,6 @@
 package com.tglabs.spotivibe.ui
 
+import com.tglabs.spotivibe.ui.component.PlayerSectionActions
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -123,7 +124,7 @@ class SafeAreaUiTest {
                 CompositionLocalProvider(LocalSvSafeInsets provides insetsHeadUnit) {
                     SettingsScreen(
                         state = playing,
-                        onBack = {}, onToggleDarkMode = {}, onSetFontSize = {}, onOpenAccess = {},
+                        onBack = {}, onToggleDarkMode = {}, onSetFontSize = {}, playerActions = PlayerSectionActions(),
                     )
                 }
             }

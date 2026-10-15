@@ -8,6 +8,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tglabs.spotivibe.domain.UiState
+import com.tglabs.spotivibe.ui.component.PlayerSectionActions
 import com.tglabs.spotivibe.ui.component.SongSyncDialog
 import com.tglabs.spotivibe.ui.screen.LyricsSearchScreen
 import com.tglabs.spotivibe.ui.screen.MainScreen
@@ -20,6 +21,8 @@ import kotlinx.coroutines.flow.Flow
 class ActivityActions(
     val openNotificationAccess: () -> Unit,
     val toggleOverlay: () -> Unit,
+    val copyDebugReport: () -> Unit,
+    val shareDebugReport: () -> Unit,
 )
 
 /** Layar yang sedang tampil. Disimpan sebagai nama supaya lolos rotasi. */
@@ -94,7 +97,11 @@ private fun SettingsRoute(
         onBack = onClose,
         onToggleDarkMode = { viewModel.toggleDarkMode() },
         onSetFontSize = { size -> viewModel.setFontSize(size) },
-        onOpenAccess = actions.openNotificationAccess,
+        playerActions = PlayerSectionActions(
+            onOpenAccess = actions.openNotificationAccess,
+            onCopyReport = actions.copyDebugReport,
+            onShareReport = actions.shareDebugReport,
+        ),
         onSetLyricsOffsetMs = { ms -> viewModel.setLyricsOffsetMs(ms) },
         onSetDeviceOffsetMs = { ms -> viewModel.setDeviceOffsetMs(ms) },
         onSetLineSpacing = { dp -> viewModel.setLineSpacing(dp) },

@@ -26,6 +26,15 @@ import com.tglabs.spotivibe.ui.theme.SvIcons
 import com.tglabs.spotivibe.ui.theme.SvSpace
 import com.tglabs.spotivibe.ui.theme.SvType
 
+/** Aksi bagian Player: semuanya membuka sesuatu di luar Spotivibe. */
+data class PlayerSectionActions(
+    val onOpenAccess: () -> Unit = {},
+    /** Salin debug report ke clipboard. */
+    val onCopyReport: () -> Unit = {},
+    /** Bagikan debug report lewat share sheet sistem. */
+    val onShareReport: () -> Unit = {},
+)
+
 /**
  * Isi bagian "Player" di Settings: app yang sedang diikuti, apa yang
  * diizinkannya, dan jalan ke layar izin sistem.
@@ -35,7 +44,7 @@ import com.tglabs.spotivibe.ui.theme.SvType
  * Spotivibe membaca player mana pun.
  */
 @Composable
-internal fun PlayerStatusSection(playing: UiState.Playing?, onOpenAccess: () -> Unit) {
+internal fun PlayerStatusSection(playing: UiState.Playing?, actions: PlayerSectionActions) {
     val sv = LocalSvColors.current
     Column(modifier = Modifier.padding(horizontal = SvSpace.s5, vertical = SvSpace.s3)) {
         Row(
@@ -62,9 +71,26 @@ internal fun PlayerStatusSection(playing: UiState.Playing?, onOpenAccess: () -> 
         OutlinedActionButton(
             label = "NOTIFICATION ACCESS",
             icon = SvIcons.External,
-            onClick = onOpenAccess,
+            onClick = actions.onOpenAccess,
             modifier = Modifier.fillMaxWidth(),
         )
+        Spacer(modifier = Modifier.height(SvSpace.s2))
+        // Untuk laporan bug: player, lagu, sumber lirik, dan kejadian sync
+        // terakhir. Tanpa ini masalah di head unit orang lain tidak terbaca.
+        Row(horizontalArrangement = Arrangement.spacedBy(SvSpace.s2)) {
+            OutlinedActionButton(
+                label = "COPY DEBUG REPORT",
+                icon = SvIcons.Check,
+                onClick = actions.onCopyReport,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedActionButton(
+                label = "SHARE",
+                icon = SvIcons.Share,
+                onClick = actions.onShareReport,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 

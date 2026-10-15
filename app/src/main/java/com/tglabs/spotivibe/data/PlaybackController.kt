@@ -1,6 +1,7 @@
 package com.tglabs.spotivibe.data
 
 import android.graphics.Bitmap
+import android.os.SystemClock
 import android.util.Log
 import androidx.compose.ui.graphics.Color
 import androidx.palette.graphics.Palette
@@ -11,6 +12,7 @@ import com.tglabs.spotivibe.domain.NowPlaying
 import com.tglabs.spotivibe.domain.PlayerControls
 import com.tglabs.spotivibe.domain.SourceReport
 import com.tglabs.spotivibe.domain.SyncOffsets
+import com.tglabs.spotivibe.domain.SyncTrace
 import com.tglabs.spotivibe.domain.SyncedLine
 import com.tglabs.spotivibe.domain.lineAt
 import com.tglabs.spotivibe.domain.pickAccentArgb
@@ -62,6 +64,8 @@ class PlaybackController(
     private val network: NetworkStatusSource = NetworkStatusSource.AlwaysOnline,
     /** Perangkat output aktif, kunci offset per perangkat. */
     private val audioOutput: AudioOutputSource = AudioOutputSource.Unknown,
+    /** Jejak kejadian untuk debug report. */
+    private val trace: SyncTrace = SyncTrace(),
 ) {
     /** Diteruskan ke UI untuk badge "Offline". */
     val isOnline: StateFlow<Boolean> = network.isOnline
@@ -345,6 +349,7 @@ class PlaybackController(
 
     private fun applyLyrics(state: LyricsState) {
         _lyricsState.value = state
+        trace.record(SystemClock.elapsedRealtime(), "lyrics ${source.nowPlaying.value?.id}: ${state::class.simpleName}")
         // Jangan tunggu tick berikutnya: kalau lirik datang dari cache atau
         // override, baris aktif harus langsung benar.
         syncEngine.onLyrics((state as? LyricsState.Ready)?.result?.synced)
