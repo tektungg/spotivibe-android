@@ -26,6 +26,9 @@ Android native companion untuk Spotify — synced lyrics dengan romanization (JP
 - **Sync offset tiga lapis** — global, per perangkat output (mobil, earbud,
   speaker HP masing-masing punya jedanya sendiri), dan per lagu lewat menu
   "Sync this song". Detail di [Sync lirik](#sync-lirik)
+- **Titik-titik jeda instrumental** — intro dan interlude >= 3 detik menampilkan
+  tiga titik yang menyala bergantian lalu menyusut tepat sebelum baris
+  berikutnya (`domain/Interlude.kt`), menggantikan "♪" yang diam
 - **Notification dengan synced lyrics** — baris prev/current/next karaoke-style di pull-down + lock screen
 - **Floating overlay** full-width, draggable Y, di atas app lain — mini bar (collapsed) ↔ expanded card (tap-to-expand)
 - **Dynamic accent color** — Palette API extract dari album cover (clamped HSV agar readable di dark theme)
