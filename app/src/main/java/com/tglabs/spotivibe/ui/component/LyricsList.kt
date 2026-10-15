@@ -116,9 +116,9 @@ data class LyricsListOptions(
 @Composable
 fun LyricsList(
     content: LyricsContent,
+    modifier: Modifier = Modifier,
     options: LyricsListOptions = LyricsListOptions(),
     interaction: LineInteraction = LineInteraction(),
-    modifier: Modifier = Modifier,
 ) {
     val lyricsState = content.lyricsState
     val sv = LocalSvColors.current
