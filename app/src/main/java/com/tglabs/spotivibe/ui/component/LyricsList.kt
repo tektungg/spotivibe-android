@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,7 +25,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -153,6 +159,27 @@ private data class SyncedContent(
     val hasRomanization: Boolean get() = romaji.values.any { !it.isNullOrBlank() }
 }
 
+/**
+ * Pudarkan [fraction] teratas dan terbawah daftar ke transparan, supaya baris
+ * yang masuk dan keluar layar tidak terpotong tajam oleh header atau transport.
+ * Lapisan offscreen dibutuhkan supaya `DstIn` memotong isi daftar saja, bukan
+ * latar di belakangnya.
+ */
+private fun Modifier.edgeFade(fraction: Float): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        drawRect(
+            brush = Brush.verticalGradient(
+                0f to Color.Transparent,
+                fraction to Color.Black,
+                1f - fraction to Color.Black,
+                1f to Color.Transparent,
+            ),
+            blendMode = BlendMode.DstIn,
+        )
+    }
+
 /** Tinggi chrome di atas dan di bawah daftar lirik, dp. */
 private data class ChromeInsets(val aboveDp: Float = 0f, val belowDp: Float = 0f)
 
@@ -180,6 +207,10 @@ private fun SyncedView(
     interaction: LineInteraction,
 ) {
     val listState = rememberLazyListState()
+    val isDragged by listState.interactionSource.collectIsDraggedAsState()
+    val linePrefs = prefs.copy(
+        distanceBlur = prefs.lyricEffects && !prefs.highContrast && !isDragged && !interaction.isSelecting,
+    )
     val density = LocalDensity.current
     var chrome by remember { mutableStateOf(ChromeInsets()) }
     ResetScrollOnNewSong(content.lines, activeIndex, listState)
@@ -205,12 +236,14 @@ private fun SyncedView(
 
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (prefs.lyricEffects) Modifier.edgeFade(EDGE_FADE_FRACTION) else Modifier),
             contentPadding = PaddingValues(horizontal = 0.dp, vertical = SvSpace.s3),
             verticalArrangement = Arrangement.spacedBy(prefs.lineSpacing.coerceIn(0, 40).dp),
         ) {
             item { IntroItem(content.lines, ukuran.leadingDp, activeIndex, clock.progressMs, prefs.fontSize) }
-            lineItems(content, activeIndex, clock, prefs, interaction)
+            lineItems(content, activeIndex, clock, linePrefs, interaction)
             item { Spacer(modifier = Modifier.height(ukuran.trailingDp.dp)) }
         }
     }
@@ -245,6 +278,7 @@ private fun LazyListScope.lineItems(
                 romaji = content.romaji[line.id],
                 state = lyricState(idx, activeIndex),
                 interludeGapMs = interludeGapMs(content.lines, idx),
+                blurDp = lineBlurDp(idx, activeIndex, prefs.distanceBlur),
             ),
             prefs = prefs,
             interaction = interaction,

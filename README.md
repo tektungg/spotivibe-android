@@ -35,6 +35,10 @@ Android native companion untuk Spotify — synced lyrics dengan romanization (JP
   memantul kembali lewat pegas. Kata yang ditahan >= 1 detik menyapu per huruf.
   Settings → **Lyric effects** mematikannya untuk head unit yang lemah. Detail
   di [Animasi karaoke](#animasi-karaoke)
+- **Blur menurut jarak dan fade di tepi** — baris non-aktif makin kabur makin
+  jauh dari baris aktif (1,25 dp per baris, maksimal 6,83 dp), dan tepi atas/bawah
+  daftar memudar. Blur lepas saat user menggulir atau memilih baris, mati di high
+  contrast, dan tidak berefek di Android < 12 (head unit tampil tajam)
 - **Titik-titik jeda instrumental** — intro dan interlude >= 3 detik menampilkan
   tiga titik yang menyala bergantian lalu menyusut tepat sebelum baris
   berikutnya (`domain/Interlude.kt`), menggantikan "♪" yang diam
@@ -389,6 +393,11 @@ menutup XXE dan entity expansion di implementasi parser mana pun.
 
 Hanya baris aktif yang memakai jalur ini; baris lain tetap `Text` biasa. Efek
 mati (`lyric_effects = false`) kembali ke highlight per kata lama.
+
+Lyric effects juga mengendalikan blur menurut jarak (`lineBlurDp` di
+`LyricsMetrics.kt`) dan fade tepi daftar (`Modifier.edgeFade`, lapisan
+offscreen + `BlendMode.DstIn`). Blur sengaja dilepas selama daftar di-drag
+(`collectIsDraggedAsState`): saat itu user sedang membaca baris lain.
 
 ### Siklus koneksi
 

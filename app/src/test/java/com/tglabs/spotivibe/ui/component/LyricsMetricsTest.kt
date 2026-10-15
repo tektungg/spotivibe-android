@@ -383,4 +383,26 @@ class LyricsMetricsTest {
             lyricsPadding(portrait),
         )
     }
+
+    // ── Blur menurut jarak ───────────────────────────────────────
+
+    @Test
+    fun `baris aktif tajam dan blur naik per langkah jarak`() {
+        assertEquals(0f, distanceBlurDp(0), 0f)
+        assertEquals(1.25f, distanceBlurDp(1), 1e-6f)
+        assertEquals(2.5f, distanceBlurDp(-2), 1e-6f)
+    }
+
+    @Test
+    fun `blur berhenti di batas atas`() {
+        assertEquals(BLUR_MAX_DP, distanceBlurDp(6), 0f)
+        assertEquals(BLUR_MAX_DP, distanceBlurDp(40), 0f)
+    }
+
+    @Test
+    fun `tanpa baris aktif atau saat dimatikan tidak ada blur`() {
+        assertEquals(0f, lineBlurDp(index = 5, activeIndex = -1, enabled = true), 0f)
+        assertEquals(0f, lineBlurDp(index = 5, activeIndex = 0, enabled = false), 0f)
+        assertEquals(distanceBlurDp(3), lineBlurDp(index = 5, activeIndex = 2, enabled = true), 0f)
+    }
 }

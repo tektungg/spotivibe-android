@@ -175,3 +175,26 @@ const val ROMANIZATION_MIN_SP = 10f
 
 fun romanizationSizeSp(lyricSizeSp: Float): Float =
     (lyricSizeSp * ROMANIZATION_RATIO).coerceAtLeast(ROMANIZATION_MIN_SP)
+
+/**
+ * Blur per langkah jarak dari baris aktif, dan batas atasnya. Baris yang jauh
+ * kabur bertingkat supaya mata langsung jatuh ke baris aktif; di atas sekitar
+ * 7 dp teksnya sudah tidak terbaca, jadi lebih kabur hanya memakan GPU.
+ */
+const val BLUR_PER_LINE_DP = 1.25f
+const val BLUR_MAX_DP = 6.83f
+
+/** Radius blur untuk baris yang berjarak [distance] baris dari yang aktif. */
+fun distanceBlurDp(distance: Int): Float =
+    (BLUR_PER_LINE_DP * kotlin.math.abs(distance)).coerceAtMost(BLUR_MAX_DP)
+
+/**
+ * Blur baris ke-[index]. Nol kalau blur sedang tidak berlaku ([enabled] false:
+ * efek mati, high contrast, user sedang menggulir atau memilih baris) atau
+ * belum ada baris aktif (intro): saat itu tidak ada titik fokus untuk dijauhi.
+ */
+fun lineBlurDp(index: Int, activeIndex: Int, enabled: Boolean): Float =
+    if (!enabled || activeIndex < 0) 0f else distanceBlurDp(index - activeIndex)
+
+/** Tinggi fade di tepi atas dan bawah daftar, sebagai pecahan tingginya. */
+const val EDGE_FADE_FRACTION = 0.08f

@@ -18,6 +18,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -62,6 +63,13 @@ internal data class LyricsDisplayPrefs(
     val hapticEnabled: Boolean,
     /** Karaoke penuh (sapuan, skala, cahaya). Mati = highlight per kata sederhana. */
     val lyricEffects: Boolean = true,
+    /**
+     * Blur menurut jarak berlaku SAAT INI. Turunan, bukan setelan: dihitung
+     * ulang di daftar dari [lyricEffects], high contrast, dan apakah user sedang
+     * menggulir. Saat menggulir user sedang membaca baris lain, dan baris yang
+     * kabur justru menghalanginya.
+     */
+    val distanceBlur: Boolean = false,
 )
 
 /** Interaksi baris: tap untuk seek, tekan lama untuk memilih. */
@@ -81,6 +89,8 @@ internal data class LyricLineModel(
     val state: LyricLineState,
     /** Panjang jeda kalau baris ini penanda jeda yang layak dianimasikan. */
     val interludeGapMs: Long?,
+    /** Radius blur menurut jarak dari baris aktif, 0 = tajam. */
+    val blurDp: Float = 0f,
 )
 
 /** Duet: jarak tambahan di kiri baris penyanyi kedua. */
@@ -159,7 +169,10 @@ internal fun LyricLineItem(
     val isSelected = interaction.selectedIds.contains(model.line.id)
 
     Row(
-        modifier = lineRowModifier(model.line, interaction, if (isSelected) sv.accentGhost else Color.Transparent),
+        modifier = Modifier.lyricLineRow(model.line, interaction, if (isSelected) sv.accentGhost else Color.Transparent)
+            // Android < 12 tidak punya RenderEffect, dan blur() di sana tidak
+            // berefek: head unit Android 9/10 tampil tajam seperti sebelumnya.
+            .then(if (model.blurDp > 0f) Modifier.blur(model.blurDp.dp) else Modifier),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (interaction.isSelecting) SelectionGutter(isSelected)
@@ -180,8 +193,8 @@ internal fun LyricLineItem(
     }
 }
 
-private fun lineRowModifier(line: SyncedLine, interaction: LineInteraction, background: Color): Modifier {
-    val base = Modifier
+private fun Modifier.lyricLineRow(line: SyncedLine, interaction: LineInteraction, background: Color): Modifier {
+    val base = this
         .fillMaxWidth()
         .background(background)
         .padding(vertical = SvSpace.s1)
