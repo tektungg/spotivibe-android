@@ -16,6 +16,9 @@ import androidx.core.graphics.scale
 import com.tglabs.spotivibe.domain.MediaSnapshot
 import com.tglabs.spotivibe.domain.NowPlaying
 import com.tglabs.spotivibe.domain.PlaybackClock
+import com.tglabs.spotivibe.domain.SeekOutcome
+import com.tglabs.spotivibe.domain.SeekVerifier
+import com.tglabs.spotivibe.domain.positionNowMs
 import com.tglabs.spotivibe.domain.PlayerControls
 import com.tglabs.spotivibe.domain.PlayerState
 import com.tglabs.spotivibe.domain.QueuedTrack
@@ -24,7 +27,10 @@ import com.tglabs.spotivibe.domain.pickSession
 import com.tglabs.spotivibe.domain.toNowPlaying
 import com.tglabs.spotivibe.domain.trackIdFor
 import com.tglabs.spotivibe.service.SessionAccessService
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -43,6 +49,12 @@ interface PlaybackSource {
 
     /** Nama app yang sedang diikuti ("Spotify", "YouTube Music"), null kalau belum ada. */
     val playerLabel: StateFlow<String?>
+
+    /**
+     * Nama player setiap kali ia diam-diam mengabaikan seek dari Spotivibe
+     * (lihat [SeekVerifier]). Paling banyak sekali per lagu.
+     */
+    val seekRefused: SharedFlow<String>
 
     /** Baca ulang status izin. Dipanggil saat kembali dari layar Settings sistem. */
     fun refreshAccess()
@@ -91,6 +103,14 @@ class AndroidMediaSessionSource(private val context: Context) : PlaybackSource {
 
     private val _playerLabel = MutableStateFlow<String?>(null)
     override val playerLabel: StateFlow<String?> = _playerLabel.asStateFlow()
+
+    private val _seekRefused = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    override val seekRefused: SharedFlow<String> = _seekRefused.asSharedFlow()
+
+    private val seekVerifier = SeekVerifier()
+
+    /** Lagu yang penolakan seek-nya sudah diberitahukan, supaya tidak diulang tiap tap. */
+    private var refusalAnnouncedFor: String? = null
 
     private var observing = false
     private var current: MediaController? = null
@@ -191,6 +211,7 @@ class AndroidMediaSessionSource(private val context: Context) : PlaybackSource {
         current?.unregisterCallback(mainCallback)
         current = controller
         clock = PlaybackClock()
+        seekVerifier.reset()
         controller?.registerCallback(mainCallback, handler)
         _playerLabel.value = controller?.let { appLabel(it.packageName) }
         Log.d(TAG, "Mengikuti ${controller?.packageName}")
@@ -206,7 +227,9 @@ class AndroidMediaSessionSource(private val context: Context) : PlaybackSource {
             if (metadataChanged) _albumBitmap.value = null
             return
         }
-        val reading = clock.onReport(snapshot, SystemClock.elapsedRealtime())
+        val now = SystemClock.elapsedRealtime()
+        seekVerifier.onReport(positionNowMs(snapshot, now), now)?.let(::onSeekOutcome)
+        val reading = clock.onReport(snapshot, now)
         _nowPlaying.value = snapshot.toNowPlaying(reading, System.currentTimeMillis())
         _controls.value = snapshot.controls
         if (metadataChanged) _albumBitmap.value = controller.metadata?.artwork()
@@ -228,9 +251,24 @@ class AndroidMediaSessionSource(private val context: Context) : PlaybackSource {
     override fun seekTo(positionMs: Long) {
         if (!_controls.value.canSeek) return
         val target = positionMs.coerceAtLeast(0L)
+        val now = SystemClock.elapsedRealtime()
         // Jam langsung pindah: lirik tidak menunggu laporan player berikutnya.
-        clock.onSeek(target, SystemClock.elapsedRealtime())
+        clock.onSeek(target, now)
+        seekVerifier.onSeek(target, now)
+        // Player yang mengabaikan seek sering tidak mengirim laporan apa pun,
+        // jadi tenggatnya diperiksa sendiri, tidak menunggu callback.
+        handler.postDelayed({
+            seekVerifier.onDeadline(SystemClock.elapsedRealtime())?.let(::onSeekOutcome)
+        }, SeekVerifier.CONFIRM_WINDOW_MS + DEADLINE_SLACK_MS)
         control { it.seekTo(target) }
+    }
+
+    private fun onSeekOutcome(outcome: SeekOutcome) {
+        val trackId = _nowPlaying.value?.id
+        Log.d(TAG, "Seek ${outcome.name} oleh ${current?.packageName}")
+        if (outcome != SeekOutcome.Refused || trackId == refusalAnnouncedFor) return
+        refusalAnnouncedFor = trackId
+        _seekRefused.tryEmit(_playerLabel.value ?: current?.packageName.orEmpty())
     }
 
     private fun control(block: (MediaController.TransportControls) -> Unit) {
@@ -268,6 +306,9 @@ class AndroidMediaSessionSource(private val context: Context) : PlaybackSource {
     private companion object {
         const val TAG = "MediaSessionSource"
         const val ENABLED_LISTENERS_KEY = "enabled_notification_listeners"
+
+        /** Sedikit di atas tenggat verifier, supaya pemeriksaan tidak datang sebelum waktunya. */
+        const val DEADLINE_SLACK_MS = 50L
 
         /** Cover lebih besar dari ini hanya membuang memori: dipakai untuk blur dan warna aksen. */
         const val MAX_ART_PX = 512

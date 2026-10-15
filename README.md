@@ -237,6 +237,10 @@ sebagai artifact, hanya tidak membuat Release.
   bias kalau player melanjutkan dari angka basinya. Buffering membekukan jam,
   kecuali di 2 s terakhir lagu (Spotify menyiapkan lagu berikutnya). Satu jam
   per player, dibuat ulang saat pindah player.
+- **Konfirmasi seek** (`domain/SeekVerifier.kt`): seek dianggap jalan kalau
+  dalam 1,5 s player melapor posisi di sekitar target (±750 ms, ditambah waktu
+  yang lewat). Kalau tidak, misalnya Spotify Free yang mengabaikannya diam-diam,
+  muncul Toast "<player> didn't accept the seek", sekali per lagu.
 - **Kontrol**: `transportControls` milik player. Tombol dan slider mengikuti
   bit `PlaybackState.actions`; tombol yang tidak diizinkan tampil redup, dan
   seek yang tidak diizinkan ditolak sebelum dikirim.

@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -21,7 +22,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.tglabs.spotivibe.service.SpotivibeNotificationService
 import com.tglabs.spotivibe.ui.component.SongSyncDialog
 import com.tglabs.spotivibe.ui.screen.LyricsSearchScreen
@@ -77,6 +80,16 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             app.playbackController.hasAccess.collect { granted ->
                 if (granted) startCompanion()
+            }
+        }
+
+        // Seek yang diabaikan player tidak boleh terlihat seperti tap yang
+        // tidak bekerja: beri tahu siapa yang menolak. Hanya saat layar tampil.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                app.playbackController.seekRefused.collect { player ->
+                    Toast.makeText(this@MainActivity, "$player didn't accept the seek", Toast.LENGTH_SHORT).show()
+                }
             }
         }
 

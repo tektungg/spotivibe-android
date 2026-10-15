@@ -27,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,6 +79,9 @@ class PlaybackController(
     val hasAccess: StateFlow<Boolean> = source.hasAccess
     val controls: StateFlow<PlayerControls> = source.controls
     val playerLabel: StateFlow<String?> = source.playerLabel
+
+    /** Nama player yang barusan mengabaikan seek. UI memberi tahu user sekali per lagu. */
+    val seekRefused: SharedFlow<String> = source.seekRefused
 
     // ── Lyrics state ─────────────────────────────────────────────
     //
