@@ -18,7 +18,6 @@ import androidx.core.content.ContextCompat
 import com.tglabs.spotivibe.MainActivity
 import com.tglabs.spotivibe.R
 import com.tglabs.spotivibe.SpotivibeApp
-import com.tglabs.spotivibe.data.SpotifySessionSupervisor
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.NowPlaying
 import com.tglabs.spotivibe.domain.SyncedLine
@@ -60,7 +59,6 @@ class SpotivibeNotificationService : Service() {
     private var lastLine: SyncedLine? = null
     private var lastPrevLine: SyncedLine? = null
     private var lastNextLine: SyncedLine? = null
-    private var isReconnecting: Boolean = false
 
     private val actionReceiver = ActionReceiver()
 
@@ -116,25 +114,15 @@ class SpotivibeNotificationService : Service() {
     private suspend fun observeControllerFlows() = coroutineScope {
         val controller = app.playbackController
 
-        // Companion berhenti HANYA kalau sesinya hilang. Koneksi putus bukan
-        // alasan berhenti: dulu Disconnected memicu stopSelf(), jadi Spotify
-        // di-kill sekali berarti notification hilang selamanya sampai user
-        // membuka app ini lagi. Sekarang supervisor yang menyambung ulang.
+        // Companion berhenti HANYA kalau izin notification access dicabut.
+        // Player yang berhenti atau ditutup bukan alasan: lagu berikutnya dari
+        // app mana pun harus langsung tampil lagi tanpa membuka Spotivibe.
         launch {
-            app.sessionSupervisor.shouldRun.collect { state ->
-                if (state == SpotifySessionSupervisor.CompanionState.Stopped) {
-                    Log.d(TAG, "Sesi hilang — stopSelf()")
+            controller.hasAccess.collect { granted ->
+                if (!granted) {
+                    Log.d(TAG, "Izin notification access dicabut — stopSelf()")
                     stopSelf()
                 }
-            }
-        }
-
-        // Teks notification ikut berubah saat sedang menyambung ulang, supaya
-        // user tidak menatap lirik basi tanpa tahu kenapa berhenti bergerak.
-        launch {
-            app.sessionSupervisor.reconnecting.collect {
-                isReconnecting = it
-                refreshNotification()
             }
         }
 
@@ -289,7 +277,6 @@ class SpotivibeNotificationService : Service() {
                 current = current?.text,
                 next = next?.text,
             ),
-            isReconnecting = isReconnecting,
         )
         val title = teks.title
         val subtitle = teks.subtitle
@@ -422,10 +409,10 @@ class SpotivibeNotificationService : Service() {
             when (intent.action) {
                 ACTION_PLAY_PAUSE -> {
                     val isPaused = app.playbackController.track.value?.isPaused ?: true
-                    if (isPaused) app.spotifyConnection.play() else app.spotifyConnection.pause()
+                    if (isPaused) app.playbackController.play() else app.playbackController.pause()
                 }
-                ACTION_NEXT -> app.spotifyConnection.skipNext()
-                ACTION_PREVIOUS -> app.spotifyConnection.skipPrevious()
+                ACTION_NEXT -> app.playbackController.skipNext()
+                ACTION_PREVIOUS -> app.playbackController.skipPrevious()
             }
         }
 

@@ -29,7 +29,6 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.tglabs.spotivibe.SpotivibeApp
 import com.tglabs.spotivibe.data.PlaybackController
 import com.tglabs.spotivibe.ui.overlay.OverlayContent
 
@@ -312,20 +311,14 @@ class OverlayManager(
     }
 
     private fun handlePlayPause() {
-        val app = context.applicationContext as? SpotivibeApp ?: return
-        val conn = app.spotifyConnection
         // Toggle berdasarkan state terakhir dari controller.track
         val paused = controller.track.value?.isPaused ?: true
-        if (paused) conn.play() else conn.pause()
+        if (paused) controller.play() else controller.pause()
     }
 
-    private fun handleNext() {
-        (context.applicationContext as? SpotivibeApp)?.spotifyConnection?.skipNext()
-    }
+    private fun handleNext() = controller.skipNext()
 
-    private fun handlePrevious() {
-        (context.applicationContext as? SpotivibeApp)?.spotifyConnection?.skipPrevious()
-    }
+    private fun handlePrevious() = controller.skipPrevious()
 
     private fun buildLayoutParams(x: Int, y: Int): WindowManager.LayoutParams {
         // Full-width overlay — width = MATCH_PARENT (screen width). Composable inner

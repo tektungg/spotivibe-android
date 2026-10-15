@@ -37,7 +37,7 @@ import java.util.Calendar
  */
 
 enum class EmptyKind {
-    /** Idle — connected but no track playing. */
+    /** Idle — izin ada, tapi tidak ada player yang sedang menerbitkan lagu. */
     Idle,
     /** LRCLIB lookup returned nothing. */
     NotFound,
@@ -131,7 +131,7 @@ private fun stateData(kind: EmptyKind): EmptyStateData = when (kind) {
     EmptyKind.Idle -> EmptyStateData(
         eyebrow  = "STATUS · IDLE",
         headline = "Nothing\nplaying.",
-        body     = "Open Spotify and play anything. Spotivibe pulls the lyrics automatically.",
+        body     = "Play something in any music app. Spotivibe follows it and pulls the lyrics automatically.",
         cta      = "",
         code     = "NP-002",
     )

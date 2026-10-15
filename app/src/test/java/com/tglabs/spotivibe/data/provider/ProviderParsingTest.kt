@@ -33,10 +33,19 @@ class ProviderParsingTest {
     /** REGRESI desain: pencarian AMLL fuzzy, item pertamanya lagu lain. */
     @Test
     fun `amll hanya menerima item yang mencantumkan ID Spotify lagunya`() {
-        assertEquals(8269588720193923L, pickAmllId(fixture("amll_search.json"), query.spotifyId))
-        assertNull(pickAmllId(fixture("amll_search.json"), "idYangTidakAda"))
-        assertNull(pickAmllId(fixture("amll_search.json"), ""))
-        assertNull(pickAmllId("bukan json", query.spotifyId))
+        assertEquals(8269588720193923L, pickAmllId(fixture("amll_search.json"), query))
+        assertNull(pickAmllId(fixture("amll_search.json"), query.copy(trackId = "spotify:track:1234567890123456789012")))
+        assertNull(pickAmllId("bukan json", query))
+    }
+
+    /** Lagu YouTube Music tidak punya ID Spotify: dicocokkan lewat judul dan artis. */
+    @Test
+    fun `amll untuk player lain mencocokkan judul dan artis`() {
+        val ytm = query.copy(trackId = "media:0123456789abcdef")
+        assertNull(ytm.spotifyId)
+        assertEquals(8269588720193923L, pickAmllId(fixture("amll_search.json"), ytm))
+        assertNull(pickAmllId(fixture("amll_search.json"), ytm.copy(artist = "Artis Lain")))
+        assertNull(pickAmllId(fixture("amll_search.json"), ytm.copy(title = "Lagu Lain")))
     }
 
     @Test

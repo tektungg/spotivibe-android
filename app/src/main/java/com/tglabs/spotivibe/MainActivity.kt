@@ -13,7 +13,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.content.ContextCompat
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -23,7 +22,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import com.tglabs.spotivibe.data.auth.SpotifyAuthRepository
 import com.tglabs.spotivibe.service.SpotivibeNotificationService
 import com.tglabs.spotivibe.ui.component.SongSyncDialog
 import com.tglabs.spotivibe.ui.screen.LyricsSearchScreen
@@ -35,17 +33,10 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
-    /**
-     * Menandai bahwa kita sedang menunggu redirect auth balik dari Custom Tab.
-     * Dipakai [onResume] untuk mendeteksi user yang membatalkan.
-     */
-    private var awaitingAuthRedirect = false
-
     private val viewModel: SpotivibeViewModel by viewModels {
         val app = application as SpotivibeApp
         SpotivibeViewModel.Factory(
             controller = app.playbackController,
-            connection = app.spotifyConnection,
             preferencesRepository = app.preferencesRepository,
             lyricsRepository = app.lyricsRepository,
             overrideRepository = app.lyricsOverrideRepository,
@@ -79,30 +70,13 @@ class MainActivity : ComponentActivity() {
 
         val app = application as SpotivibeApp
 
-        // Muat kredensial tersimpan. Sesi dianggap hidup kalau punya refresh
-        // token, bukan sekadar flag "pernah login" seperti dulu -- flag itu
-        // tetap true walaupun token sudah mati dan tidak bisa diperbarui.
+        // Satu-satunya hal yang wajib dari foreground: menyalakan foreground
+        // service, karena Android 12+ melarang menyalakannya dari background.
+        // Menyala begitu izin notification access ada, dan izin itu bisa
+        // datang kapan saja user kembali dari Settings sistem.
         lifecycleScope.launch {
-            runCatching { app.authRepository.restore() }
-            // Cold start bisa saja dipicu oleh redirect auth itu sendiri.
-            handleAuthRedirect(intent)
-        }
-
-        // Activity TIDAK lagi memiliki siklus koneksi. Yang tersisa di sini cuma
-        // satu hal yang memang wajib dilakukan dari foreground: menyalakan
-        // foreground service, karena Android 12+ melarang menyalakannya dari
-        // background. Keputusan kapan menyambung, kapan menyambung ulang, dan
-        // kapan berhenti sudah pindah ke SpotifySessionSupervisor yang hidup di
-        // application scope.
-        //
-        // Dulu Activity juga yang mematikan service saat state jadi
-        // Disconnected, jadi Spotify di-kill sekali berarti notification hilang
-        // dan tidak ada apapun yang mencoba menyambung lagi.
-        lifecycleScope.launch {
-            app.authRepository.authState.collect { state ->
-                if (state is SpotifyAuthRepository.AuthState.SignedIn) {
-                    startCompanion()
-                }
+            app.playbackController.hasAccess.collect { granted ->
+                if (granted) startCompanion()
             }
         }
 
@@ -153,10 +127,7 @@ class MainActivity : ComponentActivity() {
                         onBack = { showSettings = false },
                         onToggleDarkMode = { viewModel.toggleDarkMode() },
                         onSetFontSize = { size -> viewModel.setFontSize(size) },
-                        onLogout = {
-                            viewModel.logout()
-                            showSettings = false
-                        },
+                        onOpenAccess = { openNotificationAccess() },
                         onSetLyricsOffsetMs = { ms -> viewModel.setLyricsOffsetMs(ms) },
                         onSetDeviceOffsetMs = { ms -> viewModel.setDeviceOffsetMs(ms) },
                         onSetLineSpacing = { dp -> viewModel.setLineSpacing(dp) },
@@ -174,7 +145,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     MainScreen(
                         state = state,
-                        onConnect = { startSpotifyAuthorization() },
+                        onGrantAccess = { openNotificationAccess() },
                         onTogglePlayPause = { viewModel.togglePlayPause() },
                         onNext = { viewModel.next() },
                         onPrevious = { viewModel.previous() },
@@ -183,7 +154,6 @@ class MainActivity : ComponentActivity() {
                         onToggleOverlay = { handleOverlayToggle() },
                         onToggleDarkMode = { viewModel.toggleDarkMode() },
                         onBumpFontSize = { delta -> viewModel.bumpFontSize(delta) },
-                        onLogout = { viewModel.logout() },
                         onOpenSettings = { showSettings = true },
                         onSearchLyrics = { showLyricsSearch = true },
                         hasRememberedOverride = viewModel.hasRememberedOverride
@@ -205,92 +175,33 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Redirect `spotivibe://callback` mendarat di sini. Activity ini
-     * `launchMode="singleTask"` supaya redirect masuk lewat [onNewIntent] ke
-     * instance yang sudah ada, bukan menumpuk instance kedua di atas yang lama.
-     */
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        handleAuthRedirect(intent)
-    }
-
-    /**
-     * Kalau kita kembali ke layar ini setelah membuka Custom Tab TANPA redirect
-     * yang masuk, artinya user membatalkan: menekan back di layar consent, atau
-     * menutup tab-nya. Kembalikan state supaya tombol Connect muncul lagi.
-     * Tanpa ini UI terkunci di Connecting selamanya dan satu-satunya jalan
-     * keluar adalah menutup paksa app.
-     *
-     * onNewIntent selalu dipanggil sebelum onResume, jadi redirect yang sah
-     * sudah menurunkan flag ini lebih dulu.
+     * Izin bisa diberikan atau dicabut di Settings sistem selama app di
+     * belakang, jadi dibaca ulang setiap kali layar ini kembali tampil.
      */
     override fun onResume() {
         super.onResume()
-        if (awaitingAuthRedirect) {
-            awaitingAuthRedirect = false
-            (application as SpotivibeApp).spotifyConnection.abandonPendingAuthorization()
-        }
+        viewModel.refreshAccess()
     }
 
-    /**
-     * Nyalakan supervisor + foreground service. Idempoten, jadi aman dipanggil
-     * tiap kali authState memancarkan SignedIn.
-     */
+    /** Nyalakan foreground service lirik. Idempoten. */
     private fun startCompanion() {
-        val app = application as SpotivibeApp
-        app.sessionSupervisor.start(this)
         SpotivibeNotificationService.start(this)
     }
 
-    private fun handleAuthRedirect(intent: Intent?) {
-        val uri = intent?.data?.toString() ?: return
-        awaitingAuthRedirect = false
-        viewModel.handleRedirect(this, uri)
-    }
-
     /**
-     * Buka layar consent Spotify di Custom Tab.
-     *
-     * Kenapa browser, bukan dialog native SDK: PKCE butuh `code_challenge`
-     * ikut di request authorize, dan jalur native SDK membuang custom param.
-     * Tanpa PKCE tidak ada refresh token, dan tanpa refresh token sesi mati
-     * setelah satu jam.
+     * Buka Settings → Notification access. Sebagian head unit menyembunyikan
+     * layar itu; kalau intent-nya tidak bisa dibuka, jatuh ke Settings
+     * aplikasi ini, dan README menjelaskan jalan lewat adb.
      */
-    private fun startSpotifyAuthorization() {
-        viewModel.beginAuth { url ->
-            val launched = runCatching {
-                CustomTabsIntent.Builder()
-                    .setShowTitle(true)
-                    .build()
-                    .launchUrl(this, Uri.parse(url))
-                true
-            }.getOrElse { t ->
-                Log.w(TAG, "Custom Tab gagal dibuka: ${t.message}")
-                false
-            }
-            if (launched) {
-                awaitingAuthRedirect = true
-                return@beginAuth
-            }
-
-            // Tidak ada penyedia Custom Tabs. Jatuh ke browser biasa; redirect
-            // tetap balik lewat intent filter yang sama.
-            val fallback = runCatching {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                true
-            }.getOrElse { t ->
-                Log.e(TAG, "Tidak ada browser untuk membuka login", t)
-                false
-            }
-            if (fallback) {
-                awaitingAuthRedirect = true
-            } else {
-                (application as SpotivibeApp).spotifyConnection.onAuthorizeLaunchFailed(
-                    "No browser on this device to open the Spotify sign-in."
-                )
-            }
-        }
+    private fun openNotificationAccess() {
+        val opened = runCatching {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        }.isSuccess
+        if (opened) return
+        Log.w(TAG, "Layar notification access tidak tersedia, buka info app")
+        runCatching {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+        }.onFailure { Log.e(TAG, "Settings sistem tidak bisa dibuka", it) }
     }
 
     /**

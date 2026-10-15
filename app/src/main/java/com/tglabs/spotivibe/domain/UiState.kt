@@ -5,8 +5,13 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 
 sealed interface UiState {
-    data object Disconnected : UiState
-    data object Connecting : UiState
+    /**
+     * Notification access belum diberikan, jadi sesi media app lain tidak bisa
+     * dibaca. Ini satu-satunya syarat app; tidak ada akun yang perlu login.
+     */
+    data object NeedsAccess : UiState
+
+    /** Izin ada, tapi tidak ada player yang sedang menerbitkan lagu. */
     data object Idle : UiState
 
     /**
@@ -39,12 +44,10 @@ sealed interface UiState {
         val overlayEnabled: Boolean = false,
         val darkMode: Boolean = true,
         val lyricsFontSize: Int = 17,
-        /**
-         * Kontrol transport ditampilkan optimistis selama masih
-         * [PlaybackCapability.Unknown]. Lihat [PlaybackCapability] untuk alasan
-         * kenapa ini bukan boolean lagi.
-         */
-        val capability: PlaybackCapability = PlaybackCapability.Unknown,
+        /** Tombol yang diizinkan player yang sedang diikuti. */
+        val controls: PlayerControls = PlayerControls.Optimistic,
+        /** Nama app player ("Spotify", "YouTube Music"), null kalau belum terbaca. */
+        val playerLabel: String? = null,
         /**
          * Ketiga lapis offset sync. [SyncOffsets.totalMs] adalah yang dipakai
          * untuk progress per kata dan kompensasi seek, sama dengan engine.
@@ -63,5 +66,4 @@ sealed interface UiState {
         val lyrics: LyricsResult? get() = (lyricsState as? LyricsState.Ready)?.result
     }
 
-    data class Error(val message: String) : UiState
 }

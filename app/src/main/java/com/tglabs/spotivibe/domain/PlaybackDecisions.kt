@@ -47,6 +47,18 @@ fun <T> lineAt(lines: List<T>?, index: Int): T? = lines?.getOrNull(index)
 fun shouldPreload(trackId: String?): Boolean = !trackId.isNullOrBlank()
 
 /**
+ * Lirik lagu aktif perlu dicari ulang karena durasinya baru diketahui.
+ *
+ * Hanya kalau fetch sebelumnya memang dikerjakan TANPA durasi
+ * ([fetchedWithMs] = 0) dan sekarang durasinya ada. Null berarti belum pernah
+ * fetch untuk lagu ini; durasi yang berubah dari satu nilai positif ke nilai
+ * lain tidak memicu apa-apa, karena pemilihan sudah punya durasi untuk
+ * dibandingkan.
+ */
+fun shouldRematchForDuration(fetchedWithMs: Long?, durationNowMs: Long): Boolean =
+    fetchedWithMs == 0L && durationNowMs > 0L
+
+/**
  * Pengecekan `/me` masih perlu dilakukan.
  *
  * Sekali jawabannya didapat, ia tidak berubah selama sesi. Mengulanginya tiap

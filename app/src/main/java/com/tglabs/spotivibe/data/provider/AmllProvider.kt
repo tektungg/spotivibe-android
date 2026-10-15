@@ -3,6 +3,8 @@ package com.tglabs.spotivibe.data.provider
 import com.tglabs.spotivibe.domain.ProbeSource
 import com.tglabs.spotivibe.domain.ProviderId
 import com.tglabs.spotivibe.domain.ProviderProbe
+import com.tglabs.spotivibe.domain.artistsMatch
+import com.tglabs.spotivibe.domain.titlesMatch
 import com.tglabs.spotivibe.domain.durationSec
 import com.tglabs.spotivibe.domain.parseTtml
 import okhttp3.HttpUrl
@@ -14,9 +16,10 @@ import okhttp3.OkHttpClient
  * kata dengan vokal latar dan duet.
  *
  * Pencariannya fuzzy: untuk "Blinding Lights" item pertamanya "Wasted Times".
- * Karena itu hasil HANYA diterima kalau item mencantumkan ID Spotify lagu yang
- * sedang diputar. Lebih baik tidak dapat lirik dari sini daripada lirik lagu
- * lain dengan timing yang meyakinkan.
+ * Karena itu lagu Spotify HANYA diterima kalau item mencantumkan ID Spotify
+ * lagu yang sedang diputar. Lagu dari player lain tidak punya ID Spotify, jadi
+ * dicocokkan lewat judul dan artis ([titlesMatch], [artistsMatch]); durasinya
+ * dinilai perlombaan dari `<body dur>` TTML.
  */
 class AmllProvider(
     private val client: OkHttpClient,
@@ -33,7 +36,7 @@ class AmllProvider(
                 .build(),
         )
         if (!search.isSuccessful) return@probeCatching search.failureProbe()
-        val id = pickAmllId(search.body, query.spotifyId) ?: return@probeCatching ProviderProbe.Absent
+        val id = pickAmllId(search.body, query) ?: return@probeCatching ProviderProbe.Absent
 
         val get = client.fetch(
             baseUrl.newBuilder().addPathSegments("v1/lyrics/get")
@@ -49,11 +52,18 @@ class AmllProvider(
     }
 }
 
-/** ID item AMLL yang mencantumkan [spotifyId], atau null. */
-internal fun pickAmllId(searchJson: String, spotifyId: String): Long? {
-    if (spotifyId.isBlank()) return null
+/**
+ * ID item AMLL untuk [query], atau null. Lagu Spotify: item yang mencantumkan
+ * ID Spotify-nya. Lagu lain: item pertama yang judul DAN artisnya cocok.
+ */
+internal fun pickAmllId(searchJson: String, query: TrackQuery): Long? {
     val items = ProviderJson.parse<AmllSearchResponse>(searchJson)?.data?.items.orEmpty()
-    return items.firstOrNull { spotifyId in it.spotifyIds.orEmpty() }?.id
+    val spotifyId = query.spotifyId
+    if (spotifyId != null) return items.firstOrNull { spotifyId in it.spotifyIds.orEmpty() }?.id
+    return items.firstOrNull { item ->
+        item.musicNames.orEmpty().any { titlesMatch(query.title, it) } &&
+            item.artistNames.orEmpty().any { artistsMatch(query.artist, it) }
+    }?.id
 }
 
 /** Respons `/v1/lyrics/get` jadi probe. TTML rusak berarti tidak ada lirik yang bisa dipakai. */

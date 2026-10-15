@@ -32,7 +32,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import com.tglabs.spotivibe.domain.LyricsStats
-import com.tglabs.spotivibe.domain.PlaybackCapability
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tglabs.spotivibe.BuildConfig
@@ -51,6 +50,7 @@ import com.tglabs.spotivibe.domain.LINE_SPACING_STEP
 import com.tglabs.spotivibe.domain.tickCountFor
 import com.tglabs.spotivibe.domain.tickIndexOf
 import com.tglabs.spotivibe.domain.tickValueOf
+import com.tglabs.spotivibe.ui.component.PlayerStatusSection
 import com.tglabs.spotivibe.ui.component.SettingsToggleRow
 import com.tglabs.spotivibe.ui.component.SyncOffsetRows
 import com.tglabs.spotivibe.ui.component.TickSlider
@@ -78,7 +78,8 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onToggleDarkMode: () -> Unit,
     onSetFontSize: (Int) -> Unit,
-    onLogout: () -> Unit,
+    /** Buka Settings → Notification access milik sistem. */
+    onOpenAccess: () -> Unit,
     onSetLyricsOffsetMs: (Int) -> Unit = {},
     onSetDeviceOffsetMs: (Int) -> Unit = {},
     onSetLineSpacing: (Int) -> Unit = {},
@@ -237,85 +238,9 @@ fun SettingsScreen(
             // lambat atau user tidak ingin request ke banyak server.
             SettingsToggleRow("Community lyrics (AMLL, lrc.red, LRCMux)", communitySources, onToggleCommunitySources)
 
-            // ── 03 SPOTIFY ──
-            SectionHeader(number = "03", title = "Spotify", hint = "Connection")
-            Column(
-                modifier = Modifier.padding(horizontal = SvSpace.s5, vertical = SvSpace.s3),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(SvSpace.s3),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(
-                                when (playing?.capability) {
-                                    null -> sv.ink4
-                                    PlaybackCapability.Full -> sv.accent
-                                    PlaybackCapability.Unknown -> sv.ink2
-                                    PlaybackCapability.Restricted -> sv.ink3
-                                }
-                            ),
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = when (playing?.capability) {
-                                null -> "Not connected"
-                                PlaybackCapability.Full -> "Premium · Connected"
-                                PlaybackCapability.Unknown -> "Connected"
-                                PlaybackCapability.Restricted -> "Connected · limited control"
-                            },
-                            style = SvType.Body,
-                            color = sv.ink1,
-                        )
-                        Text(
-                            text = when (playing?.capability) {
-                                null -> "tap Connect to start"
-                                PlaybackCapability.Full -> "full playback control"
-                                // Unknown bukan kegagalan: kontrol tetap jalan
-                                // lewat App Remote, hanya label akunnya yang
-                                // belum terkonfirmasi lewat Web API.
-                                PlaybackCapability.Unknown -> "account type not confirmed yet"
-                                PlaybackCapability.Restricted -> "view-only · Premium required for control"
-                            },
-                            style = SvType.BodyItalic.copy(fontSize = 13.sp),
-                            color = sv.ink3,
-                        )
-                    }
-                    if (playing != null) {
-                        val restricted = playing.capability.showsUpgradeNotice
-                        MonoEyebrow(
-                            text = if (restricted) "● VIEW" else "● ACTIVE",
-                            color = if (restricted) sv.ink3 else sv.accent,
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(SvSpace.s3))
-                Row(horizontalArrangement = Arrangement.spacedBy(SvSpace.s2)) {
-                    // Logout button
-                    OutlinedActionButton(
-                        label = "LOGOUT",
-                        icon = SvIcons.Logout,
-                        onClick = onLogout,
-                        modifier = Modifier.weight(1f),
-                    )
-                    // Revoke link
-                    OutlinedActionButton(
-                        label = "REVOKE",
-                        icon = SvIcons.External,
-                        onClick = {
-                            runCatching {
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse("https://www.spotify.com/account/apps"))
-                                )
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
+            // ── 03 PLAYER ──
+            SectionHeader(number = "03", title = "Player", hint = "Any music app")
+            PlayerStatusSection(playing = playing, onOpenAccess = onOpenAccess)
 
             // ── 04 STATISTIK LIRIK ──
             // Metrik inti produk ini. Ditampilkan, bukan cuma dicatat, karena
@@ -542,7 +467,7 @@ internal fun SliderUnitLabel(text: String) {
 }
 
 @Composable
-private fun OutlinedActionButton(
+internal fun OutlinedActionButton(
     label: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit,

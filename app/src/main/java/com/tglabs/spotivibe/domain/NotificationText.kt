@@ -41,7 +41,6 @@ data class NotificationText(
 
 const val NOTIF_FALLBACK_TITLE = "Spotivibe"
 const val NOTIF_FALLBACK_SUBTITLE = "Loading…"
-const val NOTIF_RECONNECTING = "Reconnecting to Spotify…"
 
 /** Penanda baris aktif. Baris kosong tetap memakan ruang supaya tinggi notifikasi stabil. */
 const val NOTIF_ACTIVE_MARK = "▸ "
@@ -50,15 +49,13 @@ const val NOTIF_BLANK_LINE = "♪"
 /**
  * Rakit teks notifikasi.
  *
- * @param isReconnecting saat true, baris aktif diganti keterangan. Tanpa ini
- *   user menatap lirik basi yang berhenti bergerak tanpa tahu kenapa, dan itu
- *   terlihat seperti app yang hang.
+ * Mode "Reconnecting to Spotify…" sudah tidak ada: MediaSession dibaca
+ * langsung dari sistem, jadi tidak ada koneksi yang bisa putus di tengah lagu.
  */
 fun notificationText(
     title: String?,
     artist: String?,
     window: LyricWindow,
-    isReconnecting: Boolean,
 ): NotificationText {
     val judul = title?.takeIf { it.isNotBlank() } ?: NOTIF_FALLBACK_TITLE
     // Artis yang null berarti belum ada lagu sama sekali; artis yang kosong
@@ -72,7 +69,7 @@ fun notificationText(
         title = judul,
         subtitle = subjudul,
         prev = window.prev?.takeIf { it.isNotBlank() }.orEmpty(),
-        current = if (isReconnecting) NOTIF_RECONNECTING else NOTIF_ACTIVE_MARK + barisAktif,
+        current = NOTIF_ACTIVE_MARK + barisAktif,
         next = window.next?.takeIf { it.isNotBlank() }.orEmpty(),
     )
 }

@@ -127,6 +127,8 @@ class LyricsRepository(
      *   Dipakai sebagai cache key — sanitize otomatis untuk filename.
      * @param durationMs durasi track dalam millisecond. Akan dikonversi ke
      *   detik untuk LRCLIB `/get` param.
+     * @param forceRefresh true untuk mencari ulang walau cache punya entri,
+     *   misalnya saat durasi lagu baru diketahui setelah fetch pertama.
      * @param allowRetry false untuk preload latar belakang. Preload tidak boleh
      *   berebut jaringan dengan lagu yang sedang diputar; kalau gagal, biarkan
      *   saja dan biar fetch normal yang mengurusnya nanti.
@@ -138,6 +140,7 @@ class LyricsRepository(
         album: String,
         durationMs: Long,
         allowRetry: Boolean = true,
+        forceRefresh: Boolean = false,
     ): LyricsState = withContext(Dispatchers.IO) {
         // Layer 0: lirik pilihan user. Menang atas segalanya, dan sengaja tidak
         // menyentuh jaringan sama sekali: lagu yang sudah diperbaiki manual
@@ -149,14 +152,15 @@ class LyricsRepository(
             return@withContext state
         }
 
-        // Layer 1: in-memory (LRU bounded)
-        memCacheGet(trackId)?.let {
+        // Layer 1: in-memory (LRU bounded). forceRefresh melewati kedua cache
+        // (tapi tidak override): entri yang ada dipilih tanpa durasi lagu.
+        if (!forceRefresh) memCacheGet(trackId)?.let {
             Log.d(TAG, "mem-cache hit: $trackId")
             return@withContext it.toState().also { s -> record(LyricsSource.MemCache, s, null) }
         }
 
         // Layer 2: disk
-        diskCache.get(trackId)?.let { cached ->
+        if (!forceRefresh) diskCache.get(trackId)?.let { cached ->
             Log.d(TAG, "disk-cache hit: $trackId (hasContent=${cached.hasContent})")
             memCachePut(trackId, cached)
             return@withContext cached.toState()

@@ -33,6 +33,8 @@ internal data class AmllSearchData(val items: List<AmllItem>? = null)
 internal data class AmllItem(
     val id: Long? = null,
     val spotifyIds: List<String>? = null,
+    val musicNames: List<String>? = null,
+    val artistNames: List<String>? = null,
 )
 
 @JsonClass(generateAdapter = false)

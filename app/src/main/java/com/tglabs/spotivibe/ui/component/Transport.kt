@@ -20,9 +20,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.tglabs.spotivibe.domain.PlayerControls
 import com.tglabs.spotivibe.ui.theme.LocalSvColors
 import com.tglabs.spotivibe.ui.theme.SvIcons
 import com.tglabs.spotivibe.ui.theme.SvSpace
@@ -57,6 +59,12 @@ fun Transport(
      * Yang dipangkas hanya padding.
      */
     compact: Boolean = false,
+    /**
+     * Tombol yang diizinkan player. Tombol yang tidak diizinkan tetap
+     * tergambar tapi redup dan mati, supaya tata letak tidak bergeser saat
+     * pindah player. Seek yang tidak diizinkan mematikan geser di slider.
+     */
+    controls: PlayerControls = PlayerControls.Optimistic,
 ) {
     val sv = LocalSvColors.current
     val safeDuration = durationMs.coerceAtLeast(1L)
@@ -81,7 +89,8 @@ fun Transport(
                 modifier = Modifier
                     .weight(1f)
                     .height(14.dp)
-                    .pointerInput(safeDuration) {
+                    .pointerInput(safeDuration, controls.canSeek) {
+                        if (!controls.canSeek) return@pointerInput
                         detectHorizontalDragGestures(
                             onDragEnd = { /* onSeek handled by caller via onDrag(-1) convention */ },
                             onHorizontalDrag = { change, _ ->
@@ -137,13 +146,13 @@ fun Transport(
             Box(
                 modifier = Modifier
                     .size(44.dp)
-                    .clickable(onClick = onPrevious),
+                    .clickable(enabled = controls.canSkipPrevious, onClick = onPrevious),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = SvIcons.Prev,
                     contentDescription = "Previous",
-                    tint = sv.ink2,
+                    tint = sv.ink2.dimUnless(controls.canSkipPrevious),
                     modifier = Modifier.size(22.dp),
                 )
             }
@@ -152,8 +161,8 @@ fun Transport(
                 modifier = Modifier
                     .size(52.dp)
                     .clip(CircleShape)
-                    .background(sv.accent)
-                    .clickable(onClick = onTogglePlayPause),
+                    .background(sv.accent.dimUnless(controls.canPlayPause))
+                    .clickable(enabled = controls.canPlayPause, onClick = onTogglePlayPause),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -167,19 +176,25 @@ fun Transport(
             Box(
                 modifier = Modifier
                     .size(44.dp)
-                    .clickable(onClick = onNext),
+                    .clickable(enabled = controls.canSkipNext, onClick = onNext),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = SvIcons.Next,
                     contentDescription = "Next",
-                    tint = sv.ink2,
+                    tint = sv.ink2.dimUnless(controls.canSkipNext),
                     modifier = Modifier.size(22.dp),
                 )
             }
         }
     }
 }
+
+/** Kontrol yang tidak diizinkan player tetap terlihat, tapi jelas tidak aktif. */
+private const val DISABLED_ALPHA = 0.3f
+
+private fun Color.dimUnless(enabled: Boolean): Color =
+    if (enabled) this else copy(alpha = alpha * DISABLED_ALPHA)
 
 private fun formatMs(ms: Long): String {
     val totalSec = (ms / 1000).coerceAtLeast(0)

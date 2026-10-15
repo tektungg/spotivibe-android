@@ -17,7 +17,8 @@ import com.tglabs.spotivibe.ui.theme.LocalSvWindow
 @Composable
 fun MainScreen(
     state: UiState,
-    onConnect: () -> Unit,
+    /** Buka Settings → Notification access milik sistem. */
+    onGrantAccess: () -> Unit,
     onTogglePlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -26,7 +27,6 @@ fun MainScreen(
     onToggleOverlay: () -> Unit,
     onToggleDarkMode: () -> Unit,
     onBumpFontSize: (Int) -> Unit,
-    onLogout: () -> Unit,
     onOpenSettings: () -> Unit,
     onSearchLyrics: () -> Unit = {},
     hasRememberedOverride: Boolean = false,
@@ -41,20 +41,7 @@ fun MainScreen(
             .background(sv.bg0),
     ) {
         when (state) {
-            is UiState.Disconnected -> ConnectScreen(
-                isConnecting = false,
-                errorMessage = null,
-                onConnect = onConnect,
-            )
-            is UiState.Connecting -> ConnectScreen(
-                isConnecting = true,
-                onConnect = onConnect,
-            )
-            is UiState.Error -> ConnectScreen(
-                isConnecting = false,
-                errorMessage = state.message,
-                onConnect = onConnect,
-            )
+            is UiState.NeedsAccess -> AccessScreen(onGrantAccess = onGrantAccess)
             is UiState.Idle -> EmptyState(kind = EmptyKind.Idle)
             is UiState.Playing -> {
                 // Lebar, BUKAN orientasi. Orientasi tidak bisa membedakan HP
@@ -85,7 +72,6 @@ fun MainScreen(
                         onToggleOverlay = onToggleOverlay,
                         onToggleDarkMode = onToggleDarkMode,
                         onBumpFontSize = onBumpFontSize,
-                        onLogout = onLogout,
                         onOpenSettings = onOpenSettings,
                         onSearchLyrics = onSearchLyrics,
                         hasRememberedOverride = hasRememberedOverride,

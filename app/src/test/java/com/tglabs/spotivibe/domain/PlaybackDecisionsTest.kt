@@ -110,6 +110,25 @@ class PlaybackDecisionsTest {
         assertTrue(shouldPreload("spotify:track:abc"))
     }
 
+    // ── Rematch saat durasi datang belakangan ────────────────────
+
+    /** YouTube Music mengirim judul dulu, durasi beberapa saat kemudian. */
+    @Test
+    fun `fetch tanpa durasi dicari ulang begitu durasinya datang`() {
+        assertTrue(shouldRematchForDuration(fetchedWithMs = 0L, durationNowMs = 200_000L))
+    }
+
+    @Test
+    fun `fetch yang sudah punya durasi tidak dicari ulang`() {
+        assertFalse(shouldRematchForDuration(fetchedWithMs = 200_000L, durationNowMs = 201_000L))
+    }
+
+    @Test
+    fun `belum pernah fetch atau durasi masih nol tidak memicu apa-apa`() {
+        assertFalse(shouldRematchForDuration(fetchedWithMs = null, durationNowMs = 200_000L))
+        assertFalse(shouldRematchForDuration(fetchedWithMs = 0L, durationNowMs = 0L))
+    }
+
     // ── Pengecekan product ───────────────────────────────────────
 
     /**

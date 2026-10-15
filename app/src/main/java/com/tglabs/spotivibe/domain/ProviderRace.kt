@@ -16,8 +16,9 @@ import kotlin.math.abs
 /**
  * Satu sumber lirik. [rank] makin kecil makin dipercaya saat timing-nya setara.
  *
- * AMLL paling atas karena dicocokkan lewat ID Spotify yang pasti, bukan lewat
- * judul. lrc.red dan LRCMux dicocokkan lewat judul, artis, dan durasi. LRCLIB
+ * AMLL paling atas karena untuk lagu Spotify dicocokkan lewat ID Spotify yang
+ * pasti; lagu dari player lain dicocokkan lewat judul dan artis, sama seperti
+ * lrc.red dan LRCMux, dan durasinya tetap dinilai di sini. LRCLIB
  * paling bawah tapi tetap jadi jaring terakhir, dan satu-satunya yang jawaban
  * "tidak ada"-nya dipercaya untuk cache negatif.
  */

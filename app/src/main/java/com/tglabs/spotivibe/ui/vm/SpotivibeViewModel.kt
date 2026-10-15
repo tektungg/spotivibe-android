@@ -8,9 +8,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.tglabs.spotivibe.data.PlaybackController
 import com.tglabs.spotivibe.data.PreferencesRepository
-import com.tglabs.spotivibe.data.SpotifyConnection
-import com.tglabs.spotivibe.data.SpotifyConnection.ConnectionState
 import com.tglabs.spotivibe.domain.LyricsResult
+import com.tglabs.spotivibe.domain.PlayerControls
 import com.tglabs.spotivibe.domain.SyncOffsets
 import com.tglabs.spotivibe.domain.UiState
 import com.tglabs.spotivibe.data.supportedScripts
@@ -25,7 +24,6 @@ import kotlinx.coroutines.launch
 
 class SpotivibeViewModel(
     private val controller: PlaybackController,
-    private val connection: SpotifyConnection,
     private val preferencesRepository: PreferencesRepository,
     private val lyricsRepository: com.tglabs.spotivibe.data.LyricsRepository,
     private val overrideRepository: com.tglabs.spotivibe.data.LyricsOverrideRepository,
@@ -102,14 +100,14 @@ class SpotivibeViewModel(
      */
     val uiState: StateFlow<UiState> = combine(
         listOf(
-            controller.connectionState,
+            controller.hasAccess,
             controller.track,
             controller.albumBitmap,
             controller.lyricsState,
             controller.currentLineIndex,
             controller.romaji,
             controller.accent,
-            controller.capability,
+            controller.controls,
             preferencesRepository.romanizationEnabled,
             preferencesRepository.overlayEnabled,
             preferencesRepository.darkMode,
@@ -121,17 +119,18 @@ class SpotivibeViewModel(
             preferencesRepository.hapticEnabled,
             controller.isOnline,
             preferencesRepository.lyricEffects,
+            controller.playerLabel,
         )
     ) { values ->
         @Suppress("UNCHECKED_CAST")
-        val connState = values[0] as ConnectionState
+        val hasAccess = values[0] as Boolean
         val track = values[1] as com.tglabs.spotivibe.domain.NowPlaying?
         val bitmap = values[2] as Bitmap?
         val lyricsState = values[3] as com.tglabs.spotivibe.domain.LyricsState
         val currentLineIndex = values[4] as Int
         val romaji = values[5] as Map<Int, String?>
         val accent = values[6] as Color?
-        val capability = values[7] as com.tglabs.spotivibe.domain.PlaybackCapability
+        val controls = values[7] as PlayerControls
         val romaEnabled = values[8] as Boolean
         val overlayEnabled = values[9] as Boolean
         val darkMode = values[10] as Boolean
@@ -143,11 +142,11 @@ class SpotivibeViewModel(
         val haptic = values[16] as Boolean
         val isOnline = values[17] as Boolean
         val lyricEffects = values[18] as Boolean
+        val playerLabel = values[19] as String?
 
-        when (connState) {
-            ConnectionState.Disconnected -> UiState.Disconnected
-            ConnectionState.Connecting -> UiState.Connecting
-            ConnectionState.Connected -> track?.let { t ->
+        when {
+            !hasAccess -> UiState.NeedsAccess
+            else -> track?.let { t ->
                 val synced = (lyricsState as? com.tglabs.spotivibe.domain.LyricsState.Ready)
                     ?.result?.synced
                 // Script yang didukung VARIAN ini, bukan semua script.
@@ -167,7 +166,8 @@ class SpotivibeViewModel(
                     overlayEnabled = overlayEnabled,
                     darkMode = darkMode,
                     lyricsFontSize = fontSize,
-                    capability = capability,
+                    controls = controls,
+                    playerLabel = playerLabel,
                     syncOffsets = syncOffsets,
                     lineSpacing = lineSpacing,
                     highContrast = highContrast,
@@ -177,60 +177,27 @@ class SpotivibeViewModel(
                     lyricEffects = lyricEffects,
                 )
             } ?: UiState.Idle
-            is ConnectionState.Error -> UiState.Error(connState.message)
         }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000L),
-        initialValue = UiState.Disconnected,
+        // Dari izin yang sudah diketahui, supaya layar izin tidak berkedip
+        // sesaat di setiap cold start untuk user yang sudah memberinya.
+        initialValue = if (controller.hasAccess.value) UiState.Idle else UiState.NeedsAccess,
     )
-
-    /**
-     * Mulai Authorization Code + PKCE. [openUrl] menerima URL `/authorize` yang
-     * harus dibuka di Custom Tab; dipanggil di Main thread.
-     *
-     * Tidak lagi memakai `AuthorizationClient` SDK: jalur native-nya membuang
-     * `code_challenge`, jadi PKCE tidak mungkin lewat sana.
-     */
-    fun beginAuth(openUrl: (String) -> Unit) {
-        viewModelScope.launch {
-            val url = connection.authorizeUrl() ?: return@launch
-            openUrl(url)
-        }
-    }
-
-    /** Teruskan URI intent yang masuk. URI asing diabaikan tanpa efek samping. */
-    fun handleRedirect(context: Context, uri: String?) {
-        viewModelScope.launch { connection.handleRedirect(context, uri) }
-    }
-
-    /** Sudah ada sesi tersimpan yang layak auto-reconnect? */
-    fun hasSession(): Boolean = connection.hasSession()
-
-    fun disconnect() = connection.disconnect()
-
-    /**
-     * Logout lokal: buang access + refresh token, putus App Remote.
-     * NOTE: Tidak revoke authorization di sisi Spotify. Grant untuk Client ID
-     * masih tersimpan, jadi Connect berikutnya biasanya silent re-auth.
-     * Untuk benar-benar revoke: spotify.com → Account → Apps → Remove Access.
-     */
-    fun logout() {
-        viewModelScope.launch {
-            preferencesRepository.setOverlayEnabled(false)
-            connection.signOut()
-        }
-    }
 
     fun togglePlayPause() {
         val state = uiState.value
         if (state is UiState.Playing) {
-            if (state.track.isPaused) connection.play() else connection.pause()
+            if (state.track.isPaused) controller.play() else controller.pause()
         }
     }
-    fun next() = connection.skipNext()
-    fun previous() = connection.skipPrevious()
-    fun seekTo(positionMs: Long) = connection.seekTo(positionMs)
+    fun next() = controller.skipNext()
+    fun previous() = controller.skipPrevious()
+    fun seekTo(positionMs: Long) = controller.seekTo(positionMs)
+
+    /** Baca ulang izin notification access. Dipanggil di onResume. */
+    fun refreshAccess() = controller.refreshAccess()
 
     fun toggleRomanization() {
         viewModelScope.launch {
@@ -336,7 +303,6 @@ class SpotivibeViewModel(
 
     class Factory(
         private val controller: PlaybackController,
-        private val connection: SpotifyConnection,
         private val preferencesRepository: PreferencesRepository,
         private val lyricsRepository: com.tglabs.spotivibe.data.LyricsRepository,
         private val overrideRepository: com.tglabs.spotivibe.data.LyricsOverrideRepository,
@@ -345,7 +311,6 @@ class SpotivibeViewModel(
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             return SpotivibeViewModel(
                 controller,
-                connection,
                 preferencesRepository,
                 lyricsRepository,
                 overrideRepository,

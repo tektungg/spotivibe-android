@@ -2,6 +2,7 @@ package com.tglabs.spotivibe
 
 import android.app.Application
 import com.tglabs.spotivibe.data.AndroidAudioOutputMonitor
+import com.tglabs.spotivibe.data.AndroidMediaSessionSource
 import com.tglabs.spotivibe.data.AndroidNetworkMonitor
 import com.tglabs.spotivibe.data.AudioOutputSource
 import com.tglabs.spotivibe.data.FileLyricsOverrideStore
@@ -11,6 +12,7 @@ import com.tglabs.spotivibe.data.LyricsOverrideRepository
 import com.tglabs.spotivibe.data.LyricsRepository
 import com.tglabs.spotivibe.data.NetworkStatusSource
 import com.tglabs.spotivibe.data.PlaybackController
+import com.tglabs.spotivibe.data.PlaybackSource
 import com.tglabs.spotivibe.data.PreferencesRepository
 import com.tglabs.spotivibe.data.RomanizationService
 import com.tglabs.spotivibe.data.SpotifyConnection
@@ -107,13 +109,18 @@ class SpotivibeApp : Application() {
         WebApiClient(tokenProvider = { authRepository.validAccessToken() })
     }
 
+    /**
+     * Lagu yang sedang diputar app mana pun, lewat MediaSession sistem. Satu
+     * listener seumur proses; butuh izin notification access dari user.
+     */
+    val playbackSource: PlaybackSource by lazy { AndroidMediaSessionSource(this) }
+
     val playbackController: PlaybackController by lazy {
         PlaybackController(
-            connection = spotifyConnection,
+            source = playbackSource,
             lyricsRepository = lyricsRepository,
             romanizationService = romanizationService,
             preferencesRepository = preferencesRepository,
-            webApiClient = webApiClient,
             scope = applicationScope,
             network = networkMonitor,
             audioOutput = audioOutputMonitor,

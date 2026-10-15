@@ -4,13 +4,18 @@
 
 > **Code. Vibe. Sing along.**
 
-Android native companion untuk Spotify — synced lyrics dengan romanization (JP / KR / ZH), notification dengan baris aktif, dan floating overlay melayang di atas app lain. Cocok untuk yang coding sambil dengerin K-pop / J-pop / Mandarin.
+Android native companion untuk player musik apa pun — Spotify, YouTube Music, atau pemutar lain. Synced lyrics dengan romanization (JP / KR / ZH), notification dengan baris aktif, dan floating overlay melayang di atas app lain. Tanpa login: cukup satu izin sistem. Cocok untuk yang coding sambil dengerin K-pop / J-pop / Mandarin.
 
 > Not affiliated with Spotify AB.
 
 ## Fitur
 
-- **Now Playing** dengan album cover, judul, artist, slider seek (butuh Premium untuk kontrol)
+- **Ikuti player apa pun** lewat MediaSession Android: Spotify (termasuk Free),
+  YouTube Music, dan pemutar lain. Tidak ada akun yang perlu login; app hanya
+  minta izin notification access. Pindah otomatis ke app yang mulai memutar.
+  Detail di [Sumber playback](#sumber-playback)
+- **Now Playing** dengan album cover, judul, artist, slider seek. Tombol mengikuti
+  apa yang diizinkan player itu sendiri, bukan status akun
 - **Synced lyrics dari empat sumber yang berlomba** — [LRCLIB](https://lrclib.net),
   [AMLL TTML DB](https://amll.dev), [lrc.red](https://lrc.red), dan
   [LRCMux](https://lrcmux.dev). Yang timing-nya paling halus (per kata > per
@@ -224,6 +229,38 @@ sebagai artifact, hanya tidak membuat Release.
 > Release keystore SHA-1 beda dari debug — daftar juga di Spotify Dashboard kalau mau App Remote jalan di release build.
 
 ## Architecture
+
+### Sumber playback
+
+`data/MediaSessionSource.kt` (adapter Android) dan `domain/MediaPlayback.kt`
+(keputusan murni, diuji di JVM).
+
+- **Izin.** Android hanya mengizinkan `MediaSessionManager.getActiveSessions`
+  untuk app yang punya NotificationListenerService aktif. `SessionAccessService`
+  adalah service kosong untuk itu; notifikasi app lain tidak dibaca sama
+  sekali. Status izin dibaca dari `enabled_notification_listeners` per
+  ComponentName persis, dan dibaca ulang di `MainActivity.onResume`.
+- **Memilih sesi** (`pickSession`): yang sedang memutar di perangkat ini, lalu
+  yang memutar di mana pun, lalu sesi yang sedang diikuti, lalu yang paling
+  baru aktif. Notifikasi diam dari app lain tidak merebut layar.
+- **Identitas lagu** (`trackIdFor`): lagu Spotify tetap `spotify:track:<id>`
+  (dari mediaId sesi), jadi cache lirik, override, dan offset per lagu dari era
+  App Remote tetap terpakai. Player lain memakai `media:<hash>` dari judul dan
+  artis yang dinormalisasi, sama untuk lagu yang sama di app berbeda.
+- **Posisi** (`positionNowMs`): posisi terakhir + (sekarang − waktu laporan) ×
+  kecepatan, beku saat tidak memutar, dijepit ke durasi. Buffering dan pindah
+  lagu mempertahankan status pause sebelumnya supaya lirik tidak berkedip.
+- **Kontrol**: `transportControls` milik player. Tombol dan slider mengikuti
+  bit `PlaybackState.actions`; tombol yang tidak diizinkan tampil redup, dan
+  seek yang tidak diizinkan ditolak sebelum dikirim.
+- **Durasi belakangan.** YouTube Music mengirim judul dulu dan durasi
+  beberapa ratus milidetik kemudian. Fetch pertama menunggu durasi sampai 2 s;
+  kalau durasinya datang lebih telat, lirik dicari ulang melewati cache
+  (`shouldRematchForDuration`).
+- **AMLL** mencocokkan lewat ID Spotify untuk lagu Spotify, dan lewat judul +
+  artis untuk player lain.
+- **Antrean** dari `MediaController.queue` (kalau player membaginya) untuk
+  preload lirik 3 lagu berikutnya.
 
 ### Auth
 

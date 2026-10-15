@@ -244,28 +244,13 @@ fun NowPlayingTabletScreen(
 
                 Spacer(modifier = Modifier.height(TITLE_TRANSPORT_GAP_DP.dp))
 
-                // Transport / Premium banner / Selection action bar
+                // Transport / Selection action bar
                 when {
                     isSelecting -> SelectionActionBar(
                         count = selectedIds.size,
                         onShare = handleShareSelected,
                         onCancel = { selectedIds = emptySet() },
                     )
-                    state.capability.showsUpgradeNotice -> {
-                        HairlineRule(soft = true)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = SvSpace.s4),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = "SPOTIFY PREMIUM REQUIRED",
-                                style = SvType.MonoUp,
-                                color = sv.ink3,
-                            )
-                        }
-                    }
                     else -> {
                         // TANPA HairlineRule di sini. Transport sudah menggambar
                         // garisnya sendiri di baris pertama, jadi menambahkan
@@ -276,6 +261,7 @@ fun NowPlayingTabletScreen(
                             progressMs = rawProgressMs,
                             durationMs = track.durationMs,
                             isPaused = track.isPaused,
+                            controls = state.controls,
                             onDrag = { draggingValue = it },
                             onSeek = { ms ->
                                 draggingValue = -1L

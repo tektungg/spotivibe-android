@@ -2,18 +2,26 @@ package com.tglabs.spotivibe.data.provider
 
 import com.tglabs.spotivibe.domain.ProviderId
 import com.tglabs.spotivibe.domain.ProviderProbe
+import com.tglabs.spotivibe.domain.isSpotifyTrackId
 
 /** Lagu yang dicari liriknya, dalam bentuk yang dipakai semua sumber. */
 data class TrackQuery(
-    /** URI Spotify, `spotify:track:<id>`. Juga jadi `LyricsResult.trackId`. */
+    /**
+     * Identitas lagu dari `trackIdFor`: `spotify:track:<id>` untuk Spotify,
+     * `media:<hash>` untuk player lain. Juga jadi `LyricsResult.trackId`.
+     */
     val trackId: String,
     val title: String,
     val artist: String,
     val album: String,
     val durationMs: Long,
 ) {
-    /** ID Spotify polos, bagian terakhir URI. */
-    val spotifyId: String get() = trackId.substringAfterLast(':')
+    /**
+     * ID Spotify polos, bagian terakhir URI. Null untuk lagu dari player lain
+     * (`media:<hash>`): hash itu bukan ID Spotify dan tidak boleh dicocokkan
+     * sebagai ID.
+     */
+    val spotifyId: String? get() = trackId.takeIf(::isSpotifyTrackId)?.substringAfterLast(':')
 
     /** Durasi dalam detik, null kalau tidak diketahui. */
     val durationSec: Double? get() = durationMs.takeIf { it > 0 }?.let { it / MS_PER_SECOND }

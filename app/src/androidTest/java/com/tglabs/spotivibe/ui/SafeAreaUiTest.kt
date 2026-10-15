@@ -80,7 +80,7 @@ class SafeAreaUiTest {
                         state = playing,
                         onTogglePlayPause = {}, onNext = {}, onPrevious = {}, onSeek = {},
                         onToggleRomanization = {}, onToggleOverlay = {},
-                        onToggleDarkMode = {}, onBumpFontSize = {}, onLogout = {},
+                        onToggleDarkMode = {}, onBumpFontSize = {},
                         onOpenSettings = {},
                     )
                 }
@@ -123,7 +123,7 @@ class SafeAreaUiTest {
                 CompositionLocalProvider(LocalSvSafeInsets provides insetsHeadUnit) {
                     SettingsScreen(
                         state = playing,
-                        onBack = {}, onToggleDarkMode = {}, onSetFontSize = {}, onLogout = {},
+                        onBack = {}, onToggleDarkMode = {}, onSetFontSize = {}, onOpenAccess = {},
                     )
                 }
             }

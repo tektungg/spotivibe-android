@@ -25,6 +25,9 @@ class ManifestPermissionTest {
         "startForeground(" to "android.permission.FOREGROUND_SERVICE",
         "TYPE_APPLICATION_OVERLAY" to "android.permission.SYSTEM_ALERT_WINDOW",
         "registerDefaultNetworkCallback" to "android.permission.ACCESS_NETWORK_STATE",
+        // Bukan uses-permission tapi atribut android:permission pada service
+        // listener. Tanpa itu app lain mana pun bisa mengikat service-nya.
+        "getActiveSessions(" to "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE",
     )
 
     private fun akar(): File = listOf(File("src/main"), File("app/src/main"))

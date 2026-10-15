@@ -80,7 +80,6 @@ fun NowPlayingScreen(
     onToggleOverlay: () -> Unit,
     onToggleDarkMode: () -> Unit,
     onBumpFontSize: (Int) -> Unit,
-    onLogout: () -> Unit,
     onOpenSettings: () -> Unit,
     onSearchLyrics: () -> Unit = {},
     hasRememberedOverride: Boolean = false,
@@ -298,30 +297,14 @@ fun NowPlayingScreen(
                         onCancel = { selectedIds = emptySet() },
                     )
                 }
-                // Banner hanya muncul kalau sudah TERBUKTI kontrol ditolak:
-                // /me bilang non-premium, atau App Remote menolak perintah.
-                // Selama masih Unknown, transport tetap tampil.
-                state.capability.showsUpgradeNotice -> {
-                    com.tglabs.spotivibe.ui.component.HairlineRule()
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = SvSpace.s4),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = "SPOTIFY PREMIUM REQUIRED TO CONTROL PLAYBACK",
-                            style = SvType.MonoUp,
-                            color = sv.ink3,
-                            textAlign = TextAlign.Center,
-                        )
-                    }
-                }
                 else -> {
+                    // Tombol mengikuti izin player itu sendiri (PlaybackState.actions),
+                    // bukan status akun: tidak ada lagi banner Premium.
                     Transport(
                         progressMs = rawProgressMs,
                         durationMs = track.durationMs,
                         isPaused = track.isPaused,
+                        controls = state.controls,
                         onDrag = { draggingValue = it },
                         onSeek = { positionMs ->
                             draggingValue = -1L

@@ -28,6 +28,16 @@
          Permission normal, tidak butuh grant runtime. -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Supaya nama app player ("YouTube Music") bisa dibaca di Android 11+.
+         Tanpa ini getApplicationInfo() untuk paket lain gagal karena package
+         visibility, dan UI cuma bisa menampilkan nama paket. Semua player
+         musik mengekspos MediaBrowserService. -->
+    <queries>
+        <intent>
+            <action android:name="android.media.browse.MediaBrowserService" />
+        </intent>
+    </queries>
+
     <application
         android:name=".SpotivibeApp"
         android:allowBackup="true"
@@ -103,7 +113,20 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Display synced lyrics of currently playing media from Spotify" />
+                android:value="Display synced lyrics of the media currently playing in any music app" />
+        </service>
+
+        <!-- Kunci untuk membaca MediaSession app lain (getActiveSessions).
+             Kelasnya kosong; sistem yang mengikatnya setelah user mengaktifkan
+             Spotivibe di Settings → Notification access. Permission BIND_*
+             wajib: tanpanya app lain mana pun bisa mengikat service ini. -->
+        <service
+            android:name=".service.SessionAccessService"
+            android:exported="false"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
         </service>
 
     </application>
