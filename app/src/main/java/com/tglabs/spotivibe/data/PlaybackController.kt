@@ -9,6 +9,7 @@ import com.tglabs.spotivibe.domain.LyricsState
 import com.tglabs.spotivibe.domain.LyricsSyncEngine
 import com.tglabs.spotivibe.domain.NowPlaying
 import com.tglabs.spotivibe.domain.PlayerControls
+import com.tglabs.spotivibe.domain.SourceReport
 import com.tglabs.spotivibe.domain.SyncOffsets
 import com.tglabs.spotivibe.domain.SyncedLine
 import com.tglabs.spotivibe.domain.lineAt
@@ -90,6 +91,11 @@ class PlaybackController(
     // diperlakukan beda oleh cache.
     private val _lyricsState = MutableStateFlow<LyricsState>(LyricsState.Loading)
     val lyricsState: StateFlow<LyricsState> = _lyricsState.asStateFlow()
+
+    /** Apa yang dijawab tiap sumber lirik untuk lagu aktif, null kalau lagunya dijawab cache. */
+    val sourceReport: StateFlow<SourceReport?> = combine(source.nowPlaying, lyricsRepository.reports) { t, reports ->
+        t?.id?.let { reports[it] }
+    }.stateIn(scope, SharingStarted.Eagerly, null)
 
     /** Konten saja, untuk konsumen yang tidak peduli kenapa kosong. */
     val lyrics: StateFlow<LyricsResult?> = _lyricsState

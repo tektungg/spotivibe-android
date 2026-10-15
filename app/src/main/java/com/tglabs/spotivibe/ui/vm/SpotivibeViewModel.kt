@@ -120,6 +120,7 @@ class SpotivibeViewModel(
             controller.isOnline,
             preferencesRepository.lyricEffects,
             controller.playerLabel,
+            controller.sourceReport,
         )
     ) { values ->
         @Suppress("UNCHECKED_CAST")
@@ -143,6 +144,7 @@ class SpotivibeViewModel(
         val isOnline = values[17] as Boolean
         val lyricEffects = values[18] as Boolean
         val playerLabel = values[19] as String?
+        val sourceReport = values[20] as com.tglabs.spotivibe.domain.SourceReport?
 
         when {
             !hasAccess -> UiState.NeedsAccess
@@ -168,6 +170,7 @@ class SpotivibeViewModel(
                     lyricsFontSize = fontSize,
                     controls = controls,
                     playerLabel = playerLabel,
+                    sourceReport = sourceReport,
                     syncOffsets = syncOffsets,
                     lineSpacing = lineSpacing,
                     highContrast = highContrast,

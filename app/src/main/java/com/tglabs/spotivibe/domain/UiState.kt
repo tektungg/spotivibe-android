@@ -48,6 +48,8 @@ sealed interface UiState {
         val controls: PlayerControls = PlayerControls.Optimistic,
         /** Nama app player ("Spotify", "YouTube Music"), null kalau belum terbaca. */
         val playerLabel: String? = null,
+        /** Jawaban tiap sumber lirik untuk lagu ini, null kalau dijawab cache. */
+        val sourceReport: SourceReport? = null,
         /**
          * Ketiga lapis offset sync. [SyncOffsets.totalMs] adalah yang dipakai
          * untuk progress per kata dan kompensasi seek, sama dengan engine.
@@ -62,6 +64,9 @@ sealed interface UiState {
         /** false = perangkat offline; header menampilkan penanda "OFFLINE". */
         val isOnline: Boolean = true,
     ) : UiState {
+        /** Pesan pengganti lirik yang menyebut sumber gagal, null = pesan bawaan. */
+        val lyricsNotice: String? get() = lyricsNotice(lyricsState, sourceReport)
+
         /** Konten lirik saja, untuk kode yang tidak peduli kenapa kosong. */
         val lyrics: LyricsResult? get() = (lyricsState as? LyricsState.Ready)?.result
     }

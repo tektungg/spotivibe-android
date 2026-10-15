@@ -100,6 +100,11 @@ fun LyricsList(
     isPlaying: Boolean = true,
     /** Karaoke penuh per suku kata. Mati untuk head unit yang lemah. */
     lyricEffects: Boolean = true,
+    /**
+     * Pesan yang menyebut sumber lirik yang gagal (`lyricsNotice`), dipakai
+     * menggantikan pesan bawaan untuk "tidak ada" dan "gagal memuat".
+     */
+    notice: String? = null,
 ) {
     val sv = LocalSvColors.current
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -127,9 +132,9 @@ fun LyricsList(
                 StatusText("You're offline. Lyrics for this song aren't saved yet.")
 
             lyricsState is LyricsState.Unavailable ->
-                StatusText("Couldn't load lyrics. Check your connection, then replay the song.")
+                StatusText(notice ?: "Couldn't load lyrics. Check your connection, then replay the song.")
 
-            else -> StatusText("No lyrics found for this track")
+            else -> StatusText(notice ?: "No lyrics found for this track")
         }
     }
 }

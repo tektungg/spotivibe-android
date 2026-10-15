@@ -9,6 +9,8 @@ import com.tglabs.spotivibe.domain.ProbeSource
 import com.tglabs.spotivibe.domain.ProviderCooldown
 import com.tglabs.spotivibe.domain.ProviderId
 import com.tglabs.spotivibe.domain.ProviderProbe
+import com.tglabs.spotivibe.domain.SourceOutcome
+import com.tglabs.spotivibe.domain.TimingTier
 import com.tglabs.spotivibe.domain.SyncedLine
 import com.tglabs.spotivibe.domain.SyncedWord
 import kotlinx.coroutines.awaitCancellation
@@ -182,5 +184,44 @@ class LyricsRaceRepositoryTest {
         repo(listOf(gagal), cooldown = cooldown).ambil()
         repo(listOf(gagal), cooldown = cooldown).ambil()
         assertTrue(cooldown.isCoolingDown(ProviderId.LrcRed))
+    }
+
+    // ── Report sumber ────────────────────────────────────────────
+
+    private fun LyricsRepository.reportT1() = reports.value["t1"]
+
+    @Test
+    fun `report mencatat pemenang dan sumber yang dibatalkan`() {
+        val amll = FakeProvider(ProviderId.Amll, 10, wordContent("dari amll", ProbeSource.Amll))
+        val lambat = FakeProvider(ProviderId.LrcMux, 5_000, wordContent("dari lrcmux", ProbeSource.LrcMux))
+        val r = repo(listOf(amll, lambat))
+        r.ambil()
+        val report = r.reportT1()!!
+        assertEquals(ProviderId.Amll, report.winner)
+        val byId = report.entries.associateBy { it.id }
+        assertEquals(SourceOutcome.Found(TimingTier.Word), byId.getValue(ProviderId.Amll).outcome)
+        assertEquals(SourceOutcome.NotAsked, byId.getValue(ProviderId.LrcMux).outcome)
+    }
+
+    @Test
+    fun `report mencatat sumber yang dijeda dan yang gagal`() {
+        val cooldown = ProviderCooldown()
+        repeat(2) { cooldown.record(ProviderId.Amll, ProviderProbe.Failed("http_503")) }
+        val amll = FakeProvider(ProviderId.Amll, 5, wordContent("dari amll", ProbeSource.Amll))
+        val gagal = FakeProvider(ProviderId.LrcRed, 5, ProviderProbe.Failed("http_502"))
+        val r = repo(listOf(amll, gagal), cooldown = cooldown)
+        r.ambil()
+        val byId = r.reportT1()!!.entries.associateBy { it.id }
+        assertEquals(SourceOutcome.Skipped, byId.getValue(ProviderId.Amll).outcome)
+        assertEquals(SourceOutcome.Failed("http_502"), byId.getValue(ProviderId.LrcRed).outcome)
+        assertEquals(ProviderId.Lrclib, r.reportT1()!!.winner)
+    }
+
+    @Test
+    fun `report disimpan per lagu dan dibatasi`() {
+        val r = repo(emptyList())
+        (1..10).forEach { i -> runBlocking { r.fetchLyrics("t$i", "Lagu", "Artis", "Album", 200_000, allowRetry = false) } }
+        assertEquals(8, r.reports.value.size)
+        assertEquals((3..10).map { "t$it" }, r.reports.value.keys.toList())
     }
 }

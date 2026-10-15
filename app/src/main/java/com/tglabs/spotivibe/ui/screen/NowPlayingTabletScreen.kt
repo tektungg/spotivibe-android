@@ -360,6 +360,7 @@ fun NowPlayingTabletScreen(
                         hapticEnabled = state.hapticEnabled,
                         isPlaying = !track.isPaused,
                         lyricEffects = state.lyricEffects,
+                        notice = state.lyricsNotice,
                         onSeekToLine = { line ->
                             if (isSelecting) toggleSelect(line.id)
                             else onSeek(

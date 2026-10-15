@@ -281,6 +281,7 @@ fun NowPlayingScreen(
                     hapticEnabled = state.hapticEnabled,
                     isPlaying = !track.isPaused,
                     lyricEffects = state.lyricEffects,
+                    notice = state.lyricsNotice,
                     onSeekToLine = handleLineTap,
                     onLongPressShare = handleLineLongPress,
                     selectedIds = selectedIds,

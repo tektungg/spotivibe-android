@@ -20,6 +20,9 @@ import com.tglabs.spotivibe.domain.ProviderAnswer
 import com.tglabs.spotivibe.domain.ProviderCooldown
 import com.tglabs.spotivibe.domain.ProviderId
 import com.tglabs.spotivibe.domain.ProviderProbe
+import com.tglabs.spotivibe.domain.SourceReport
+import com.tglabs.spotivibe.domain.pickProviderWinner
+import com.tglabs.spotivibe.domain.sourceReportOf
 import com.tglabs.spotivibe.domain.cacheEntryFor
 import com.tglabs.spotivibe.domain.combineProviderAnswers
 import com.tglabs.spotivibe.domain.isRaceSettled
@@ -33,6 +36,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import retrofit2.Retrofit
@@ -114,6 +121,24 @@ class LyricsRepository(
         .create(LrclibApi::class.java)
 
     private val lrclib = LrclibProvider(api)
+
+    /**
+     * Report perlombaan terakhir per lagu, paling banyak [MAX_REPORTS].
+     * Per lagu, bukan satu nilai: preload antrean ikut berlomba, dan report
+     * lagu berikutnya tidak boleh menimpa report lagu yang sedang diputar.
+     */
+    private val _reports = MutableStateFlow<Map<String, SourceReport>>(emptyMap())
+    val reports: StateFlow<Map<String, SourceReport>> = _reports.asStateFlow()
+
+    private fun putReport(report: SourceReport) {
+        _reports.update { current ->
+            val next = LinkedHashMap(current)
+            next.remove(report.trackId)
+            next[report.trackId] = report
+            while (next.size > MAX_REPORTS) next.remove(next.keys.first())
+            next
+        }
+    }
 
     /**
      * Fetch lirik untuk track tertentu. Cascade: memory → disk → network.
@@ -326,12 +351,15 @@ class LyricsRepository(
      */
     private suspend fun probeNetwork(query: TrackQuery): LyricsLookup = coroutineScope {
         val peserta = racers()
+        val skipped = if (communitySources()) providers.filter { cooldown.isCoolingDown(it.id) }.map { it.id } else emptyList()
         val events = Channel<RaceEvent>(Channel.UNLIMITED)
         val jobs = peserta.map { p ->
             launch { events.send(RaceEvent.Answer(ProviderAnswer(p.id, p.lookup(query)))) }
         }
         val answers = collectRace(events, peserta.map { it.id }.toSet(), query.durationSec)
         jobs.forEach { it.cancel() }
+        val winner = pickProviderWinner(answers, query.durationSec)?.id
+        putReport(sourceReportOf(query.trackId, answers, peserta.map { it.id }, skipped, winner))
         combineProviderAnswers(answers, query.durationSec).also {
             Log.d(TAG, "Lookup ${query.trackId}: ${answers.map { a -> a.id to a.probe::class.simpleName }} -> $it")
         }
@@ -375,6 +403,9 @@ class LyricsRepository(
          * cukup pendek supaya lirik LRCLIB yang sudah ada tidak terasa ditahan.
          */
         private const val DEFAULT_CONTENT_GRACE_MS = 3_000L
+
+        /** Report yang disimpan: lagu aktif plus antrean preload, dengan sisa. */
+        private const val MAX_REPORTS = 8
         private const val MEM_CACHE_MAX = 50
 
         /** Total percobaan untuk fetch normal. Preload selalu 1. */

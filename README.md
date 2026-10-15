@@ -334,6 +334,12 @@ Keputusan yang disengaja:
   ditanyakan ulang setiap diputar.
 - **Jeda per sumber** (`ProviderCooldown`): mulai gagal kedua berturut-turut,
   sumber komunitas diistirahatkan 30/60/120/300 s, atau sesuai `Retry-After`.
+- **Report per lagu** (`domain/SourceReport.kt`): setiap perlombaan mencatat
+  jawaban tiap sumber (berisi + tier, tidak ada, gagal + alasan, dijeda, belum
+  ditanya karena perlombaan selesai). Disimpan per lagu, maksimal 8, supaya
+  preload antrean tidak menimpa lagu aktif. Pesan "tidak ada lirik" dan "gagal
+  memuat" menyebut sumber yang gagal dan golongan alasannya (timed out, rate
+  limited, server error, no connection).
 - Settings → **Community lyrics** mematikan ketiganya; app kembali ke LRCLIB
   saja. Statistik **COMMUNITY WON** menunjukkan seberapa sering mereka menang.
 - `LYRICS_SELECTION_VERSION` naik ke 2, jadi cache dari era LRCLIB-saja dipilih
