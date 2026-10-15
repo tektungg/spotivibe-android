@@ -89,3 +89,28 @@ fun introGapMs(lines: List<SyncedLine>): Long? {
     if (first.isInterlude) return null
     return first.timeMs.takeIf { it >= INTERLUDE_MIN_GAP_MS }
 }
+
+/**
+ * Sisipkan baris kosong di setiap jeda >= [INTERLUDE_MIN_GAP_MS] antara AKHIR
+ * satu baris dan awal baris berikutnya.
+ *
+ * LRC menandai jeda dengan baris kosong, tapi TTML dan JSON per kata tidak:
+ * mereka punya waktu akhir tiap baris, jadi jedanya tersirat. Mengubahnya jadi
+ * baris kosong membuat satu jalur tampilan ([interludeGapMs]) berlaku untuk
+ * semua sumber, termasuk notification yang tidak tahu apa-apa soal waktu akhir.
+ *
+ * Baris tanpa [SyncedLine.endMs] tidak menyisipkan apa-apa: jedanya tidak
+ * diketahui. Id ditetapkan ulang sesuai posisi.
+ */
+fun insertInterludeMarkers(lines: List<SyncedLine>): List<SyncedLine> {
+    if (lines.size < 2) return lines.withPositionalIds()
+    val out = ArrayList<SyncedLine>(lines.size + 4)
+    lines.forEachIndexed { i, line ->
+        out += line
+        val next = lines.getOrNull(i + 1) ?: return@forEachIndexed
+        val end = line.endMs ?: return@forEachIndexed
+        if (line.isInterlude || next.isInterlude) return@forEachIndexed
+        if (next.timeMs - end >= INTERLUDE_MIN_GAP_MS) out += SyncedLine(id = 0, timeMs = end, text = "")
+    }
+    return out.withPositionalIds()
+}

@@ -2,11 +2,29 @@ package com.tglabs.spotivibe.domain
 
 import androidx.compose.runtime.Immutable
 
-/** Satu kata dalam enhanced LRC — punya timestamp sendiri */
+/**
+ * Satu kata (enhanced LRC) atau satu suku kata (TTML) dengan timestamp sendiri.
+ *
+ * [text] membawa spasinya sendiri: suku kata terakhir sebuah kata diakhiri
+ * spasi, suku kata di tengah kata tidak. Jadi menggabungkan semua [text] tanpa
+ * pemisah menghasilkan baris aslinya, untuk sumber mana pun.
+ */
 @Immutable
 data class SyncedWord(
     val timeMs: Long,
     val text: String,
+    /** Akhir kata. Null untuk enhanced LRC, yang hanya punya waktu mulai. */
+    val endMs: Long? = null,
+)
+
+/**
+ * Vokal latar (backing vocal) yang dinyanyikan bersamaan dengan baris utama,
+ * misalnya "(Oh)" di belakang lirik. Hanya datang dari TTML (`ttm:role="x-bg"`).
+ */
+@Immutable
+data class BackgroundVocal(
+    val text: String,
+    val words: List<SyncedWord> = emptyList(),
 )
 
 /**
@@ -31,6 +49,14 @@ data class SyncedLine(
     val timeMs: Long,
     val text: String,
     val words: List<SyncedWord> = emptyList(),
+    /** Akhir baris. Hanya TTML yang punya; LRC cuma punya waktu mulai. */
+    val endMs: Long? = null,
+    /**
+     * Baris duet milik penyanyi kedua, digambar rata kanan. Dari TTML: agent
+     * baris ini bukan agent utama lagu (lihat `parseTtml`).
+     */
+    val oppositeAligned: Boolean = false,
+    val background: BackgroundVocal? = null,
 )
 
 /** Hasil fetch lyrics dari LRCLIB */

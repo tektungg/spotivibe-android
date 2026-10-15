@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
@@ -80,6 +81,17 @@ internal data class LyricLineModel(
     val interludeGapMs: Long?,
 )
 
+/** Duet: jarak tambahan di kiri baris penyanyi kedua. */
+private val DUET_INSET = 48.dp
+
+/** Vokal latar relatif terhadap baris utamanya. */
+private const val BACKGROUND_SIZE_RATIO = 0.72f
+private const val BACKGROUND_ALPHA = 0.7f
+private const val BACKGROUND_PENDING_ALPHA = 0.4f
+
+private fun alignFor(line: SyncedLine): TextAlign =
+    if (line.oppositeAligned) TextAlign.End else TextAlign.Start
+
 /** Warna target dan alpha tambahan untuk satu keadaan baris. */
 private data class LineTint(val color: Color, val alpha: Float)
 
@@ -130,7 +142,9 @@ internal fun LyricLineItem(
         label = "lineColor",
     )
     val tint = color.copy(alpha = color.alpha * target.alpha)
-    val textStyle = lineTextStyle(model.state, prefs.fontSize)
+    // Perataan ikut di style, jadi semua teks baris ini (utama, latar,
+    // romanisasi) sepakat tanpa parameter tambahan.
+    val textStyle = lineTextStyle(model.state, prefs.fontSize).copy(textAlign = alignFor(model.line))
     val isSelected = interaction.selectedIds.contains(model.line.id)
 
     Row(
@@ -138,16 +152,18 @@ internal fun LyricLineItem(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (interaction.isSelecting) SelectionGutter(isSelected)
+        val edge = if (interaction.isSelecting) SvSpace.s4 else SvSpace.s5
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(
-                    horizontal = if (interaction.isSelecting) SvSpace.s4 else SvSpace.s5,
-                    vertical = SvSpace.s1,
-                ),
-            horizontalAlignment = Alignment.Start,
+                .padding(vertical = SvSpace.s1)
+                // Baris penyanyi kedua digeser ke kanan dengan jarak tambahan
+                // di kiri, supaya dua suara terbaca sebagai dua sisi.
+                .padding(start = if (model.line.oppositeAligned) edge + DUET_INSET else edge, end = edge),
+            horizontalAlignment = if (model.line.oppositeAligned) Alignment.End else Alignment.Start,
         ) {
             LyricLineBody(model, textStyle, color, tint, progressMs)
+            BackgroundVocalText(model, textStyle, color, tint, progressMs)
             RomanizationText(model, textStyle, tint)
         }
     }
@@ -228,12 +244,45 @@ private fun LyricLineBody(
             style = textStyle,
         )
 
-        else -> Text(
-            text = line.text,
-            style = textStyle,
-            color = tint,
-            textAlign = TextAlign.Start,
-        )
+        else -> Text(text = line.text, style = textStyle, color = tint)
+    }
+}
+
+/**
+ * Vokal latar di bawah baris utama: lebih kecil, miring, dan lebih redup,
+ * karena itu suara di belakang, bukan yang dinyanyikan bersama. Ikut karaoke
+ * per kata saat barisnya aktif.
+ */
+@Composable
+private fun BackgroundVocalText(
+    model: LyricLineModel,
+    textStyle: TextStyle,
+    color: Color,
+    tint: Color,
+    progressMs: Long,
+) {
+    val bg = model.line.background ?: return
+    if (model.state == LyricLineState.Distant) return
+    val sv = LocalSvColors.current
+    val size = textStyle.fontSize.value * BACKGROUND_SIZE_RATIO
+    val style = textStyle.copy(
+        fontSize = size.sp,
+        lineHeight = (size + 4f).sp,
+        fontStyle = FontStyle.Italic,
+    )
+    val modifier = Modifier.padding(top = 2.dp)
+    if (model.state == LyricLineState.Active && bg.words.isNotEmpty()) {
+        Box(modifier) {
+            WordHighlightText(
+                words = bg.words,
+                progressMs = progressMs,
+                activeColor = color.copy(alpha = color.alpha * BACKGROUND_ALPHA),
+                pendingColor = sv.ink3.copy(alpha = BACKGROUND_PENDING_ALPHA),
+                style = style,
+            )
+        }
+    } else {
+        Text(text = bg.text, style = style, color = tint.copy(alpha = tint.alpha * BACKGROUND_ALPHA), modifier = modifier)
     }
 }
 
@@ -251,12 +300,12 @@ private fun RomanizationText(model: LyricLineModel, textStyle: TextStyle, tint: 
         style = SvType.Romanization.copy(
             fontSize = romaSp.sp,
             lineHeight = (romaSp + 4f).sp,
+            textAlign = textStyle.textAlign,
         ),
         // Warna PERSIS sama dengan baris liriknya, termasuk alpha. Sebelumnya
         // accentDim dengan alpha 0,85, jadi romanisasi selalu lebih redup dari
         // liriknya walau baris itu aktif.
         color = tint,
-        textAlign = TextAlign.Start,
         modifier = Modifier.padding(top = 2.dp),
     )
 }
@@ -286,9 +335,5 @@ private fun WordHighlightText(
             }
         }
     }
-    Text(
-        text = annotated,
-        style = style,
-        textAlign = TextAlign.Start,
-    )
+    Text(text = annotated, style = style)
 }

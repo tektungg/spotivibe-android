@@ -1,0 +1,3 @@
+<?xml version="1.0"?>
+<!DOCTYPE tt [<!ENTITY boom "BOOM">]>
+<tt xmlns="http://www.w3.org/ns/ttml" xmlns:itunes="http://music.apple.com/lyric-ttml-internal" itunes:timing="Line"><body><div><p begin="1" end="2">&boom;</p></div></body></tt>

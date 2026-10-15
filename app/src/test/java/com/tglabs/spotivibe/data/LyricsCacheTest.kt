@@ -1,6 +1,8 @@
 package com.tglabs.spotivibe.data
 
+import com.tglabs.spotivibe.domain.BackgroundVocal
 import com.tglabs.spotivibe.domain.LyricsResult
+import com.tglabs.spotivibe.domain.SyncedWord
 import com.tglabs.spotivibe.domain.SyncedLine
 import com.tglabs.spotivibe.domain.cacheFileName
 import org.junit.Assert.assertEquals
@@ -40,6 +42,36 @@ class LyricsCacheTest {
 
     private fun kosong(id: String = "spotify:track:a") =
         LyricsResult(trackId = id, synced = null, plain = null)
+
+    // ── Field TTML ───────────────────────────────────────────────
+
+    @Test
+    fun `field TTML selamat lewat disk`() {
+        val baris = SyncedLine(
+            id = 0,
+            timeMs = 1_000,
+            text = "Second voice",
+            words = listOf(SyncedWord(1_000, "Second ", 1_400), SyncedWord(1_400, "voice", 2_000)),
+            endMs = 2_000,
+            oppositeAligned = true,
+            background = BackgroundVocal("(Oh)", listOf(SyncedWord(1_500, "(Oh)", 1_900))),
+        )
+        val c = cache()
+        c.put(LyricsResult(trackId = "spotify:track:t", synced = listOf(baris), plain = null))
+        assertEquals(baris, c.get("spotify:track:t")?.synced?.single())
+    }
+
+    /** Berkas dari versi sebelum TTML tidak punya field baru dan tetap harus terbaca. */
+    @Test
+    fun `berkas tanpa field TTML tetap terbaca dengan nilai bawaan`() {
+        val dir = tmp.root.resolve("baru").apply { mkdirs() }
+        dir.resolve(cacheFileName("spotify:track:lama")).writeText(
+            """{"synced":[{"timeMs":1000,"text":"halo","words":[{"timeMs":1000,"text":"halo"}]}],""" +
+                """"plain":null,"hasContent":true,"cachedAt":$sekarang,"selectionVersion":1}""",
+        )
+        val baris = cache(dir).getStale("spotify:track:lama")?.synced?.single()
+        assertEquals(SyncedLine(id = 0, timeMs = 1_000, text = "halo", words = listOf(SyncedWord(1_000, "halo"))), baris)
+    }
 
     // ── TTL vs cadangan basi ─────────────────────────────────────
 

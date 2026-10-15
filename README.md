@@ -291,6 +291,29 @@ Cache disk sekarang ikut menyimpan timing per-kata. Sebelumnya field itu hilang
 saat round-trip, jadi karaoke per-kata jalan di pemutaran pertama lalu
 diam-diam turun ke per-baris begitu cache dipakai.
 
+### Parsing TTML: suku kata, vokal latar, duet
+
+`domain/TtmlParser.kt` membaca TTML, format lirik Apple Music yang juga dipakai
+AMLL dan lrc.red. Hasilnya `SyncedLine` yang sama dengan LRC, ditambah field
+yang hanya bisa datang dari TTML:
+
+| Markup TTML | Jadi | Tampil |
+|---|---|---|
+| `<span begin end>` berdempetan | `SyncedWord` per suku kata, spasi = batas kata | karaoke per suku kata |
+| `ttm:role="x-bg"` | `SyncedLine.background` | teks kecil miring di bawah baris |
+| `ttm:agent` selain penyanyi utama | `oppositeAligned = true` | rata kanan |
+| `ttm:role="x-translation"` / `x-roman` | dibuang | (romanisasi app sendiri) |
+| `end` baris → `begin` berikutnya >= 3 s | baris kosong disisipkan | titik-titik jeda |
+
+Penyanyi utama adalah agent yang pertama dipakai sebuah baris, dan agent
+bertipe `group` (paduan suara) tidak pernah dianggap pihak kedua duet. Baris
+yang isinya cuma vokal latar menaikkan latarnya jadi baris utama, supaya tidak
+salah terbaca sebagai penanda jeda.
+
+Parser memakai `javax.xml.parsers` (DOM), bukan `XmlPullParser`: yang kedua
+cuma stub di unit test JVM. Dokumen ber-DOCTYPE ditolak sebelum diparse, yang
+menutup XXE dan entity expansion di implementasi parser mana pun.
+
 ### Siklus koneksi
 
 `SpotifySessionSupervisor` hidup di application scope dan menjaga koneksi

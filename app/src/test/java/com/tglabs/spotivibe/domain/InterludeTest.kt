@@ -109,4 +109,30 @@ class InterludeTest {
         // Baris kosong pertama sudah menampilkan titiknya sendiri.
         assertNull(introGapMs(lines(0L to "", 15_000L to "a")))
     }
+
+    // ── Penanda jeda dari waktu akhir ────────────────────────────
+
+    private fun timed(start: Long, end: Long?, text: String = "x") =
+        SyncedLine(id = 0, timeMs = start, text = text, endMs = end)
+
+    @Test
+    fun `jeda panjang antara akhir dan awal disisipi baris kosong`() {
+        val hasil = insertInterludeMarkers(listOf(timed(1_000, 2_000), timed(9_000, 10_000)))
+        assertEquals(listOf(1_000L, 2_000L, 9_000L), hasil.map { it.timeMs })
+        assertTrue(hasil[1].isInterlude)
+        assertEquals(listOf(0, 1, 2), hasil.map { it.id })
+        assertEquals(7_000L, interludeGapMs(hasil, 1))
+    }
+
+    @Test
+    fun `jeda pendek dan baris tanpa waktu akhir tidak disisipi`() {
+        assertEquals(2, insertInterludeMarkers(listOf(timed(1_000, 2_000), timed(4_000, 5_000))).size)
+        assertEquals(2, insertInterludeMarkers(listOf(timed(1_000, null), timed(9_000, 10_000))).size)
+    }
+
+    @Test
+    fun `penanda yang sudah ada tidak digandakan`() {
+        val l = listOf(timed(1_000, 2_000), timed(2_000, null, text = ""), timed(9_000, 10_000))
+        assertEquals(3, insertInterludeMarkers(l).size)
+    }
 }

@@ -10,6 +10,7 @@ import android.util.Log
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import com.tglabs.spotivibe.domain.BackgroundVocal
 import com.tglabs.spotivibe.domain.CacheFileInfo
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.SyncedLine
@@ -153,15 +154,7 @@ class LyricsCache internal constructor(
         ensureMigrated()
         try {
             val entry = CachedEntry(
-                synced = result.synced?.map { line ->
-                    SyncedLineDto(
-                        timeMs = line.timeMs,
-                        text = line.text,
-                        words = line.words
-                            .takeIf { it.isNotEmpty() }
-                            ?.map { SyncedWordDto(it.timeMs, it.text) },
-                    )
-                },
+                synced = result.synced?.map { it.toDto() },
                 plain = result.plain,
                 hasContent = result.hasContent,
                 cachedAt = nowMs(),
@@ -214,10 +207,20 @@ class LyricsCache internal constructor(
 
     private fun fileFor(trackId: String): File = File(dir, cacheFileName(trackId))
 
+    /** [endMs] default null supaya berkas dari versi sebelum TTML tetap terbaca. */
     @JsonClass(generateAdapter = false)
     internal data class SyncedWordDto(
         val timeMs: Long,
         val text: String,
+        val endMs: Long? = null,
+    ) {
+        fun toWord(): SyncedWord = SyncedWord(timeMs, text, endMs)
+    }
+
+    @JsonClass(generateAdapter = false)
+    internal data class BackgroundDto(
+        val text: String,
+        val words: List<SyncedWordDto>? = null,
     )
 
     /**
@@ -232,7 +235,21 @@ class LyricsCache internal constructor(
         val timeMs: Long,
         val text: String,
         val words: List<SyncedWordDto>? = null,
-    )
+        /** Field TTML. Semuanya punya default: berkas lama tidak memilikinya. */
+        val endMs: Long? = null,
+        val oppositeAligned: Boolean = false,
+        val background: BackgroundDto? = null,
+    ) {
+        fun toLine(): SyncedLine = SyncedLine(
+            id = 0,
+            timeMs = timeMs,
+            text = text,
+            words = words.orEmpty().map { it.toWord() },
+            endMs = endMs,
+            oppositeAligned = oppositeAligned,
+            background = background?.let { bg -> BackgroundVocal(bg.text, bg.words.orEmpty().map { it.toWord() }) },
+        )
+    }
 
     @JsonClass(generateAdapter = false)
     internal data class CachedEntry(
@@ -248,16 +265,7 @@ class LyricsCache internal constructor(
     ) {
         fun toLyricsResult(trackId: String): LyricsResult = LyricsResult(
             trackId = trackId,
-            synced = synced
-                ?.map { dto ->
-                    SyncedLine(
-                        id = 0,
-                        timeMs = dto.timeMs,
-                        text = dto.text,
-                        words = dto.words.orEmpty().map { SyncedWord(it.timeMs, it.text) },
-                    )
-                }
-                ?.withPositionalIds(),
+            synced = synced?.map { it.toLine() }?.withPositionalIds(),
             plain = plain,
         )
     }
@@ -279,6 +287,19 @@ class LyricsCache internal constructor(
         private const val SWEEP_EVERY = 25
     }
 }
+
+private fun SyncedWord.toDto() = LyricsCache.SyncedWordDto(timeMs, text, endMs)
+
+private fun SyncedLine.toDto() = LyricsCache.SyncedLineDto(
+    timeMs = timeMs,
+    text = text,
+    words = words.takeIf { it.isNotEmpty() }?.map { it.toDto() },
+    endMs = endMs,
+    oppositeAligned = oppositeAligned,
+    background = background?.let { bg ->
+        LyricsCache.BackgroundDto(bg.text, bg.words.takeIf { it.isNotEmpty() }?.map { it.toDto() })
+    },
+)
 
 /**
  * Pindahkan berkas cache lirik dari [legacy] ke [target], lalu hapus [legacy].
