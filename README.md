@@ -16,6 +16,10 @@ Android native companion untuk player musik apa pun — Spotify, YouTube Music, 
   Detail di [Sumber playback](#sumber-playback)
 - **Now Playing** dengan album cover, judul, artist, slider seek. Tombol mengikuti
   apa yang diizinkan player itu sendiri, bukan status akun
+- **Gestur cover**: geser cover (atau thumbnail + judul di portrait) ke kiri untuk
+  lagu berikutnya, ke kanan untuk sebelumnya; ketuk dua kali untuk play/pause.
+  Ambang 48 dp, dan gerakan yang tidak diizinkan player diabaikan
+  (`domain/CoverGesture.kt`)
 - **Synced lyrics dari empat sumber yang berlomba** — [LRCLIB](https://lrclib.net),
   [AMLL TTML DB](https://amll.dev), [lrc.red](https://lrc.red), dan
   [LRCMux](https://lrcmux.dev). Yang timing-nya paling halus (per kata > per

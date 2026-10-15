@@ -66,18 +66,16 @@ fun NPHeader(
     onRomajiClick: () -> Unit,
     onOverlayClick: () -> Unit,
     onEnterKaraoke: () -> Unit,
-    onMoreClick: () -> Unit,
-    onSearchLyrics: () -> Unit = {},
-    /** Hanya true kalau lagu ini punya lirik tersimpan permanen. */
-    showForgetOverride: Boolean = false,
-    onForgetOverride: () -> Unit = {},
-    onSyncSong: (() -> Unit)? = null,
+    /** Isi menu kebab: pencarian lirik, sync lagu, lupakan lirik, Settings. */
+    menu: HeaderMenuActions,
     modifier: Modifier = Modifier,
     showRomajiIcon: Boolean = true,
     romajiEnabled: Boolean = false,
     overlayEnabled: Boolean = false,
     /** Perangkat offline: eyebrow berubah jadi penanda status beraksen. */
     offline: Boolean = false,
+    /** Geser untuk pindah lagu, ketuk dua kali untuk play/pause. Null = tanpa gestur. */
+    coverActions: CoverActions? = null,
 ) {
     val sv = LocalSvColors.current
     Row(
@@ -87,64 +85,19 @@ fun NPHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(SvSpace.s3),
     ) {
-        // ── Album thumb 44dp ──
-        AlbumThumb(bitmap = albumBitmap, size = 44.dp)
-
-        // ── Title block ──
-        Column(modifier = Modifier.weight(1f)) {
-            MonoEyebrow(
-                // Album sebagai eyebrow. Release year tidak dikirim semua
-                // player lewat MediaSession, jadi tidak ditampilkan daripada
-                // tampil di sebagian player saja.
-                // ink2 (bukan ink3) + maxLines 1 supaya tetap legible di atas
-                // album art terang + tidak wrap jadi 2 baris yang berantakan.
-                text = headerEyebrowText(album, offline),
-                color = if (offline) sv.accent else sv.ink2,
-                maxLines = 1,
-                modifier = Modifier.padding(bottom = 2.dp),
-            )
-            // Track-change spec: 540ms total. Old fades + slides -20dp over
-            // 0-220ms. New crossfades at delayMillis=180ms, slides +10dp→0
-            // over 360ms. Easing = SvMotion.EaseOut (cubic-bezier 0.16,1,0.3,1).
-            AnimatedContent(
-                targetState = title.ifBlank { "Untitled" },
-                transitionSpec = {
-                    (slideInVertically(
-                        tween(360, delayMillis = 180, easing = SvMotion.EaseOut),
-                    ) { it / 3 } + fadeIn(
-                        tween(360, delayMillis = 180, easing = SvMotion.EaseOut),
-                    ))
-                        .togetherWith(
-                            slideOutVertically(tween(220, easing = SvMotion.EaseOut)) { -it / 3 } +
-                                fadeOut(tween(220, easing = SvMotion.EaseOut))
-                        )
-                },
-                label = "title",
-            ) { t ->
-                Text(
-                    text = t,
-                    style = SvType.H3.copy(fontSize = 18.sp, lineHeight = 22.sp),
-                    color = sv.ink1,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            AnimatedContent(
-                targetState = artist.ifBlank { "Unknown artist" },
-                transitionSpec = {
-                    fadeIn(tween(360, delayMillis = 180, easing = SvMotion.EaseOut))
-                        .togetherWith(fadeOut(tween(220, easing = SvMotion.EaseOut)))
-                },
-                label = "artist",
-            ) { a ->
-                Text(
-                    text = a,
-                    style = SvType.BodyItalic.copy(fontSize = 12.sp),
-                    color = sv.ink3,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+        // Thumb + judul jadi satu area gestur: cover 44 dp terlalu kecil
+        // sendirian untuk digeser di mobil.
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .coverGestures(coverActions),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(SvSpace.s3),
+        ) {
+            // ── Album thumb 44dp ──
+            AlbumThumb(bitmap = albumBitmap, size = 44.dp)
+            // ── Title block ──
+            HeaderTitleBlock(album = album, title = title, artist = artist, offline = offline, modifier = Modifier.weight(1f))
         }
 
         // ── Icon row ── Rm / overlay / fullscreen / more
@@ -172,15 +125,7 @@ fun NPHeader(
                 enabled = false,
                 onClick = onEnterKaraoke,
             )
-            HeaderOverflowMenu(
-                actions = HeaderMenuActions(
-                    onSearchLyrics = onSearchLyrics,
-                    onOpenSettings = onMoreClick,
-                    onSyncSong = onSyncSong,
-                    showForgetOverride = showForgetOverride,
-                    onForgetOverride = onForgetOverride,
-                ),
-            )
+            HeaderOverflowMenu(actions = menu)
         }
     }
 }
@@ -259,4 +204,85 @@ private fun HeaderToggleIcon(
 internal fun headerEyebrowText(album: String, offline: Boolean): String {
     val detail = album.ifBlank { "NOW PLAYING" }
     return if (offline) "OFFLINE · $detail" else detail
+}
+
+/** Album sebagai eyebrow, lalu judul dan artis dengan transisi ganti lagu. */
+@Composable
+private fun HeaderTitleBlock(
+    album: String,
+    title: String,
+    artist: String,
+    offline: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val sv = LocalSvColors.current
+    Column(modifier = modifier) {
+        MonoEyebrow(
+            // Album sebagai eyebrow. Release year tidak dikirim semua
+            // player lewat MediaSession, jadi tidak ditampilkan daripada
+            // tampil di sebagian player saja.
+            // ink2 (bukan ink3) + maxLines 1 supaya tetap legible di atas
+            // album art terang + tidak wrap jadi 2 baris yang berantakan.
+            text = headerEyebrowText(album, offline),
+            color = if (offline) sv.accent else sv.ink2,
+            maxLines = 1,
+            modifier = Modifier.padding(bottom = 2.dp),
+        )
+        AnimatedTitle(title)
+        AnimatedArtist(artist)
+    }
+}
+
+/**
+ * Track-change spec: 540ms total. Old fades + slides -20dp over 0-220ms. New
+ * crossfades at delayMillis=180ms, slides +10dp→0 over 360ms. Easing =
+ * SvMotion.EaseOut (cubic-bezier 0.16,1,0.3,1).
+ */
+@Composable
+private fun AnimatedTitle(title: String) {
+    val sv = LocalSvColors.current
+    AnimatedContent(
+        targetState = title.ifBlank { "Untitled" },
+        transitionSpec = {
+            (slideInVertically(
+                tween(360, delayMillis = 180, easing = SvMotion.EaseOut),
+            ) { it / 3 } + fadeIn(
+                tween(360, delayMillis = 180, easing = SvMotion.EaseOut),
+            ))
+                .togetherWith(
+                    slideOutVertically(tween(220, easing = SvMotion.EaseOut)) { -it / 3 } +
+                        fadeOut(tween(220, easing = SvMotion.EaseOut))
+                )
+        },
+        label = "title",
+    ) { t ->
+        Text(
+            text = t,
+            style = SvType.H3.copy(fontSize = 18.sp, lineHeight = 22.sp),
+            color = sv.ink1,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun AnimatedArtist(artist: String) {
+    val sv = LocalSvColors.current
+    AnimatedContent(
+        targetState = artist.ifBlank { "Unknown artist" },
+        transitionSpec = {
+            fadeIn(tween(360, delayMillis = 180, easing = SvMotion.EaseOut))
+                .togetherWith(fadeOut(tween(220, easing = SvMotion.EaseOut)))
+        },
+        label = "artist",
+    ) { a ->
+        Text(
+            text = a,
+            style = SvType.BodyItalic.copy(fontSize = 12.sp),
+            color = sv.ink3,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }

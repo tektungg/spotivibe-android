@@ -34,6 +34,8 @@ import com.tglabs.spotivibe.domain.UiState
 import com.tglabs.spotivibe.domain.lyricsProgressMs
 import com.tglabs.spotivibe.domain.seekTargetMs
 import com.tglabs.spotivibe.ui.component.AmbientBg
+import com.tglabs.spotivibe.ui.component.CoverActions
+import com.tglabs.spotivibe.ui.component.HeaderMenuActions
 import com.tglabs.spotivibe.ui.component.LineInteraction
 import com.tglabs.spotivibe.ui.component.LyricsContent
 import com.tglabs.spotivibe.ui.component.LyricsList
@@ -259,11 +261,14 @@ fun NowPlayingScreen(
                     onRomajiClick = onToggleRomanization,
                     onOverlayClick = onToggleOverlay,
                     onEnterKaraoke = { karaokeMode = true },
-                    onMoreClick = onOpenSettings,
-                    onSearchLyrics = onSearchLyrics,
-                    showForgetOverride = hasRememberedOverride,
-                    onForgetOverride = onForgetOverride,
-                    onSyncSong = onSyncSong,
+                    menu = HeaderMenuActions(
+                        onSearchLyrics = onSearchLyrics,
+                        onOpenSettings = onOpenSettings,
+                        onSyncSong = onSyncSong,
+                        showForgetOverride = hasRememberedOverride,
+                        onForgetOverride = onForgetOverride,
+                    ),
+                    coverActions = CoverActions(onNext, onPrevious, onTogglePlayPause, state.controls),
                     offline = !state.isOnline,
                 )
             }

@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tglabs.spotivibe.domain.UiState
 import com.tglabs.spotivibe.ui.component.AmbientBg
+import com.tglabs.spotivibe.ui.component.CoverActions
+import com.tglabs.spotivibe.ui.component.coverGestures
 import com.tglabs.spotivibe.ui.component.HairlineIconButton
 import com.tglabs.spotivibe.ui.component.HairlineRule
 import com.tglabs.spotivibe.ui.component.LineInteraction
@@ -202,7 +204,9 @@ fun NowPlayingTabletScreen(
                             modifier = Modifier
                                 .size(sisi.dp)
                                 .clip(androidx.compose.foundation.shape.RoundedCornerShape(SvRadius.r1))
-                                .background(sv.bg2),
+                                .background(sv.bg2)
+                                // Geser untuk pindah lagu, ketuk dua kali untuk play/pause.
+                                .coverGestures(CoverActions(onNext, onPrevious, onTogglePlayPause, state.controls)),
                         ) {
                             if (state.albumBitmap != null) {
                                 Image(
