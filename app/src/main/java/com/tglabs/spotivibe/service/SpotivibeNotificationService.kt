@@ -35,14 +35,15 @@ import kotlinx.coroutines.launch
 /**
  * Foreground service yang menampilkan notification dengan synced lyric line.
  *
- * Tujuan: tampil PARALEL dengan Spotify's media notification (HyperOS Dynamic
- * Island / lock screen). Kita TIDAK pakai MediaSession + MediaStyle karena itu
- * akan "hijack" media indicator system dari Spotify — user tap dynamic island
- * malah masuk ke kita, bukan Spotify.
+ * Tujuan: tampil PARALEL dengan media notification milik player (HyperOS
+ * Dynamic Island / lock screen). Kita TIDAK menerbitkan MediaSession + MediaStyle
+ * sendiri karena itu akan "hijack" media indicator system dari player — user tap
+ * dynamic island malah masuk ke kita, bukan ke player. Membaca sesi player lain
+ * (lewat SessionAccessService) tidak menerbitkan apa pun.
  *
  * Strategi: pakai foregroundServiceType=specialUse (bukan mediaPlayback) supaya
  * tidak claim media playback role, dan pakai BigText style biasa untuk
- * notification — Spotify tetap punya media indicator-nya sendiri.
+ * notification — player tetap punya media indicator-nya sendiri.
  *
  * Lifecycle:
  * - start() dari MainActivity setelah connection Connected
@@ -84,7 +85,7 @@ class SpotivibeNotificationService : Service() {
         try {
             // Android 14+ wajib pass foregroundServiceType di startForeground call.
             // FOREGROUND_SERVICE_TYPE_SPECIAL_USE — kita bukan media player, ini app
-            // companion yang nampilin info dari app lain (Spotify).
+            // companion yang nampilin info dari app lain (player musik).
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 startForeground(
                     NOTIF_ID,

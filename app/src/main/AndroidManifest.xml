@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Network access for LRCLIB + Spotify Web API -->
+    <!-- Network access untuk sumber lirik (LRCLIB, AMLL, lrc.red, LRCMux) -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Status jaringan untuk mode offline (NetworkMonitor). Tanpa ini
@@ -12,7 +11,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Foreground service untuk lyrics notification (specialUse — bukan media
-         player karena Spotify yang main musik, kita cuma companion display) -->
+         player karena app lain yang memutar musik, kita cuma companion display) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
@@ -49,15 +48,10 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Spotivibe">
 
-        <!-- launchMode=singleTask wajib untuk redirect OAuth: tanpa ini,
-             spotivibe://callback membuat instance MainActivity KEDUA di atas
-             yang lama, bukan masuk lewat onNewIntent ke instance yang sudah
-             memegang state auth. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:launchMode="singleTask"
             android:theme="@style/Theme.Spotivibe"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode">
             <intent-filter>
@@ -65,32 +59,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Redirect Authorization Code + PKCE: spotivibe://callback -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="${redirectSchemeName}"
-                    android:host="${redirectHostName}" />
-            </intent-filter>
         </activity>
-
-        <!-- Buang LoginActivity milik Spotify Auth SDK dari manifest hasil merge.
-             AAR-nya mendeklarasikan activity itu dengan intent-filter
-             spotivibe://callback yang PERSIS SAMA dengan milik MainActivity,
-             memakai manifest placeholder redirectSchemeName/redirectHostName
-             yang kita isi sendiri. Akibatnya redirect auth memunculkan dialog
-             pilihan berisi dua entri yang sama-sama berlabel "Spotivibe", dan
-             kalau user memilih yang milik SDK, redirect-nya ditelan activity
-             translucent yang langsung finish. onNewIntent kita tidak pernah
-             jalan, jadi UI tertinggal di Connecting selamanya.
-
-             Aman dihapus: sejak pindah ke Authorization Code + PKCE, tidak ada
-             satu pun kode kita yang memakai AuthorizationClient. -->
-        <activity
-            android:name="com.spotify.sdk.android.auth.LoginActivity"
-            tools:node="remove" />
 
         <!-- FileProvider untuk share lyric-card sebagai PNG ke other apps.
              Authority pakai BuildConfig.APPLICATION_ID supaya unik per build. -->
@@ -105,8 +74,8 @@
         </provider>
 
         <!-- Foreground lyrics notification service. Type "specialUse" supaya
-             system tidak claim sebagai media player + tidak hijack Spotify's
-             Dynamic Island / lock screen media indicator. -->
+             system tidak claim sebagai media player + tidak membajak indikator
+             media milik player di lock screen. -->
         <service
             android:name=".service.SpotivibeNotificationService"
             android:exported="false"

@@ -1,15 +1,13 @@
 name: Release
 
 # Dipicu tag `v<versi>`, mis. `v0.6.0`. APK ditandatangani dengan keystore yang
-# SAMA dengan build lokal, jadi bisa dipasang menimpa versi yang sudah ada dan
-# SHA-1-nya tetap yang terdaftar di Spotify Dashboard.
+# SAMA dengan build lokal, jadi bisa dipasang menimpa versi yang sudah ada.
 #
 # Secret yang wajib ada (pasang lewat scripts/setup-ci-secrets.ps1):
 #   KEYSTORE_BASE64     release.jks dalam base64
 #   KEYSTORE_PASSWORD   storePassword
 #   KEY_ALIAS           keyAlias
 #   KEY_PASSWORD        keyPassword
-#   SPOTIFY_CLIENT_ID   spotify.clientId dari local.properties
 on:
   push:
     tags: ['v*']
@@ -62,21 +60,16 @@ jobs:
 
       # Secret ditulis ke file, tidak pernah di-echo. `set +x` supaya baris
       # perintahnya sendiri tidak muncul di log.
-      - name: Siapkan keystore dan client ID
+      - name: Siapkan keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          SPOTIFY_CLIENT_ID: ${{ secrets.SPOTIFY_CLIENT_ID }}
         run: |
           set +x
           if [ -z "$KEYSTORE_BASE64" ]; then
             echo "::error::Secret KEYSTORE_BASE64 kosong. Jalankan scripts/setup-ci-secrets.ps1."
-            exit 1
-          fi
-          if [ -z "$SPOTIFY_CLIENT_ID" ]; then
-            echo "::error::Secret SPOTIFY_CLIENT_ID kosong. Tanpa ini app tidak bisa login Spotify."
             exit 1
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > release.jks
@@ -93,7 +86,6 @@ jobs:
             echo "keyAlias=$KEY_ALIAS"
             echo "keyPassword=$KEY_PASSWORD"
           } > keystore.properties
-          echo "spotify.clientId=$SPOTIFY_CLIENT_ID" > local.properties
 
       # KEDUA varian. Menguji satu saja membuat separuh matriksnya tidak pernah
       # dijalankan, dan yang berbeda di antara keduanya justru romanisasi.

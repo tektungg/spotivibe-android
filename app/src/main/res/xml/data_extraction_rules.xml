@@ -2,9 +2,9 @@
 <!--
    Aturan backup + device transfer untuk API 31+.
 
-   Sama alasannya dengan backup_rules.xml: DataStore memegang refresh token
-   Spotify dalam plaintext, jadi direktori datastore/ dikecualikan dari
-   cloud-backup maupun device-transfer.
+   Sama alasannya dengan backup_rules.xml: DataStore bisa masih memegang
+   sisa refresh token Spotify dari versi lama sampai pembersihan jalan, jadi
+   direktori datastore/ dikecualikan dari cloud-backup maupun device-transfer.
 -->
 <data-extraction-rules>
     <cloud-backup>

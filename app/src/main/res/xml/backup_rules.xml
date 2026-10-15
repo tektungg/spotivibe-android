@@ -2,9 +2,11 @@
 <!--
    Aturan backup untuk device di bawah API 31.
 
-   DataStore Preferences kita (spotivibe_prefs) menyimpan access + refresh
-   token Spotify dalam bentuk plaintext. Refresh token itu kredensial jangka
-   panjang, jadi TIDAK boleh ikut terangkut ke cloud backup Google.
+   DataStore Preferences kita (spotivibe_prefs) dulu menyimpan access +
+   refresh token Spotify dalam plaintext. Versi sekarang tidak lagi login dan
+   menghapus sisa token itu saat start, tapi pengecualian ini tetap dipasang:
+   backup bisa diambil sebelum pembersihan sempat jalan di perangkat yang
+   baru di-upgrade.
 
    Preference lain (tema, ukuran font, posisi overlay) memang tidak dibackup
    sekalian: nilainya sepele dan mengecualikan seluruh file jauh lebih aman

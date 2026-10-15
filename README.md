@@ -50,7 +50,6 @@ Android native companion untuk player musik apa pun — Spotify, YouTube Music, 
 - **Notification dengan synced lyrics** — baris prev/current/next karaoke-style di pull-down + lock screen
 - **Floating overlay** full-width, draggable Y, di atas app lain — mini bar (collapsed) ↔ expanded card (tap-to-expand)
 - **Dynamic accent color** — Palette API extract dari album cover (clamped HSV agar readable di dark theme)
-- **Auth OAuth 2.0 Authorization Code + PKCE** — connect sekali, sesi hidup terus lewat refresh token. Tidak ada client secret di APK
 - **Disk-based lyrics cache** — 30 hari positive / 1 hari negative TTL, LRU memory cache bounded 50 entries
 - **Offline mode** — lirik yang pernah dimuat tetap tampil tanpa internet berapa
   pun umurnya, nol panggilan jaringan saat offline, eyebrow header "OFFLINE",
@@ -61,9 +60,8 @@ Android native companion untuk player musik apa pun — Spotify, YouTube Music, 
 ## Stack
 
 - Kotlin + Jetpack Compose (Material 3)
-- Spotify App Remote SDK (distribusi AAR di `app/libs/`)
-- OAuth Authorization Code + PKCE via Custom Tabs (`androidx.browser`)
-- LRCLIB API via Retrofit + Moshi
+- MediaSession Android (`MediaSessionManager` + NotificationListenerService kosong) untuk player apa pun
+- LRCLIB via Retrofit + Moshi; AMLL, lrc.red, LRCMux via OkHttp
 - Room (gak dipakai — JSON file cache lebih simple)
 - DataStore Preferences untuk persist toggle
 - Coroutines + StateFlow reactive
@@ -75,8 +73,8 @@ Android native companion untuk player musik apa pun — Spotify, YouTube Music, 
 ### Prerequisites
 
 - Android Studio (Hedgehog atau lebih baru)
-- Android device fisik (overlay + Spotify integration butuh real device, bukan emulator)
-- Spotify app ter-install di device, login dengan akun **Premium** (Premium required untuk seek/play/pause via App Remote)
+- Android device fisik (overlay + MediaSession player sungguhan butuh real device, bukan emulator)
+- Player musik apa pun di device (Spotify, YouTube Music, ...). Tidak perlu akun atau Premium
 
 ### 1. Clone
 
@@ -85,40 +83,24 @@ git clone git@github-personal:tektungg/spotivibe.git
 cd spotivibe
 ```
 
-### 2. Spotify Developer setup
+### 2. Build & run
 
-1. Buka https://developer.spotify.com/dashboard
-2. **Create app** dengan:
-   - **Redirect URI**: `spotivibe://callback`
-   - **APIs used**: centang **Web API** + **Android**
-3. Catat **Client ID**
+Di Android Studio → Sync Gradle → klik ▶ Run (pilih device fisik). Tidak ada
+client ID, secret, atau dashboard developer yang perlu disiapkan.
 
-### 3. Generate debug keystore SHA-1, register di Spotify Dashboard
+### 3. Beri izin notification access
 
-```powershell
-# Cari keytool di JBR Android Studio
-$keytool = "C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe"
+Saat pertama dibuka, Spotivibe meminta **notification access**: Android hanya
+mengizinkan app membaca lagu yang diputar app lain lewat izin itu. Tekan
+**ALLOW NOTIFICATION ACCESS**, aktifkan Spotivibe, lalu kembali; layar izin
+hilang sendiri.
 
-# Print debug keystore SHA-1
-& $keytool -list -v -keystore "$env:USERPROFILE\.android\debug.keystore" -alias androiddebugkey -storepass android -keypass android
+Sebagian head unit mobil menyembunyikan layar Settings itu. Izinnya tetap bisa
+diberikan lewat adb (Android 8.1+):
+
+```bash
+adb shell cmd notification allow_listener com.tglabs.spotivibe/com.tglabs.spotivibe.service.SessionAccessService
 ```
-
-Copy SHA-1 (format `XX:XX:XX:...`), tambahkan ke Spotify Dashboard → app → Settings → Android Packages:
-- Package name: `com.tglabs.spotivibe`
-- SHA-1: yang barusan di-copy
-
-### 4. Configure local.properties
-
-Buat / edit `local.properties` di project root:
-
-```properties
-sdk.dir=C\:\\Users\\<USER>\\AppData\\Local\\Android\\Sdk
-spotify.clientId=YOUR_SPOTIFY_CLIENT_ID
-```
-
-### 5. Build & run
-
-Di Android Studio → Sync Gradle → klik ▶ Run (pilih device fisik).
 
 ## Build release APK
 
@@ -194,14 +176,15 @@ bukan detik, dan gate yang lambat pelan-pelan berhenti dibaca orang.
 powershell -ExecutionPolicy Bypass -File scripts\setup-ci-secrets.ps1
 ```
 
-Script membaca `keystore.properties`, `local.properties`, dan `release.jks` lalu
-mengirim lima secret lewat `gh`. Nilainya tidak pernah ditampilkan dan tidak perlu
+Script membaca `keystore.properties` dan `release.jks` lalu mengirim empat secret
+lewat `gh`. Nilainya tidak pernah ditampilkan dan tidak perlu
 diketik ulang, jadi password tidak singgah di clipboard maupun riwayat shell.
 Repo tujuan diambil dari remote git, bukan diketik. Tambahkan `-WhatIf` untuk
 melihat apa yang akan dikirim tanpa mengirim apa pun.
 
 Secret yang dipasang: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`,
-`KEY_PASSWORD`, `SPOTIFY_CLIENT_ID`.
+`KEY_PASSWORD`. Secret `SPOTIFY_CLIENT_ID` dari versi lama tidak dipakai lagi
+dan boleh dihapus: `gh secret delete SPOTIFY_CLIENT_ID`.
 
 ### Setiap rilis
 
@@ -210,8 +193,7 @@ git tag v0.6.0 && git push origin v0.6.0
 ```
 
 CI membangun APK dengan keystore yang **sama** dengan build lokal, jadi bisa
-dipasang menimpa versi sebelumnya dan SHA-1-nya tetap yang terdaftar di Spotify
-Dashboard.
+dipasang menimpa versi sebelumnya.
 
 Tiga hal yang ditolak workflow di depan, karena ketiganya gagal secara diam-diam
 kalau dibiarkan:
@@ -225,8 +207,6 @@ kalau dibiarkan:
 
 Menjalankan `release.yml` lewat "Run workflow" tanpa tag tetap menghasilkan APK
 sebagai artifact, hanya tidak membuat Release.
-
-> Release keystore SHA-1 beda dari debug — daftar juga di Spotify Dashboard kalau mau App Remote jalan di release build.
 
 ## Architecture
 
@@ -262,54 +242,24 @@ sebagai artifact, hanya tidak membuat Release.
 - **Antrean** dari `MediaController.queue` (kalau player membaginya) untuk
   preload lirik 3 lagu berikutnya.
 
-### Auth
+### Tanpa login
 
-Login memakai **Authorization Code + PKCE** lewat Custom Tab ke
-`accounts.spotify.com`, bukan `AuthorizationClient` dari Auth SDK.
+Sampai 0.8.x Spotivibe login lewat OAuth PKCE dan menyambung ke Spotify App
+Remote. Semua itu sudah dihapus: tidak ada token, client ID, Web API, maupun
+supervisor reconnect. Akibat yang perlu diketahui:
 
-Alasannya struktural, bukan preferensi. Auth SDK cuma bisa memberi implicit
-grant (`Type.TOKEN`) di jalur native, dan implicit grant tidak punya refresh
-token, jadi sesi mati setelah satu jam. Jalur `Type.CODE` +
-`setCustomParam("code_challenge", …)` juga tidak jalan: `toUri()` (jalur
-browser) memang meneruskan custom param, tapi
-`SpotifyNativeAuthUtil.startAuthActivity()` cuma mengirim
-`VERSION, CLIENT_ID, REDIRECT_URI, RESPONSE_TYPE, SCOPES, STATE` ke intent dan
-membuang sisanya. Karena app ini mensyaratkan Spotify terpasang, jalur native
-selalu menang dan `code_challenge` tidak pernah sampai.
-
-Alurnya:
-
-```
-ConnectScreen tap
-  └─ authRepository.beginAuthorization()   generate verifier + challenge + state, persist
-       └─ Custom Tab → accounts.spotify.com/authorize?...&code_challenge=…
-            └─ redirect spotivibe://callback?code=…&state=…
-                 └─ MainActivity.onNewIntent (launchMode=singleTask)
-                      └─ POST /api/token (code + code_verifier, tanpa client secret)
-                           └─ access + refresh token → DataStore
-                                └─ SpotifyAppRemote.connect(showAuthView=false)
-```
-
-**Kuirk yang sudah terkonfirmasi di device:** Spotify memantulkan redirect
-dengan garis miring di akhir walaupun yang didaftarkan tanpa itu, dan
-menambahkan parameter `ubi` yang tidak diminta:
-
-```
-didaftarkan  spotivibe://callback
-dipantulkan  spotivibe://callback/?code=…&state=…&ubi=…
-```
-
-Karena itu perbandingan base URI dinormalkan lebih dulu, bukan `String.equals`
-persis. Parameter asing diabaikan.
-
-Semua pembacaan token lewat `authRepository.validAccessToken()`, yang me-refresh
-sendiri 60 detik sebelum expiry di bawah satu mutex, jadi pemanggil bersamaan
-(UI, notification service, overlay, preload antrean) hanya memicu satu request
-refresh. Kegagalan sementara (jaringan) mempertahankan kredensial; hanya
-penolakan permanen (`invalid_grant` dan kawan-kawan) yang memaksa login ulang.
-
-Token disimpan di DataStore dan direktori `datastore/` dikecualikan dari cloud
-backup maupun device transfer.
+- **Kontrol tidak lagi butuh Premium.** Tombol mengikuti `PlaybackState.actions`
+  milik player. Spotify Free mengiklankan seek dan skip dengan batasnya sendiri;
+  yang ditolak Spotify, ditolak di Spotify.
+- **Tidak ada koneksi yang bisa putus.** MediaSession dibaca langsung dari
+  sistem, jadi mode "Reconnecting to Spotify…" dan backoff reconnect hilang.
+- **Sisa kredensial dihapus.** `PreferencesRepository.purgeLegacySpotifyCredentials`
+  membuang token, PKCE, dan status Premium lama di setiap start (menulis hanya
+  kalau ada). Daftar key-nya di `domain/LegacyCredentials.kt`, diuji.
+- **Data lama tetap terpakai.** Lagu Spotify masih ber-ID `spotify:track:<id>`,
+  jadi cache lirik, override, dan offset per lagu tidak hilang saat upgrade.
+- **Notification service** berhenti hanya kalau izin notification access
+  dicabut, bukan saat player berhenti.
 
 ### Parsing LRC dan identitas baris
 
@@ -436,38 +386,6 @@ Lyric effects juga mengendalikan blur menurut jarak (`lineBlurDp` di
 offscreen + `BlendMode.DstIn`). Blur sengaja dilepas selama daftar di-drag
 (`collectIsDraggedAsState`): saat itu user sedang membaca baris lain.
 
-### Siklus koneksi
-
-`SpotifySessionSupervisor` hidup di application scope dan menjaga koneksi
-selama masih ada sesi. Activity tidak lagi memilikinya.
-
-Dulu `MainActivity` yang memanggil `tryAutoConnect` DAN yang menghidup-matikan
-foreground service berdasarkan `connectionState`. Dua akibatnya buruk. Spotify
-di-kill sekali berarti state jatuh ke Disconnected, service `stopSelf()`,
-notification hilang, dan tidak ada apapun yang menyambung lagi sampai user
-membuka app ini secara manual. Dan service yang dibangkitkan sistem lewat
-START_STICKY hidup tanpa ada apapun yang menyambungkannya ke Spotify, jadi cuma
-jadi notification kosong.
-
-Yang masih dipegang Activity cuma satu, dan memang wajib: menyalakan foreground
-service, karena Android 12+ melarang menyalakannya dari background.
-
-Backoff reconnect: percobaan pertama langsung, lalu 1, 2, 4, 8 detik dan
-seterusnya sampai batas 5 menit. Batasnya sengaja menit, bukan detik, karena
-kegagalan beruntun biasanya berarti Spotify memang tidak jalan. Tidak ada
-keadaan menyerah: selama sesi masih ada, companion terus mencoba, cuma makin
-jarang. Satu-satunya cara berhenti adalah sesinya hilang lewat logout atau
-otorisasi dicabut Spotify.
-
-Putusnya link dideteksi lewat `Subscription.LifecycleCallback.onStop` dan error
-callback pada subscription player state. Sebelumnya keduanya cuma di-log, jadi
-koneksi bisa jadi zombie: state tetap Connected padahal tidak ada event yang
-masuk lagi selamanya.
-
-Saat sedang menunggu percobaan berikutnya, notification menampilkan
-"Menyambungkan ulang ke Spotify…" supaya user tidak menatap lirik basi tanpa
-tahu kenapa berhenti bergerak.
-
 ### Cache lirik
 
 Tiga lapis: memory LRU 50, file JSON di `filesDir/lyrics-cache`, lalu jaringan.
@@ -519,7 +437,7 @@ setiap item `/search`) diberi peringkat oleh `pickBestCandidate`
 | Urutan | Kunci |
 |---|---|
 | 1 | Synced dengan selisih durasi ≤ 5 s, lalu plain ≤ 5 s, lalu synced di luar toleransi, lalu plain di luar toleransi |
-| 2 | Selisih durasi terhadap lagu di Spotify, terkecil dulu |
+| 2 | Selisih durasi terhadap lagu yang sedang diputar, terkecil dulu |
 | 3 | `/get` sebelum `/search` (ikut dicocokkan dengan album) |
 
 Dulu konten `/get` selalu menang walau cuma plain, dan dari `/search` diambil
@@ -552,12 +470,10 @@ Keputusan lengkap dan alternatif yang ditolak ada di
 
 | Data | Sumber | Saat offline |
 |---|---|---|
-| Info lagu, posisi, kontrol, cover | App Remote (IPC ke app Spotify) | Jalan normal |
+| Info lagu, posisi, kontrol, cover | MediaSession player (lokal) | Jalan normal |
 | Romanisasi | Lokal | Jalan normal |
 | Lirik | Disk cache, lalu LRCLIB | Cache segar atau basi, tanpa panggilan jaringan |
-| Status Premium | Web API `/me` | Nilai terakhir dari DataStore, dicek ulang sekali per sesi saat online |
-| Preload antrean | Web API `/me/player/queue` | Dilewati |
-| Token | `accounts.spotify.com` | Kredensial dipertahankan, refresh dicoba lagi nanti |
+| Preload antrean | `MediaController.queue` + sumber lirik | Dilewati |
 
 `NetworkMonitor` mengikuti default network lewat
 `registerDefaultNetworkCallback`. Online berarti punya `NET_CAPABILITY_INTERNET`
@@ -566,12 +482,10 @@ disyaratkan: endpoint validasi Google diblokir di sebagian jaringan, dan salah
 mengira offline membuat app berhenti mengambil lirik sama sekali.
 
 Saat jaringan kembali, `PlaybackController` mengambil ulang lirik lagu aktif
-kalau tadi `Offline` atau `Unavailable`, lalu mengecek `/me` kalau sesi ini
-belum memverifikasinya.
+kalau tadi `Offline` atau `Unavailable`.
 
-Yang tetap butuh internet: login pertama, dan lirik lagu yang belum pernah
-diputar atau masuk antrean saat online. Musik offline sendiri tetap urusan fitur
-download di app Spotify.
+Yang tetap butuh internet: lirik lagu yang belum pernah diputar atau masuk
+antrean saat online. Musik offline sendiri tetap urusan player-nya.
 
 Trace di logcat: `adb logcat -s NetworkMonitor LyricsRepository PlaybackController`
 menampilkan `online=<bool>`, `stale disk hit`, dan `offline tanpa cadangan`.
@@ -650,7 +564,7 @@ terlalu cepat begitu kembali ke speaker. Satu file LRC yang telat juga tidak
 boleh memaksa lagu lain ikut digeser.
 
 Perangkat aktif dibaca `AudioOutputMonitor` lewat `AudioDeviceCallback`.
-Android tidak memberi tahu perangkat mana yang dipakai Spotify, jadi dipakai
+Android tidak memberi tahu perangkat mana yang dipakai player, jadi dipakai
 urutan routing media bawaan sistem: Bluetooth (A2DP/BLE) > headset kabel/USB >
 output eksternal (bus audio head unit, HDMI, line) > speaker internal. SCO
 (jalur panggilan) diabaikan. Kuncinya SHA-256 dari tipe + nama produk, bukan
@@ -715,16 +629,15 @@ ada API yang bisa melihatnya.
 ```
 SpotivibeApp (Application)
 ├── applicationScope (SupervisorJob + Main.immediate)
-├── preferencesRepository (DataStore, sekaligus AuthStorage)
+├── preferencesRepository (DataStore; hapus kredensial Spotify lama saat start)
 ├── networkMonitor ─ default network callback → isOnline
-├── authRepository ─ PKCE + token refresh (single-flight)
-├── spotifyConnection ─ AppRemote IPC
-├── lyricsRepository ─ LRCLIB + 3-layer cache (mem LRU 50, disk JSON, network), stale-if-offline
+├── audioOutputMonitor ─ perangkat output aktif → offset per perangkat
+├── playbackSource ─ MediaSession player apa pun (butuh notification access)
+├── lyricsRepository ─ 4 sumber berlomba + 3-layer cache (mem LRU 50, disk JSON, network), stale-if-offline
 ├── romanizationService ─ JA/KR/ZH lazy-init
 └── playbackController ─ orchestrator
-        ├── observe nowPlaying (Spotify event stream)
-        ├── fetch lyrics on track change, ulang saat online kembali
-        ├── status Premium tersimpan, /me sekali per sesi saat online
+        ├── observe nowPlaying (MediaSession player yang diikuti)
+        ├── fetch lyrics on track change, ulang saat online kembali / durasi datang
         ├── lyricsSyncEngine → currentLineIndex (tick adaptif, offset-aware)
         ├── compute romaji reactive (off main)
         └── compute accent (Palette, off main)
@@ -743,6 +656,8 @@ ViewModel + UI      NotificationService    OverlayManager
 - `POST_NOTIFICATIONS` — Android 13+ runtime
 - `SYSTEM_ALERT_WINDOW` — floating overlay (granted via Settings)
 - `VIBRATE` — haptic tick saat baris lirik berganti
+- Notification access (`BIND_NOTIFICATION_LISTENER_SERVICE` pada `SessionAccessService`) —
+  satu-satunya cara membaca MediaSession app lain. Notifikasinya sendiri tidak dibaca
 
 ## Tested on
 
@@ -751,14 +666,13 @@ ViewModel + UI      NotificationService    OverlayManager
 
 ## Compatibility caveats
 
-- **Spotify Premium required** untuk play/pause/seek/next/prev via App Remote API.
-  Kontrol ditampilkan optimistis selama tipe akun belum terkonfirmasi, dan baru
-  disembunyikan setelah ada bukti nyata: `/me` bilang non-premium, atau App
-  Remote menolak perintah. Panggilan Web API yang gagal TIDAK menyembunyikan
-  kontrol, karena kontrolnya sendiri jalan lewat App Remote
+- **Kontrol mengikuti player.** Tombol yang tidak diiklankan player lewat
+  `PlaybackState.actions` tampil redup; Spotify Free tetap menerapkan batas
+  skip-nya sendiri
+- **Head unit tanpa layar notification access**: beri izin lewat adb (lihat Setup)
 - **Min SDK 26** (Android 8) — covers ~95% device global
 - **HyperOS Dynamic Island** tidak di-hijack karena pakai `foregroundServiceType=specialUse` (bukan `mediaPlayback`)
-- **MIUI Autostart + Battery No Restrictions** untuk Spotivibe + Spotify wajib dinyalakan biar service stabil
+- **MIUI Autostart + Battery No Restrictions** untuk Spotivibe dan player-nya wajib dinyalakan biar service stabil
 
 ## License
 
@@ -766,7 +680,6 @@ MIT (rencananya) — TODO file `LICENSE`.
 
 ## Credits
 
-- Spotify SDK © Spotify AB
 - LRCLIB.net — community lyrics database
 - kuromoji © Atilika Inc.
 - pinyin4j © Li Min

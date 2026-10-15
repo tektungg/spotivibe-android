@@ -129,39 +129,6 @@ class PlaybackDecisionsTest {
         assertFalse(shouldRematchForDuration(fetchedWithMs = 0L, durationNowMs = 0L))
     }
 
-    // ── Pengecekan product ───────────────────────────────────────
-
-    /**
-     * Jawabannya tidak berubah selama sesi. Mengulanginya tiap ganti lagu
-     * memboroskan panggilan dan mendekatkan ke batas rate limit.
-     */
-    @Test
-    fun `product hanya dicek sekali per sesi`() {
-        assertTrue(shouldCheckProduct(verifiedThisSession = false, online = true))
-        assertFalse(shouldCheckProduct(verifiedThisSession = true, online = true))
-    }
-
-    /**
-     * REGRESI: dulu syaratnya "product masih null". Sejak product disimpan ke
-     * disk, nilai hasil restore bukan null tapi juga belum tentu segar. Kalau
-     * syarat lama dipakai, user yang baru upgrade ke Premium tidak pernah dicek
-     * ulang dan terus melihat banner "Premium required".
-     */
-    @Test
-    fun `nilai hasil restore tetap dicek ulang sekali saat online`() {
-        assertTrue(shouldCheckProduct(verifiedThisSession = false, online = true))
-    }
-
-    /**
-     * Offline: panggilannya pasti gagal, dan menunggunya berarti menahan
-     * timeout koneksi setiap ganti lagu.
-     */
-    @Test
-    fun `product tidak dicek saat offline`() {
-        assertFalse(shouldCheckProduct(verifiedThisSession = false, online = false))
-        assertFalse(shouldCheckProduct(verifiedThisSession = true, online = false))
-    }
-
     // ── Accent dari album art ────────────────────────────────────
 
     /**

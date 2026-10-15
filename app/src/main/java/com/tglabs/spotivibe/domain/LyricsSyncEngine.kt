@@ -5,7 +5,7 @@ package com.tglabs.spotivibe.domain
  * daftar baris, lalu menjawab satu pertanyaan: baris mana yang aktif sekarang.
  *
  * Diekstrak keluar dari `PlaybackController` supaya perilakunya bisa diuji.
- * Controller-nya sendiri terikat ke Spotify SDK, DataStore, dan Context, jadi
+ * Controller-nya sendiri terikat ke MediaSession, DataStore, dan Context, jadi
  * kalau logika ini tinggal di sana, yang bisa diuji cuma fungsi-fungsi murni
  * lepasannya, bukan hal yang sebenarnya penting: bahwa mengubah offset benar-
  * benar menggeser baris yang dipakai notification dan overlay.
@@ -28,7 +28,7 @@ class LyricsSyncEngine(
     val hasLines: Boolean get() = lines.isNotEmpty()
 
     /**
-     * Snapshot dari Spotify. [capturedAtMs] adalah wall clock saat snapshot
+     * Snapshot dari player. [capturedAtMs] adalah wall clock saat snapshot
      * diambil di callback, bukan saat fungsi ini dipanggil, supaya
      * extrapolasi tetap akurat walau collector telat sedikit.
      */

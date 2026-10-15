@@ -93,9 +93,9 @@ fun NPHeader(
         // ── Title block ──
         Column(modifier = Modifier.weight(1f)) {
             MonoEyebrow(
-                // Album sebagai eyebrow. Release year tidak tersedia dari
-                // Spotify App Remote PlayerState (cuma name/artist/album/uri/
-                // duration), jadi tidak ditampilkan daripada hardcode salah.
+                // Album sebagai eyebrow. Release year tidak dikirim semua
+                // player lewat MediaSession, jadi tidak ditampilkan daripada
+                // tampil di sebagian player saja.
                 // ink2 (bukan ink3) + maxLines 1 supaya tetap legible di atas
                 // album art terang + tidak wrap jadi 2 baris yang berantakan.
                 text = headerEyebrowText(album, offline),

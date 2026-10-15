@@ -9,7 +9,7 @@ package com.tglabs.spotivibe.domain
  */
 
 /**
- * Jaringan ini layak dipakai untuk memanggil LRCLIB dan Spotify Web API?
+ * Jaringan ini layak dipakai untuk memanggil sumber lirik?
  *
  * Sengaja TIDAK mensyaratkan `NET_CAPABILITY_VALIDATED`. Validasi Android
  * bergantung pada endpoint cek milik Google, yang diblokir di sebagian jaringan

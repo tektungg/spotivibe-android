@@ -4,12 +4,6 @@
 # Keep source file + line numbers untuk crash stacktrace readable
 -keepattributes SourceFile,LineNumberTable
 
-# ── Spotify SDK ──────────────────────────────────────────────────
-# Spotify pakai reflection internal di App Remote + Auth. Keep all classes.
--keep class com.spotify.** { *; }
--keep interface com.spotify.** { *; }
--dontwarn com.spotify.**
-
 # ── Kuromoji ─────────────────────────────────────────────────────
 # Kuromoji pakai reflection untuk load dict dari embedded resources.
 -keep class com.atilika.kuromoji.** { *; }

@@ -269,7 +269,7 @@ class LyricsRepository(
                 }
                 val hasil = toSearchResults(
                     dtos = resp.body().orEmpty().map { it.toSearchEntry() },
-                    // trackId Spotify yang sedang diputar; hasil pencarian akan
+                    // trackId lagu yang sedang diputar; hasil pencarian akan
                     // dipasang ke track ITU, bukan ke track milik entry LRCLIB.
                     trackId = "",
                 )

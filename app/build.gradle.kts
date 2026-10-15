@@ -6,13 +6,6 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// Read Spotify Client ID from local.properties (gitignored)
-val localProps = Properties().apply {
-    val f = rootProject.file("local.properties")
-    if (f.exists()) load(FileInputStream(f))
-}
-val spotifyClientId: String = localProps.getProperty("spotify.clientId", "")
-
 // Read release signing config dari keystore.properties (gitignored).
 // Kalau file tidak ada (mis. CI atau fresh clone), release build skip sign
 // dan output unsigned APK — bisa di-sign manual dengan apksigner.
@@ -38,13 +31,6 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Spotify configuration exposed via BuildConfig
-        buildConfigField("String", "SPOTIFY_CLIENT_ID", "\"$spotifyClientId\"")
-        buildConfigField("String", "SPOTIFY_REDIRECT_URI", "\"spotivibe://callback\"")
-
-        // Manifest placeholder for Spotify auth intent filter
-        manifestPlaceholders["redirectSchemeName"] = "spotivibe"
-        manifestPlaceholders["redirectHostName"] = "callback"
     }
 
     /**
@@ -59,9 +45,8 @@ android {
      * Releases, bukan Play Store, dan modul on-demand butuh Play.
      *
      * applicationId keduanya SAMA, jadi lite menimpa full dan sebaliknya. Itu
-     * disengaja: dua app dengan nama sama yang terpasang berbarengan akan
-     * berebut redirect auth `spotivibe://callback`, dan itu persis bug yang
-     * pernah membuat login tidak bisa selesai.
+     * disengaja: dua app dengan nama sama yang terpasang berbarengan
+     * membingungkan, dan izin notification access dipegang per paket.
      */
     flavorDimensions += "romanization"
     productFlavors {
@@ -93,7 +78,7 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
             // R8 minify + resource shrinking — strip unused code, obfuscate names.
-            // Keep rules untuk Spotify SDK, kuromoji, pinyin4j, Moshi, Retrofit
+            // Keep rules untuk kuromoji, pinyin4j, Moshi, Retrofit
             // sudah di proguard-rules.pro.
             isMinifyEnabled = true
             isShrinkResources = true
@@ -113,8 +98,8 @@ android {
     }
 
     // android.util.Log punya implementasi stub di JVM yang melempar exception.
-    // Gate test kita murni logika (PKCE, parsing redirect, expiry token,
-    // capability) tapi kelas yang diuji ikut menulis log, jadi stub-nya
+    // Gate test kita murni logika (parsing lirik, pemilihan sumber, sync)
+    // tapi kelas yang diuji ikut menulis log, jadi stub-nya
     // dibikin mengembalikan default alih-alih melempar.
     testOptions {
         unitTests.isReturnDefaultValues = true
@@ -183,14 +168,6 @@ dependencies {
     // MediaStyle notification — lock screen + pull-down dengan synced lyric line
     implementation(libs.androidx.media)
 
-    // Custom Tabs — layar consent OAuth (Authorization Code + PKCE)
-    implementation(libs.androidx.browser)
-
-    // Spotify Android SDK (distributed via AAR files in libs/, not Maven Central)
-    implementation(files("libs/spotify-app-remote-release-0.8.0.aar"))
-    implementation(files("libs/spotify-auth-release-2.1.0.aar"))
-    // Gson required at runtime by Spotify App Remote SDK
-    implementation("com.google.code.gson:gson:2.10.1")
 
     // Tests
     testImplementation(libs.junit)

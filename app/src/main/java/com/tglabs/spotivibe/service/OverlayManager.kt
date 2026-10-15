@@ -40,7 +40,7 @@ import com.tglabs.spotivibe.ui.overlay.OverlayContent
  *  - Setup lifecycle / viewmodel / savedstate tree owner (wajib supaya Compose
  *    di luar Activity context bisa hidup)
  *  - Forward drag delta dari Composable ke WindowManager layout params
- *  - Forward play/pause/next/previous ke SpotifyConnection
+ *  - Forward play/pause/next/previous ke PlaybackController
  *
  * Lifecycle:
  *  - [show] dipanggil dari Service / Activity setelah permission granted

@@ -1,7 +1,7 @@
 name: CI
 
 # Test berjalan di setiap push ke main dan setiap PR. Tidak butuh secret apa
-# pun: unit test tidak menyentuh keystore maupun Spotify client ID.
+# pun: unit test tidak menyentuh keystore.
 on:
   push:
     branches: [main]

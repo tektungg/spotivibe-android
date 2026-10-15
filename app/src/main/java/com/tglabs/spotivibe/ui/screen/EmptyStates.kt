@@ -41,10 +41,6 @@ enum class EmptyKind {
     Idle,
     /** LRCLIB lookup returned nothing. */
     NotFound,
-    /** Free Spotify tier — can't control playback. */
-    Premium,
-    /** Rate limit / reconnecting Spotify session. */
-    RateLimit,
 }
 
 @Composable
@@ -141,20 +137,6 @@ private fun stateData(kind: EmptyKind): EmptyStateData = when (kind) {
         body     = "LRCLIB has no lyrics for this track yet. You can request it or contribute the timing.",
         cta      = "",
         code     = "404",
-    )
-    EmptyKind.Premium -> EmptyStateData(
-        eyebrow  = "AUTH · UPGRADE",
-        headline = "Free tier\ncan only watch.",
-        body     = "Spotify Premium is required for playback control. Lyrics still show while a Premium device is playing.",
-        cta      = "GO TO SPOTIFY",
-        code     = "403",
-    )
-    EmptyKind.RateLimit -> EmptyStateData(
-        eyebrow  = "WAIT · REFRESHING",
-        headline = "A short\nintermission.",
-        body     = "Reconnecting ke Spotify session. Cuma sebentar.",
-        cta      = "",
-        code     = "429",
     )
 }
 

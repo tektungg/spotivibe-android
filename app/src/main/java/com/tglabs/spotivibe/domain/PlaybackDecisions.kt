@@ -59,23 +59,6 @@ fun shouldRematchForDuration(fetchedWithMs: Long?, durationNowMs: Long): Boolean
     fetchedWithMs == 0L && durationNowMs > 0L
 
 /**
- * Pengecekan `/me` masih perlu dilakukan.
- *
- * Sekali jawabannya didapat, ia tidak berubah selama sesi. Mengulanginya tiap
- * ganti lagu memboroskan panggilan dan kuota rate limit.
- *
- * Yang ditanyakan adalah "sudah diverifikasi SESI INI", bukan "sudah ada
- * nilainya". Nilai product kini disimpan ke disk supaya cold start offline
- * tidak mulai dari Unknown, jadi adanya nilai tidak lagi berarti nilainya
- * segar: user bisa saja upgrade atau downgrade sejak terakhir dicek.
- *
- * Saat offline tidak dicek sama sekali. Panggilannya pasti gagal, dan
- * menunggunya berarti menahan timeout koneksi tiap ganti lagu.
- */
-fun shouldCheckProduct(verifiedThisSession: Boolean, online: Boolean): Boolean =
-    !verifiedThisSession && online
-
-/**
  * Accent perlu dihitung ulang untuk bitmap ini.
  *
  * Dibandingkan lewat IDENTITAS, bukan isi. Album art yang sama datang sebagai

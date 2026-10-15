@@ -1,10 +1,10 @@
 # Pasang secret GitHub Actions dari berkas lokal yang gitignored.
 #
-# Nilai rahasia dibaca langsung dari keystore.properties, local.properties, dan
-# release.jks lalu dikirim ke GitHub. Tidak ada yang perlu diketik ulang, jadi
+# Nilai rahasia dibaca langsung dari keystore.properties dan release.jks lalu
+# dikirim ke GitHub. Tidak ada yang perlu diketik ulang, jadi
 # password tidak pernah singgah di clipboard, chat, atau riwayat shell.
 #
-# Sekali saja, kecuali keystore atau client ID berganti.
+# Sekali saja, kecuali keystore berganti.
 #
 # Pakai:
 #   powershell -ExecutionPolicy Bypass -File scripts\setup-ci-secrets.ps1
@@ -30,22 +30,16 @@ function Baca-Properties($path) {
     return $h
 }
 
-foreach ($wajib in @('keystore.properties', 'local.properties')) {
+foreach ($wajib in @('keystore.properties')) {
     if (-not (Test-Path (Join-Path $akar $wajib))) { throw "$wajib tidak ada." }
 }
 
 $ks = Baca-Properties (Join-Path $akar 'keystore.properties')
-$lp = Baca-Properties (Join-Path $akar 'local.properties')
 
 # storeFile relatif terhadap root project, sama seperti rootProject.file() di
 # build.gradle.kts.
 $jks = Join-Path $akar $ks['storeFile']
 if (-not (Test-Path $jks)) { throw "Keystore tidak ketemu di $jks" }
-
-$clientId = $lp['spotify.clientId']
-if ([string]::IsNullOrWhiteSpace($clientId)) {
-    throw 'spotify.clientId kosong di local.properties.'
-}
 
 # Repo diambil dari remote git, bukan diketik, supaya secret tidak pernah
 # terkirim ke repo yang salah. Owner diambil dari PATH remote, bukan dari
@@ -74,7 +68,6 @@ $secrets = [ordered]@{
     KEYSTORE_PASSWORD = $ks['storePassword']
     KEY_ALIAS         = $ks['keyAlias']
     KEY_PASSWORD      = $ks['keyPassword']
-    SPOTIFY_CLIENT_ID = $clientId
 }
 
 foreach ($nama in $secrets.Keys) {

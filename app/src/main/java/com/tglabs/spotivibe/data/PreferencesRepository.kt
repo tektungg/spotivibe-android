@@ -7,18 +7,14 @@ import com.tglabs.spotivibe.domain.clampLyricsOffsetMs
 import com.tglabs.spotivibe.domain.clampDeviceOffsetMs
 import com.tglabs.spotivibe.domain.clampSongOffsetMs
 import com.tglabs.spotivibe.domain.sanitizeKeyPart
+import com.tglabs.spotivibe.domain.legacySpotifyCredentialKeys
 import android.content.Context
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.longPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-import com.tglabs.spotivibe.data.auth.AuthStorage
-import com.tglabs.spotivibe.data.auth.PendingAuth
-import com.tglabs.spotivibe.data.auth.SpotifyTokens
 import com.tglabs.spotivibe.domain.LyricsLookupEvent
 import com.tglabs.spotivibe.domain.LyricsOutcome
 import com.tglabs.spotivibe.domain.LyricsSource
@@ -33,27 +29,18 @@ private val Context.dataStore by preferencesDataStore(name = "spotivibe_prefs")
 /**
  * Persist user preferences + overlay position. Survive app restart.
  *
- * Juga jadi implementasi [AuthStorage] untuk kredensial Spotify. File ini
- * di-exclude dari cloud backup lewat `res/xml/backup_rules.xml` +
- * `data_extraction_rules.xml` -- refresh token tidak boleh ikut terangkut ke
- * backup Google.
+ * Dulu juga menyimpan token login Spotify; sejak app membaca MediaSession,
+ * tidak ada lagi kredensial apa pun. Sisa token di perangkat yang di-upgrade
+ * dihapus oleh [purgeLegacySpotifyCredentials]. File ini tetap di-exclude dari
+ * cloud backup lewat `res/xml/backup_rules.xml` + `data_extraction_rules.xml`,
+ * supaya sisa itu tidak sempat ikut terangkut ke backup Google.
  */
-class PreferencesRepository(private val context: Context) : AuthStorage {
+class PreferencesRepository(private val context: Context) {
 
     private val romanizationKey = booleanPreferencesKey("romanization_enabled")
     private val overlayEnabledKey = booleanPreferencesKey("overlay_enabled")
     private val overlayXKey = intPreferencesKey("overlay_x")
     private val overlayYKey = intPreferencesKey("overlay_y")
-    private val spotifyTokenKey = stringPreferencesKey("spotify_access_token")
-    private val spotifyRefreshTokenKey = stringPreferencesKey("spotify_refresh_token")
-    private val spotifyTokenExpiresAtKey = longPreferencesKey("spotify_token_expires_at_ms")
-    private val pkceVerifierKey = stringPreferencesKey("spotify_pkce_verifier")
-    private val pkceStateKey = stringPreferencesKey("spotify_pkce_state")
-
-    // Legacy: flag dari era implicit grant. Dihapus saat clearTokens() supaya
-    // tidak ada dua sumber kebenaran soal "apakah user sudah login".
-    private val legacyAuthorizedKey = booleanPreferencesKey("spotify_authorized")
-
     // Penghitung statistik lirik. Monoton naik sampai di-reset user.
     private val statSyncedKey = intPreferencesKey("stat_lyrics_synced")
     private val statPlainKey = intPreferencesKey("stat_lyrics_plain")
@@ -76,14 +63,6 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
     private val smoothScrollKey = booleanPreferencesKey("smooth_scroll")
     private val hapticEnabledKey = booleanPreferencesKey("haptic_enabled")
     private val lyricEffectsKey = booleanPreferencesKey("lyric_effects")
-
-    /**
-     * Field `product` terakhir dari Spotify Web API `/me` ("premium", "free").
-     * Disimpan supaya cold start offline tidak mulai dari Unknown. Ikut dihapus
-     * bersama token di [clearTokens], karena nilai ini milik AKUN, dan login
-     * berikutnya bisa saja akun lain.
-     */
-    private val lastKnownProductKey = stringPreferencesKey("last_known_product")
 
     val romanizationEnabled: Flow<Boolean> = context.dataStore.data
         .map { prefs -> prefs[romanizationKey] ?: false }
@@ -159,72 +138,22 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
         }
     }
 
-    // ── AuthStorage ──────────────────────────────────────────────
-    //
-    // Token lama dari era implicit grant tidak punya refresh token. Saat
-    // di-load, refreshToken-nya null, jadi SpotifyAuthRepository.restore()
-    // menganggapnya SignedOut dan user login sekali lewat PKCE. Itu migrasi
-    // yang diinginkan: sesi yang tidak bisa diperbarui memang tidak berguna.
-
-    override suspend fun loadTokens(): SpotifyTokens? {
-        val prefs = context.dataStore.data.first()
-        val access = prefs[spotifyTokenKey]?.takeIf { it.isNotBlank() } ?: return null
-        return SpotifyTokens(
-            accessToken = access,
-            refreshToken = prefs[spotifyRefreshTokenKey]?.takeIf { it.isNotBlank() },
-            expiresAtMs = prefs[spotifyTokenExpiresAtKey] ?: 0L,
-        )
-    }
-
-    override suspend fun saveTokens(tokens: SpotifyTokens) {
-        context.dataStore.edit { prefs ->
-            prefs[spotifyTokenKey] = tokens.accessToken
-            prefs[spotifyTokenExpiresAtKey] = tokens.expiresAtMs
-            val refresh = tokens.refreshToken
-            if (refresh.isNullOrBlank()) {
-                prefs.remove(spotifyRefreshTokenKey)
-            } else {
-                prefs[spotifyRefreshTokenKey] = refresh
-            }
-        }
-    }
-
-    override suspend fun clearTokens() {
-        context.dataStore.edit { prefs ->
-            prefs.remove(spotifyTokenKey)
-            prefs.remove(spotifyRefreshTokenKey)
-            prefs.remove(spotifyTokenExpiresAtKey)
-            prefs.remove(legacyAuthorizedKey)
-            prefs.remove(lastKnownProductKey)
-        }
-    }
-
-    val lastKnownProduct: Flow<String?> = context.dataStore.data
-        .map { prefs -> prefs[lastKnownProductKey] }
-
-    suspend fun setLastKnownProduct(product: String) {
-        context.dataStore.edit { it[lastKnownProductKey] = product }
-    }
-
-    override suspend fun savePendingAuth(pending: PendingAuth) {
-        context.dataStore.edit { prefs ->
-            prefs[pkceVerifierKey] = pending.verifier
-            prefs[pkceStateKey] = pending.state
-        }
-    }
-
-    override suspend fun loadPendingAuth(): PendingAuth? {
-        val prefs = context.dataStore.data.first()
-        val verifier = prefs[pkceVerifierKey]?.takeIf { it.isNotBlank() } ?: return null
-        val state = prefs[pkceStateKey]?.takeIf { it.isNotBlank() } ?: return null
-        return PendingAuth(verifier = verifier, state = state)
-    }
-
-    override suspend fun clearPendingAuth() {
-        context.dataStore.edit { prefs ->
-            prefs.remove(pkceVerifierKey)
-            prefs.remove(pkceStateKey)
-        }
+    /**
+     * Hapus token, PKCE, dan status Premium sisa era login Spotify.
+     *
+     * Refresh token yang tertinggal di disk adalah kredensial hidup ke akun
+     * Spotify user, padahal tidak ada lagi kode yang memakainya. Dipanggil di
+     * setiap start; menulis HANYA kalau ada yang perlu dihapus, jadi setelah
+     * sekali bersih biayanya cuma satu baca.
+     *
+     * @return jumlah key yang dihapus.
+     */
+    suspend fun purgeLegacySpotifyCredentials(): Int {
+        val present = context.dataStore.data.first().asMap().keys
+        val stale = present.filter { it.name in legacySpotifyCredentialKeys(present.map { k -> k.name }) }
+        if (stale.isEmpty()) return 0
+        context.dataStore.edit { prefs -> stale.forEach { prefs.remove(it) } }
+        return stale.size
     }
 
     /** Dark theme default true. User toggle via icon di header. */

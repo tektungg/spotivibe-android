@@ -1,6 +1,7 @@
 package com.tglabs.spotivibe
 
 import android.app.Application
+import android.util.Log
 import com.tglabs.spotivibe.data.AndroidAudioOutputMonitor
 import com.tglabs.spotivibe.data.AndroidMediaSessionSource
 import com.tglabs.spotivibe.data.AndroidNetworkMonitor
@@ -15,17 +16,13 @@ import com.tglabs.spotivibe.data.PlaybackController
 import com.tglabs.spotivibe.data.PlaybackSource
 import com.tglabs.spotivibe.data.PreferencesRepository
 import com.tglabs.spotivibe.data.RomanizationService
-import com.tglabs.spotivibe.data.SpotifyConnection
-import com.tglabs.spotivibe.data.SpotifySessionSupervisor
-import com.tglabs.spotivibe.data.WebApiClient
-import com.tglabs.spotivibe.data.auth.SpotifyAuthApi
-import com.tglabs.spotivibe.data.auth.SpotifyAuthRepository
 import com.tglabs.spotivibe.data.provider.AmllProvider
 import com.tglabs.spotivibe.data.provider.LrcMuxProvider
 import com.tglabs.spotivibe.data.provider.LrcRedProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -46,40 +43,22 @@ class SpotivibeApp : Application() {
 
     val preferencesRepository: PreferencesRepository by lazy { PreferencesRepository(this) }
 
+    override fun onCreate() {
+        super.onCreate()
+        // Sisa token login Spotify dari versi 0.8.x tidak boleh tertinggal.
+        applicationScope.launch(Dispatchers.IO) {
+            runCatching { preferencesRepository.purgeLegacySpotifyCredentials() }
+                .onSuccess { n -> if (n > 0) Log.i(TAG, "Kredensial Spotify lama dihapus: $n key") }
+                .onFailure { Log.w(TAG, "Gagal menghapus kredensial Spotify lama: ${it.message}") }
+        }
+    }
+
     /** Status jaringan untuk mode offline. Satu callback seumur proses. */
     val networkMonitor: NetworkStatusSource by lazy { AndroidNetworkMonitor(this) }
 
     /** Perangkat output aktif, untuk offset sync per perangkat. Satu callback seumur proses. */
     val audioOutputMonitor: AudioOutputSource by lazy { AndroidAudioOutputMonitor(this) }
 
-    /**
-     * Sumber kebenaran tunggal untuk kredensial Spotify. Semua pembacaan token
-     * lewat sini supaya refresh terjadi sekali, bukan per pemanggil.
-     */
-    val authRepository: SpotifyAuthRepository by lazy {
-        SpotifyAuthRepository(
-            clientId = BuildConfig.SPOTIFY_CLIENT_ID,
-            redirectUri = BuildConfig.SPOTIFY_REDIRECT_URI,
-            storage = preferencesRepository,
-            api = SpotifyAuthApi(
-                clientId = BuildConfig.SPOTIFY_CLIENT_ID,
-                redirectUri = BuildConfig.SPOTIFY_REDIRECT_URI,
-            ),
-        )
-    }
-
-    val spotifyConnection: SpotifyConnection by lazy {
-        SpotifyConnection(authRepository, applicationScope)
-    }
-
-    /**
-     * Pemilik siklus hidup koneksi. Hidup di application scope, bukan di
-     * Activity, supaya koneksi yang putus disambung ulang sendiri walaupun
-     * tidak ada layar yang terbuka.
-     */
-    val sessionSupervisor: SpotifySessionSupervisor by lazy {
-        SpotifySessionSupervisor(spotifyConnection, authRepository, applicationScope)
-    }
     /** Lirik pilihan user. Disimpan di filesDir, bukan cacheDir. */
     val lyricsOverrideRepository: LyricsOverrideRepository by lazy {
         LyricsOverrideRepository(FileLyricsOverrideStore(this))
@@ -105,9 +84,6 @@ class SpotivibeApp : Application() {
         )
     }
     val romanizationService: RomanizationService by lazy { RomanizationService() }
-    val webApiClient: WebApiClient by lazy {
-        WebApiClient(tokenProvider = { authRepository.validAccessToken() })
-    }
 
     /**
      * Lagu yang sedang diputar app mana pun, lewat MediaSession sistem. Satu
@@ -127,4 +103,7 @@ class SpotivibeApp : Application() {
         )
     }
 
+    private companion object {
+        const val TAG = "SpotivibeApp"
+    }
 }
