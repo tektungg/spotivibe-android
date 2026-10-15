@@ -11,6 +11,7 @@ import com.tglabs.spotivibe.data.PreferencesRepository
 import com.tglabs.spotivibe.data.SpotifyConnection
 import com.tglabs.spotivibe.data.SpotifyConnection.ConnectionState
 import com.tglabs.spotivibe.domain.LyricsResult
+import com.tglabs.spotivibe.domain.SyncOffsets
 import com.tglabs.spotivibe.domain.UiState
 import com.tglabs.spotivibe.data.supportedScripts
 import com.tglabs.spotivibe.domain.hasRomanizableText
@@ -113,7 +114,7 @@ class SpotivibeViewModel(
             preferencesRepository.overlayEnabled,
             preferencesRepository.darkMode,
             preferencesRepository.lyricsFontSize,
-            preferencesRepository.lyricsOffsetMs,
+            controller.syncOffsets,
             preferencesRepository.lineSpacing,
             preferencesRepository.highContrast,
             preferencesRepository.smoothScroll,
@@ -134,7 +135,7 @@ class SpotivibeViewModel(
         val overlayEnabled = values[9] as Boolean
         val darkMode = values[10] as Boolean
         val fontSize = values[11] as Int
-        val offsetMs = values[12] as Int
+        val syncOffsets = values[12] as SyncOffsets
         val lineSpacing = values[13] as Int
         val highContrast = values[14] as Boolean
         val smoothScroll = values[15] as Boolean
@@ -165,7 +166,7 @@ class SpotivibeViewModel(
                     darkMode = darkMode,
                     lyricsFontSize = fontSize,
                     capability = capability,
-                    lyricsOffsetMs = offsetMs,
+                    syncOffsets = syncOffsets,
                     lineSpacing = lineSpacing,
                     highContrast = highContrast,
                     smoothScroll = smoothScroll,
@@ -264,6 +265,16 @@ class SpotivibeViewModel(
     // ── Lyrics tuning + UX preferences (Improvement set) ──
     fun setLyricsOffsetMs(ms: Int) {
         viewModelScope.launch { preferencesRepository.setLyricsOffsetMs(ms) }
+    }
+
+    /** Koreksi sync khusus lagu yang sedang diputar. */
+    fun setSongOffsetMs(ms: Int) {
+        viewModelScope.launch { controller.setSongOffsetMs(ms) }
+    }
+
+    /** Koreksi sync khusus perangkat output aktif (mobil, earbud, speaker). */
+    fun setDeviceOffsetMs(ms: Int) {
+        viewModelScope.launch { controller.setDeviceOffsetMs(ms) }
     }
 
     fun setLineSpacing(dp: Int) {

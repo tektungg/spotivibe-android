@@ -25,6 +25,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.tglabs.spotivibe.data.auth.SpotifyAuthRepository
 import com.tglabs.spotivibe.service.SpotivibeNotificationService
+import com.tglabs.spotivibe.ui.component.SongSyncDialog
 import com.tglabs.spotivibe.ui.screen.LyricsSearchScreen
 import com.tglabs.spotivibe.ui.screen.MainScreen
 import com.tglabs.spotivibe.ui.screen.SettingsScreen
@@ -119,6 +120,7 @@ class MainActivity : ComponentActivity() {
             SpotivibeTheme(darkTheme = darkMode, accent = accent) {
                 var showSettings by rememberSaveable { mutableStateOf(false) }
                 var showLyricsSearch by rememberSaveable { mutableStateOf(false) }
+                var showSongSync by rememberSaveable { mutableStateOf(false) }
 
                 val playing = state as? com.tglabs.spotivibe.domain.UiState.Playing
 
@@ -156,6 +158,7 @@ class MainActivity : ComponentActivity() {
                             showSettings = false
                         },
                         onSetLyricsOffsetMs = { ms -> viewModel.setLyricsOffsetMs(ms) },
+                        onSetDeviceOffsetMs = { ms -> viewModel.setDeviceOffsetMs(ms) },
                         onSetLineSpacing = { dp -> viewModel.setLineSpacing(dp) },
                         onToggleHighContrast = { viewModel.toggleHighContrast() },
                         onToggleSmoothScroll = { viewModel.toggleSmoothScroll() },
@@ -182,7 +185,16 @@ class MainActivity : ComponentActivity() {
                         hasRememberedOverride = viewModel.hasRememberedOverride
                             .collectAsStateWithLifecycle().value,
                         onForgetOverride = { viewModel.forgetOverride() },
+                        onSyncSong = { showSongSync = true },
                     )
+                    if (showSongSync && playing != null) {
+                        SongSyncDialog(
+                            title = playing.track.title,
+                            songOffsetMs = playing.syncOffsets.songMs,
+                            onChange = { ms -> viewModel.setSongOffsetMs(ms) },
+                            onDismiss = { showSongSync = false },
+                        )
+                    }
                 }
             }
         }

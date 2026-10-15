@@ -45,8 +45,11 @@ sealed interface UiState {
          * kenapa ini bukan boolean lagi.
          */
         val capability: PlaybackCapability = PlaybackCapability.Unknown,
-        // Improvement set: lyrics tuning + UX prefs
-        val lyricsOffsetMs: Int = 0,
+        /**
+         * Ketiga lapis offset sync. [SyncOffsets.totalMs] adalah yang dipakai
+         * untuk progress per kata dan kompensasi seek, sama dengan engine.
+         */
+        val syncOffsets: SyncOffsets = SyncOffsets(),
         val lineSpacing: Int = 7,
         val highContrast: Boolean = false,
         val smoothScroll: Boolean = true,

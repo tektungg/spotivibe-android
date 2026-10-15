@@ -4,7 +4,12 @@ import com.tglabs.spotivibe.domain.bumpFontSize
 import com.tglabs.spotivibe.domain.clampFontSize
 import com.tglabs.spotivibe.domain.clampLineSpacing
 import com.tglabs.spotivibe.domain.clampLyricsOffsetMs
+import com.tglabs.spotivibe.domain.clampDeviceOffsetMs
+import com.tglabs.spotivibe.domain.clampSongOffsetMs
+import com.tglabs.spotivibe.domain.sanitizeKeyPart
 import android.content.Context
+import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -288,6 +293,37 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
 
     suspend fun setLyricsOffsetMs(ms: Int) {
         context.dataStore.edit { it[lyricsOffsetMsKey] = clampLyricsOffsetMs(ms) }
+    }
+
+    // ── Offset per perangkat dan per lagu ────────────────────────
+    //
+    // Key-nya dinamis, satu per perangkat atau lagu, dan HANYA ada selama
+    // nilainya bukan nol. Jumlahnya tumbuh sebanyak yang pernah disetel user,
+    // bukan sebanyak lagu yang pernah diputar, jadi tidak perlu dibatasi.
+
+    private fun deviceOffsetKey(outputKey: String) = intPreferencesKey("device_offset_$outputKey")
+
+    private fun songOffsetKey(trackId: String) =
+        intPreferencesKey("song_offset_${sanitizeKeyPart(trackId)}")
+
+    /** Offset untuk perangkat output dengan kunci [outputKey] (lihat `outputKey`). */
+    fun deviceOffsetMs(outputKey: String): Flow<Int> = context.dataStore.data
+        .map { prefs -> clampDeviceOffsetMs(prefs[deviceOffsetKey(outputKey)]) }
+
+    suspend fun setDeviceOffsetMs(outputKey: String, ms: Int) {
+        context.dataStore.edit { prefs -> prefs.putOrRemove(deviceOffsetKey(outputKey), clampDeviceOffsetMs(ms)) }
+    }
+
+    fun songOffsetMs(trackId: String): Flow<Int> = context.dataStore.data
+        .map { prefs -> clampSongOffsetMs(prefs[songOffsetKey(trackId)]) }
+
+    suspend fun setSongOffsetMs(trackId: String, ms: Int) {
+        context.dataStore.edit { prefs -> prefs.putOrRemove(songOffsetKey(trackId), clampSongOffsetMs(ms)) }
+    }
+
+    /** Nol berarti "tidak ada koreksi", jadi key-nya dibuang, bukan disimpan sebagai 0. */
+    private fun MutablePreferences.putOrRemove(key: Preferences.Key<Int>, value: Int) {
+        if (value == 0) remove(key) else this[key] = value
     }
 
     suspend fun setLineSpacing(dp: Int) {

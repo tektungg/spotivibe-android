@@ -1,7 +1,9 @@
 package com.tglabs.spotivibe
 
 import android.app.Application
+import com.tglabs.spotivibe.data.AndroidAudioOutputMonitor
 import com.tglabs.spotivibe.data.AndroidNetworkMonitor
+import com.tglabs.spotivibe.data.AudioOutputSource
 import com.tglabs.spotivibe.data.FileLyricsOverrideStore
 import com.tglabs.spotivibe.data.LyricsCache
 import com.tglabs.spotivibe.data.LyricsOverrideRepository
@@ -37,6 +39,9 @@ class SpotivibeApp : Application() {
 
     /** Status jaringan untuk mode offline. Satu callback seumur proses. */
     val networkMonitor: NetworkStatusSource by lazy { AndroidNetworkMonitor(this) }
+
+    /** Perangkat output aktif, untuk offset sync per perangkat. Satu callback seumur proses. */
+    val audioOutputMonitor: AudioOutputSource by lazy { AndroidAudioOutputMonitor(this) }
 
     /**
      * Sumber kebenaran tunggal untuk kredensial Spotify. Semua pembacaan token
@@ -93,6 +98,7 @@ class SpotivibeApp : Application() {
             webApiClient = webApiClient,
             scope = applicationScope,
             network = networkMonitor,
+            audioOutput = audioOutputMonitor,
         )
     }
 

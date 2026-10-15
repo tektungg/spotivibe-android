@@ -85,6 +85,7 @@ fun NowPlayingScreen(
     onSearchLyrics: () -> Unit = {},
     hasRememberedOverride: Boolean = false,
     onForgetOverride: () -> Unit = {},
+    onSyncSong: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     // Theme wrapping dipindahkan ke MainActivity — di sini cukup baca SvColors
@@ -111,7 +112,7 @@ fun NowPlayingScreen(
     // per-kata. Baris aktif TIDAK dihitung di sini lagi; datang dari
     // state.currentLineIndex supaya sama persis dengan notification + overlay.
     val rawProgressMs = if (draggingValue >= 0L) draggingValue else displayProgressMs
-    val effectiveProgressMs = lyricsProgressMs(rawProgressMs, state.lyricsOffsetMs)
+    val effectiveProgressMs = lyricsProgressMs(rawProgressMs, state.syncOffsets.totalMs)
 
     // ── Karaoke fullscreen state ──
     var karaokeMode by remember { mutableStateOf(false) }
@@ -150,7 +151,7 @@ fun NowPlayingScreen(
         // mendarat di posisi yang justru membuat baris BERIKUTNYA yang aktif,
         // karena progress lirik = posisi + offset.
         if (isSelecting) toggleSelect(line.id)
-        else onSeek(seekTargetMs(line.timeMs, state.lyricsOffsetMs))
+        else onSeek(seekTargetMs(line.timeMs, state.syncOffsets.totalMs))
     }
     val handleLineLongPress: (com.tglabs.spotivibe.domain.SyncedLine) -> Unit = { line ->
         if (isSelecting) toggleSelect(line.id)
@@ -260,6 +261,7 @@ fun NowPlayingScreen(
                     onSearchLyrics = onSearchLyrics,
                     showForgetOverride = hasRememberedOverride,
                     onForgetOverride = onForgetOverride,
+                    onSyncSong = onSyncSong,
                     offline = !state.isOnline,
                 )
             }

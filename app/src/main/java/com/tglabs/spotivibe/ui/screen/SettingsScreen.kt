@@ -36,6 +36,7 @@ import com.tglabs.spotivibe.domain.PlaybackCapability
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tglabs.spotivibe.BuildConfig
+import com.tglabs.spotivibe.domain.SyncOffsets
 import com.tglabs.spotivibe.domain.UiState
 import com.tglabs.spotivibe.ui.component.HairlineIconButton
 import com.tglabs.spotivibe.ui.component.HairlineRule
@@ -47,12 +48,10 @@ import com.tglabs.spotivibe.domain.FONT_SIZE_STEP
 import com.tglabs.spotivibe.domain.LINE_SPACING_MAX
 import com.tglabs.spotivibe.domain.LINE_SPACING_MIN
 import com.tglabs.spotivibe.domain.LINE_SPACING_STEP
-import com.tglabs.spotivibe.domain.LYRICS_OFFSET_MAX_MS
-import com.tglabs.spotivibe.domain.LYRICS_OFFSET_MIN_MS
-import com.tglabs.spotivibe.domain.LYRICS_OFFSET_STEP_MS
 import com.tglabs.spotivibe.domain.tickCountFor
 import com.tglabs.spotivibe.domain.tickIndexOf
 import com.tglabs.spotivibe.domain.tickValueOf
+import com.tglabs.spotivibe.ui.component.SyncOffsetRows
 import com.tglabs.spotivibe.ui.component.TickSlider
 import com.tglabs.spotivibe.ui.component.Toggle
 import com.tglabs.spotivibe.ui.theme.LocalSvColors
@@ -80,6 +79,7 @@ fun SettingsScreen(
     onSetFontSize: (Int) -> Unit,
     onLogout: () -> Unit,
     onSetLyricsOffsetMs: (Int) -> Unit = {},
+    onSetDeviceOffsetMs: (Int) -> Unit = {},
     onSetLineSpacing: (Int) -> Unit = {},
     onToggleHighContrast: () -> Unit = {},
     onToggleSmoothScroll: () -> Unit = {},
@@ -93,7 +93,7 @@ fun SettingsScreen(
 
     val darkMode = playing?.darkMode ?: true
     val fontSize = playing?.lyricsFontSize ?: 17
-    val lyricsOffsetMs = playing?.lyricsOffsetMs ?: 0
+    val syncOffsets = playing?.syncOffsets ?: SyncOffsets()
     val lineSpacing = playing?.lineSpacing ?: 7
     val highContrast = playing?.highContrast ?: false
     val smoothScroll = playing?.smoothScroll ?: true
@@ -170,29 +170,10 @@ fun SettingsScreen(
 
             // ── 02 LYRICS ──
             SectionHeader(number = "02", title = "Lyrics", hint = "Sync, spacing, feedback")
-            SettingsRow(
-                label = "Sync offset",
-                trail = "${if (lyricsOffsetMs >= 0) "+" else ""}${lyricsOffsetMs} ms",
-                content = {
-                    val garisOffset = tickCountFor(
-                        LYRICS_OFFSET_MIN_MS, LYRICS_OFFSET_MAX_MS, LYRICS_OFFSET_STEP_MS,
-                    )
-                    TickSlider(
-                        index = tickIndexOf(
-                            lyricsOffsetMs, LYRICS_OFFSET_MIN_MS, LYRICS_OFFSET_MAX_MS, garisOffset,
-                        ),
-                        tickCount = garisOffset,
-                        twoSided = true,
-                        onIndexChange = { i ->
-                            onSetLyricsOffsetMs(
-                                tickValueOf(
-                                    i, LYRICS_OFFSET_MIN_MS, LYRICS_OFFSET_MAX_MS, garisOffset,
-                                ),
-                            )
-                        },
-                    )
-                    SliderUnitLabel(text = "−2000 / 0 / +2000")
-                },
+            SyncOffsetRows(
+                offsets = syncOffsets,
+                onSetGlobalMs = onSetLyricsOffsetMs,
+                onSetDeviceMs = onSetDeviceOffsetMs,
             )
             SettingsRow(
                 label = "Line spacing",
@@ -495,7 +476,7 @@ private fun SectionHeader(number: String, title: String, hint: String? = null) {
 }
 
 @Composable
-private fun SettingsRow(
+internal fun SettingsRow(
     label: String,
     trail: String? = null,
     content: @Composable () -> Unit,
@@ -531,7 +512,7 @@ private fun SettingsRow(
 }
 
 @Composable
-private fun SliderUnitLabel(text: String) {
+internal fun SliderUnitLabel(text: String) {
     val sv = LocalSvColors.current
     Text(
         text = text,

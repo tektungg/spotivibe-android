@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.tglabs.spotivibe.ui.component.HeaderMenuActions
 import com.tglabs.spotivibe.ui.component.HeaderOverflowMenu
 import com.tglabs.spotivibe.ui.theme.SpotivibeTheme
 import org.junit.Assert.assertEquals
@@ -30,15 +31,19 @@ class HeaderOverflowMenuUiTest {
     private var cariLirik = 0
     private var bukaSettings = 0
     private var lupakan = 0
+    private var sinkron = 0
 
-    private fun pasang(showForgetOverride: Boolean = false) {
+    private fun pasang(showForgetOverride: Boolean = false, adaLagu: Boolean = true) {
         compose.setContent {
             SpotivibeTheme {
                 HeaderOverflowMenu(
-                    onSearchLyrics = { cariLirik++ },
-                    onOpenSettings = { bukaSettings++ },
-                    showForgetOverride = showForgetOverride,
-                    onForgetOverride = { lupakan++ },
+                    actions = HeaderMenuActions(
+                        onSearchLyrics = { cariLirik++ },
+                        onOpenSettings = { bukaSettings++ },
+                        onSyncSong = if (adaLagu) ({ sinkron++ }) else null,
+                        showForgetOverride = showForgetOverride,
+                        onForgetOverride = { lupakan++ },
+                    ),
                 )
             }
         }
@@ -116,6 +121,22 @@ class HeaderOverflowMenuUiTest {
         buka()
         compose.onNodeWithText("Forget saved lyrics").performClick()
         assertEquals(1, lupakan)
+    }
+
+    @Test
+    fun mengetukSinkronLaguMemanggilCallbackNya() {
+        pasang()
+        buka()
+        compose.onNodeWithText("Sync this song").performClick()
+        assertEquals(1, sinkron)
+    }
+
+    /** Tanpa lagu tidak ada yang bisa disinkronkan, jadi itemnya tidak ditawarkan. */
+    @Test
+    fun sinkronLaguTersembunyiTanpaLagu() {
+        pasang(adaLagu = false)
+        buka()
+        compose.onNodeWithText("Sync this song").assertDoesNotExist()
     }
 
     /** Menu harus menutup sendiri setelah dipilih, bukan menggantung terbuka. */

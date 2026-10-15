@@ -31,6 +31,7 @@ fun MainScreen(
     onSearchLyrics: () -> Unit = {},
     hasRememberedOverride: Boolean = false,
     onForgetOverride: () -> Unit = {},
+    onSyncSong: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val sv = LocalSvColors.current
@@ -71,6 +72,7 @@ fun MainScreen(
                         onSearchLyrics = onSearchLyrics,
                         hasRememberedOverride = hasRememberedOverride,
                         onForgetOverride = onForgetOverride,
+                        onSyncSong = onSyncSong,
                     )
                 } else {
                     NowPlayingScreen(
@@ -88,6 +90,7 @@ fun MainScreen(
                         onSearchLyrics = onSearchLyrics,
                         hasRememberedOverride = hasRememberedOverride,
                         onForgetOverride = onForgetOverride,
+                        onSyncSong = onSyncSong,
                     )
                 }
             }

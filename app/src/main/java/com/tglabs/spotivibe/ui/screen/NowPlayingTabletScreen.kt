@@ -92,6 +92,7 @@ fun NowPlayingTabletScreen(
     onSearchLyrics: () -> Unit = {},
     hasRememberedOverride: Boolean = false,
     onForgetOverride: () -> Unit = {},
+    onSyncSong: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val sv = LocalSvColors.current
@@ -111,7 +112,7 @@ fun NowPlayingTabletScreen(
     // Sama dengan portrait: raw untuk slider, effective untuk highlight
     // per-kata. Baris aktif datang dari state.currentLineIndex.
     val effectiveProgressMs = com.tglabs.spotivibe.domain.lyricsProgressMs(
-        rawProgressMs, state.lyricsOffsetMs,
+        rawProgressMs, state.syncOffsets.totalMs,
     )
 
     // Selection state (sama dengan portrait)
@@ -347,10 +348,13 @@ fun NowPlayingTabletScreen(
                         // pintunya tidak ada sama sekali karena menunya ditulis
                         // langsung di NPHeader yang tidak dipakai di sini.
                         com.tglabs.spotivibe.ui.component.HeaderOverflowMenu(
-                            onSearchLyrics = onSearchLyrics,
-                            onOpenSettings = onOpenSettings,
-                            showForgetOverride = hasRememberedOverride,
-                            onForgetOverride = onForgetOverride,
+                            actions = com.tglabs.spotivibe.ui.component.HeaderMenuActions(
+                                onSearchLyrics = onSearchLyrics,
+                                onOpenSettings = onOpenSettings,
+                                onSyncSong = onSyncSong,
+                                showForgetOverride = hasRememberedOverride,
+                                onForgetOverride = onForgetOverride,
+                            ),
                         )
                     }
                 }
@@ -372,7 +376,7 @@ fun NowPlayingTabletScreen(
                             if (isSelecting) toggleSelect(line.id)
                             else onSeek(
                                 com.tglabs.spotivibe.domain.seekTargetMs(
-                                    line.timeMs, state.lyricsOffsetMs,
+                                    line.timeMs, state.syncOffsets.totalMs,
                                 )
                             )
                         },

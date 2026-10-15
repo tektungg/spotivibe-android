@@ -18,6 +18,8 @@ import com.tglabs.spotivibe.domain.LyricsState
 import com.tglabs.spotivibe.domain.NowPlaying
 import com.tglabs.spotivibe.domain.PlaybackCapability
 import com.tglabs.spotivibe.domain.SyncedLine
+import com.tglabs.spotivibe.domain.SyncOffsets
+import com.tglabs.spotivibe.domain.syncOffsetsFlow
 import com.tglabs.spotivibe.domain.LyricsSyncEngine
 import com.tglabs.spotivibe.domain.resolveCapability
 import com.tglabs.spotivibe.ui.theme.AccentLock
@@ -56,9 +58,19 @@ class PlaybackController(
     private val webApiClient: WebApiClient,
     private val scope: CoroutineScope,
     private val network: NetworkStatusSource = NetworkStatusSource.AlwaysOnline,
+    /** Perangkat output aktif, kunci offset per perangkat. */
+    private val audioOutput: AudioOutputSource = AudioOutputSource.Unknown,
 ) {
     /** Diteruskan ke UI untuk badge "Offline". */
     val isOnline: StateFlow<Boolean> = network.isOnline
+
+    /**
+     * Ketiga lapis offset yang sedang berlaku. [SyncOffsets.totalMs] adalah
+     * nilai yang dipakai engine; UI memakainya untuk progress per kata dan
+     * kompensasi seek, supaya keduanya sepakat dengan baris aktif.
+     */
+    private val _syncOffsets = MutableStateFlow(SyncOffsets())
+    val syncOffsets: StateFlow<SyncOffsets> = _syncOffsets.asStateFlow()
 
     // ── Pass-through dari SpotifyConnection ──────────────────────
     val track: StateFlow<NowPlaying?> = connection.nowPlaying
@@ -237,14 +249,20 @@ class PlaybackController(
             }
         }
 
-        // 2b. Offset sync manual — sumbernya preference, dipakai semua permukaan.
+        // 2b. Offset sync: global + perangkat output + lagu ini, dipakai semua
+        //     permukaan. Dibaca ulang saat perangkat atau lagu berganti.
         scope.launch {
-            preferencesRepository.lyricsOffsetMs
-                .distinctUntilChanged()
-                .collect { offset ->
-                    syncEngine.onOffset(offset)
-                    publishLineIndex()
-                }
+            syncOffsetsFlow(
+                globalMs = preferencesRepository.lyricsOffsetMs,
+                output = audioOutput.current,
+                trackId = connection.nowPlaying.map { it?.id },
+                deviceOffsetMs = preferencesRepository::deviceOffsetMs,
+                songOffsetMs = preferencesRepository::songOffsetMs,
+            ).collect { offsets ->
+                _syncOffsets.value = offsets
+                syncEngine.onOffset(offsets.totalMs)
+                publishLineIndex()
+            }
         }
 
         // 3. Ticker adaptif — tidur tepat sampai batas baris berikutnya.
@@ -333,6 +351,18 @@ class PlaybackController(
             )
             if (shouldApplyFetchedLyrics(t.id, connection.nowPlaying.value?.id)) applyLyrics(fetched)
         }
+    }
+
+    /** Simpan koreksi sync untuk lagu yang sedang diputar. Tanpa lagu, tidak ada efek. */
+    suspend fun setSongOffsetMs(ms: Int) {
+        val trackId = connection.nowPlaying.value?.id?.takeIf { it.isNotBlank() } ?: return
+        preferencesRepository.setSongOffsetMs(trackId, ms)
+    }
+
+    /** Simpan koreksi sync untuk perangkat output aktif. Tanpa perangkat, tidak ada efek. */
+    suspend fun setDeviceOffsetMs(ms: Int) {
+        val key = audioOutput.current.value?.key ?: return
+        preferencesRepository.setDeviceOffsetMs(key, ms)
     }
 
     /**

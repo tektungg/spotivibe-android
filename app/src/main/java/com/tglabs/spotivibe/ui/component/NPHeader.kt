@@ -71,6 +71,7 @@ fun NPHeader(
     /** Hanya true kalau lagu ini punya lirik tersimpan permanen. */
     showForgetOverride: Boolean = false,
     onForgetOverride: () -> Unit = {},
+    onSyncSong: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     showRomajiIcon: Boolean = true,
     romajiEnabled: Boolean = false,
@@ -172,10 +173,13 @@ fun NPHeader(
                 onClick = onEnterKaraoke,
             )
             HeaderOverflowMenu(
-                onSearchLyrics = onSearchLyrics,
-                onOpenSettings = onMoreClick,
-                showForgetOverride = showForgetOverride,
-                onForgetOverride = onForgetOverride,
+                actions = HeaderMenuActions(
+                    onSearchLyrics = onSearchLyrics,
+                    onOpenSettings = onMoreClick,
+                    onSyncSong = onSyncSong,
+                    showForgetOverride = showForgetOverride,
+                    onForgetOverride = onForgetOverride,
+                ),
             )
         }
     }

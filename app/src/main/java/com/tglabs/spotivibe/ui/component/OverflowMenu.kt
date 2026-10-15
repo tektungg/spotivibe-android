@@ -9,10 +9,27 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.tglabs.spotivibe.ui.theme.LocalSvColors
 import com.tglabs.spotivibe.ui.theme.SvIcons
 import com.tglabs.spotivibe.ui.theme.SvType
+
+/**
+ * Isi menu kebab. Dibungkus satu objek supaya portrait dan landscape menyusun
+ * menu yang sama dari satu tempat, dan item baru tidak perlu menambah parameter
+ * di setiap lapis pemanggil.
+ */
+data class HeaderMenuActions(
+    val onSearchLyrics: () -> Unit,
+    val onOpenSettings: () -> Unit,
+    /** Null = tidak ada lagu untuk disinkronkan, item disembunyikan. */
+    val onSyncSong: (() -> Unit)? = null,
+    /** Hanya true kalau lagu ini punya lirik tersimpan permanen. */
+    val showForgetOverride: Boolean = false,
+    val onForgetOverride: () -> Unit = {},
+)
 
 /**
  * Menu kebab yang dipakai portrait maupun landscape.
@@ -28,16 +45,17 @@ import com.tglabs.spotivibe.ui.theme.SvType
  */
 @Composable
 fun HeaderOverflowMenu(
-    onSearchLyrics: () -> Unit,
-    onOpenSettings: () -> Unit,
-    /** Hanya true kalau lagu ini punya lirik tersimpan permanen. */
-    showForgetOverride: Boolean = false,
-    onForgetOverride: () -> Unit = {},
-    buttonSize: androidx.compose.ui.unit.Dp = 36.dp,
-    iconSize: androidx.compose.ui.unit.Dp = 16.dp,
+    actions: HeaderMenuActions,
+    buttonSize: Dp = 36.dp,
+    iconSize: Dp = 16.dp,
 ) {
     val sv = LocalSvColors.current
     var terbuka by remember { mutableStateOf(false) }
+    // Setiap item menutup menu dulu, baru menjalankan aksinya.
+    val pilih: (() -> Unit) -> Unit = { aksi ->
+        terbuka = false
+        aksi()
+    }
 
     Box {
         HairlineIconButton(
@@ -52,29 +70,20 @@ fun HeaderOverflowMenu(
             onDismissRequest = { terbuka = false },
             containerColor = sv.bg2,
         ) {
-            DropdownMenuItem(
-                text = { Text("Search lyrics", style = SvType.Body, color = sv.ink1) },
-                onClick = {
-                    terbuka = false
-                    onSearchLyrics()
-                },
-            )
-            if (showForgetOverride) {
-                DropdownMenuItem(
-                    text = { Text("Forget saved lyrics", style = SvType.Body, color = sv.accent) },
-                    onClick = {
-                        terbuka = false
-                        onForgetOverride()
-                    },
-                )
+            MenuItem("Search lyrics", sv.ink1) { pilih(actions.onSearchLyrics) }
+            actions.onSyncSong?.let { sync -> MenuItem("Sync this song", sv.ink1) { pilih(sync) } }
+            if (actions.showForgetOverride) {
+                MenuItem("Forget saved lyrics", sv.accent) { pilih(actions.onForgetOverride) }
             }
-            DropdownMenuItem(
-                text = { Text("Settings", style = SvType.Body, color = sv.ink1) },
-                onClick = {
-                    terbuka = false
-                    onOpenSettings()
-                },
-            )
+            MenuItem("Settings", sv.ink1) { pilih(actions.onOpenSettings) }
         }
     }
+}
+
+@Composable
+private fun MenuItem(label: String, color: Color, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(label, style = SvType.Body, color = color) },
+        onClick = onClick,
+    )
 }

@@ -49,9 +49,12 @@ fun isCacheExpired(cachedAtMs: Long, nowMs: Long, punyaIsi: Boolean): Boolean =
  * mengenai, dan setiap lagu dijemput ulang dari jaringan tanpa ada yang
  * menyadarinya.
  */
-fun cacheFileName(trackId: String): String {
-    val aman = trackId.map { c ->
-        if (c.isLetterOrDigit() || c == '-' || c == '_') c else '_'
-    }.joinToString("")
-    return "$aman.json"
-}
+fun cacheFileName(trackId: String): String = "${sanitizeKeyPart(trackId)}.json"
+
+/**
+ * [raw] dengan semua karakter selain huruf, angka, `-`, dan `_` diganti `_`.
+ * Dipakai untuk nama berkas cache dan untuk key DataStore per lagu.
+ */
+fun sanitizeKeyPart(raw: String): String = raw.map { c ->
+    if (c.isLetterOrDigit() || c == '-' || c == '_') c else '_'
+}.joinToString("")

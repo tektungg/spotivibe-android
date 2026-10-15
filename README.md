@@ -23,6 +23,9 @@ Android native companion untuk Spotify — synced lyrics dengan romanization (JP
     Jepang dan hangul eksklusif milik Korea, tapi kanji dipakai bersama Jepang
     dan Mandarin. Kalau diputuskan per baris, baris Jepang yang isinya kanji saja
     keluar sebagai pinyin di tengah lagu yang selebihnya romaji
+- **Sync offset tiga lapis** — global, per perangkat output (mobil, earbud,
+  speaker HP masing-masing punya jedanya sendiri), dan per lagu lewat menu
+  "Sync this song". Detail di [Sync lirik](#sync-lirik)
 - **Notification dengan synced lyrics** — baris prev/current/next karaoke-style di pull-down + lock screen
 - **Floating overlay** full-width, draggable Y, di atas app lain — mini bar (collapsed) ↔ expanded card (tap-to-expand)
 - **Dynamic accent color** — Palette API extract dari album cover (clamped HSV agar readable di dark theme)
@@ -479,6 +482,33 @@ lagu tidak punya lirik sehingga membangunkan CPU tanpa hasil.
 Tap baris untuk seek mengompensasi offset (`seekTargetMs`). Tanpa itu, dengan
 offset non-nol tap baris mendarat di posisi yang justru membuat baris
 berikutnya yang menyala.
+
+#### Offset tiga lapis
+
+Offset yang dipakai engine adalah jumlah tiga lapis (`domain/SyncOffsets.kt`):
+
+| Lapis | Disetel di | Kunci simpan | Batas |
+|---|---|---|---|
+| Global | Settings → Sync offset | `lyrics_offset_ms` | ±2000 ms |
+| Perangkat output | Settings → This output | `device_offset_<hash>` | ±2000 ms |
+| Lagu | Menu ⋮ → Sync this song | `song_offset_<track id>` | ±2000 ms |
+
+Jumlahnya dijepit ±5000 ms. Lewat dari itu yang salah bukan sync-nya tapi
+liriknya (versi lain lagunya), dan obatnya pencarian lirik.
+
+Kenapa dipecah: jeda Bluetooth mobil bisa 150 sampai 300 ms sedangkan speaker
+HP hampir nol, jadi offset global yang disetel untuk mobil membuat lirik
+terlalu cepat begitu kembali ke speaker. Satu file LRC yang telat juga tidak
+boleh memaksa lagu lain ikut digeser.
+
+Perangkat aktif dibaca `AudioOutputMonitor` lewat `AudioDeviceCallback`.
+Android tidak memberi tahu perangkat mana yang dipakai Spotify, jadi dipakai
+urutan routing media bawaan sistem: Bluetooth (A2DP/BLE) > headset kabel/USB >
+output eksternal (bus audio head unit, HDMI, line) > speaker internal. SCO
+(jalur panggilan) diabaikan. Kuncinya SHA-256 dari tipe + nama produk, bukan
+alamat MAC, supaya tidak butuh izin `BLUETOOTH_CONNECT` dan nama perangkat
+tidak tersimpan mentah. Nilai 0 menghapus key-nya, jadi jumlah key hanya
+sebanyak yang pernah disetel user.
 
 ### Layout: responsif dan safe area
 
