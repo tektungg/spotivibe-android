@@ -15,5 +15,5 @@ Itu disengaja; kontrol yang ada tapi tidak berfungsi lebih membingungkan
 daripada kontrol yang tidak ada.
 
 Keduanya memakai applicationId yang sama, jadi yang satu menimpa yang lain saat
-dipasang. Itu juga disengaja: dua app terpasang berbarengan akan berebut
-redirect auth `spotivibe://callback`.
+dipasang. Itu juga disengaja: dua app bernama sama yang terpasang berbarengan
+membingungkan, dan izin notification access dipegang per paket.
