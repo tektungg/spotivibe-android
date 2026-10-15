@@ -86,6 +86,54 @@ class SpotivibeViewModel(
         }
     }
 
+    // ── Pemilih sumber ───────────────────────────────────────────
+
+    private val _askingSource = MutableStateFlow<com.tglabs.spotivibe.domain.ProviderId?>(null)
+
+    /** Sumber lirik lagu aktif untuk pemilih di layar pencarian. */
+    val sourcePicker: StateFlow<com.tglabs.spotivibe.domain.SourcePickerModel> = combine(
+        controller.sourceReport,
+        controller.track,
+        preferencesRepository.communitySources,
+        _askingSource,
+        controller.lyrics,
+    ) { report, track, community, asking, showing ->
+        com.tglabs.spotivibe.domain.sourcePickerModel(report, track?.id.orEmpty(), community, asking, showing)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), com.tglabs.spotivibe.domain.SourcePickerModel())
+
+    /**
+     * Pakai lirik dari [entry] untuk lagu yang sedang diputar. Sumber yang
+     * belum punya jawaban ditanya dulu; kalau ternyata kosong, tidak ada yang
+     * diterapkan dan barisnya cukup diperbarui. [onApplied] dipanggil hanya
+     * kalau lirik benar-benar diterapkan, supaya layar bisa ditutup.
+     */
+    fun pickSource(entry: com.tglabs.spotivibe.domain.SourceEntry, remember: Boolean, onApplied: () -> Unit) {
+        val track = controller.track.value ?: return
+        if (_askingSource.value != null) return
+        viewModelScope.launch {
+            val chosen = entry.result?.let { entry } ?: run {
+                _askingSource.value = entry.id
+                try {
+                    lyricsRepository.askSource(entry.id, track.toQuery())
+                } finally {
+                    _askingSource.value = null
+                }
+            }
+            val result = chosen.result ?: return@launch
+            overrideRepository.apply(
+                trackId = track.id,
+                result = result.copy(trackId = track.id),
+                lrclibId = com.tglabs.spotivibe.domain.NO_LRCLIB_ID,
+                remember = remember,
+            )
+            controller.reloadLyrics()
+            onApplied()
+        }
+    }
+
+    private fun com.tglabs.spotivibe.domain.NowPlaying.toQuery() =
+        com.tglabs.spotivibe.data.provider.TrackQuery(id, title, artist, album, durationMs)
+
     fun forgetOverride() {
         val trackId = controller.track.value?.id ?: return
         viewModelScope.launch {

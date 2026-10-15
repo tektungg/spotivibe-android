@@ -346,6 +346,14 @@ Keputusan yang disengaja:
   preload antrean tidak menimpa lagu aktif. Pesan "tidak ada lirik" dan "gagal
   memuat" menyebut sumber yang gagal dan golongan alasannya (timed out, rate
   limited, server error, no connection).
+- **Pemilih sumber** (menu ⋮ → Search lyrics → "Sources for this song"): satu
+  baris per sumber aktif dengan jawabannya untuk lagu ini. Ketuk yang berisi
+  untuk memakainya, ketuk yang belum ditanya atau gagal untuk menanyakannya
+  sekarang (`LyricsRepository.askSource`). Pilihannya disimpan sebagai override
+  (ikut checkbox "Remember"); penanda IN USE dicocokkan dengan lirik yang
+  benar-benar tampil, bukan dengan pemenang perlombaan. Override tersimpan kini
+  memakai bentuk baris yang sama dengan cache disk, jadi lirik TTML tidak
+  kehilangan duet dan vokal latar setelah restart.
 - Settings → **Community lyrics** mematikan ketiganya; app kembali ke LRCLIB
   saja. Statistik **COMMUNITY WON** menunjukkan seberapa sering mereka menang.
 - `LYRICS_SELECTION_VERSION` naik ke 2, jadi cache dari era LRCLIB-saja dipilih

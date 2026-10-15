@@ -1,5 +1,9 @@
 package com.tglabs.spotivibe.data
 
+import com.tglabs.spotivibe.domain.cacheFileName
+
+import com.tglabs.spotivibe.domain.BackgroundVocal
+
 import com.tglabs.spotivibe.domain.LyricsOverride
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.SyncedLine
@@ -227,5 +231,39 @@ class FileLyricsOverrideStoreTest {
     fun `store kedua di direktori yang sama melihat isi yang sama`() = runBlocking {
         store.save(override())
         assertNotNull(FileLyricsOverrideStore(dir).loadAll().firstOrNull())
+    }
+
+    // ── Field TTML ───────────────────────────────────────────────
+
+    /** REGRESI: override dari sumber TTML dulu kehilangan duet dan vokal latar setelah restart. */
+    @Test
+    fun `field TTML ikut tersimpan`() = runBlocking {
+        val baris = SyncedLine(
+            id = 0,
+            timeMs = 1_000,
+            text = "Second voice",
+            words = listOf(SyncedWord(1_000, "Second ", 1_400), SyncedWord(1_400, "voice", 2_000)),
+            endMs = 2_000,
+            oppositeAligned = true,
+            background = BackgroundVocal("(Oh)", listOf(SyncedWord(1_500, "(Oh)", 1_900))),
+        )
+        val override = LyricsOverride(
+            trackId = "media:0123456789abcdef",
+            result = LyricsResult("media:0123456789abcdef", listOf(baris), null),
+            lrclibId = 0,
+            savedAtMs = 1,
+        )
+        store.save(override)
+        assertEquals(baris, store.loadAll().single().result.synced!!.single())
+    }
+
+    @Test
+    fun `berkas format lama tetap terbaca`() = runBlocking {
+        dir.resolve(cacheFileName("spotify:track:lama")).writeText(
+            """{"trackId":"spotify:track:lama","lrclibId":7,"savedAtMs":1,""" +
+                """"synced":[{"timeMs":1000,"text":"halo","words":[{"timeMs":1000,"text":"halo"}]}],"plain":null}""",
+        )
+        val line = store.loadAll().single().result.synced!!.single()
+        assertEquals(SyncedLine(0, 1_000, "halo", words = listOf(SyncedWord(1_000, "halo"))), line)
     }
 }

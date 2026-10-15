@@ -224,4 +224,40 @@ class LyricsRaceRepositoryTest {
         assertEquals(8, r.reports.value.size)
         assertEquals((3..10).map { "t$it" }, r.reports.value.keys.toList())
     }
+
+    // ── Tanya satu sumber ────────────────────────────────────────
+
+    private val query = TrackQuery("t1", "Lagu", "Artis", "Album", 200_000)
+
+    @Test
+    fun `sumber yang belum ditanya bisa ditanya dan report diperbarui`() {
+        val amll = FakeProvider(ProviderId.Amll, 10, wordContent("dari amll", ProbeSource.Amll))
+        val lambat = FakeProvider(ProviderId.LrcMux, 5_000, wordContent("dari lrcmux", ProbeSource.LrcMux))
+        val r = repo(listOf(amll, lambat))
+        r.ambil()
+        assertEquals(SourceOutcome.NotAsked, r.reportT1()!!.entries.first { it.id == ProviderId.LrcMux }.outcome)
+
+        val cepat = FakeProvider(ProviderId.LrcMux, 0, wordContent("dari lrcmux", ProbeSource.LrcMux))
+        val r2 = repo(listOf(amll, cepat))
+        r2.ambil()
+        val entry = runBlocking { r2.askSource(ProviderId.LrcMux, query) }
+        assertEquals("dari lrcmux", entry.result?.synced?.single()?.text)
+        assertEquals(SourceOutcome.Found(TimingTier.Word), r2.reportT1()!!.entries.first { it.id == ProviderId.LrcMux }.outcome)
+        // Pemenang perlombaan tidak berubah karena user menanyakan sumber lain.
+        assertEquals(ProviderId.Amll, r2.reportT1()!!.winner)
+    }
+
+    @Test
+    fun `menanyakan LRCLIB memakai jalur LRCLIB`() {
+        val r = repo(emptyList())
+        val entry = runBlocking { r.askSource(ProviderId.Lrclib, query) }
+        assertEquals("dari lrclib", entry.result?.synced?.single()?.text)
+    }
+
+    @Test
+    fun `sumber yang tidak terpasang dilaporkan gagal`() {
+        val r = repo(emptyList())
+        val entry = runBlocking { r.askSource(ProviderId.Amll, query) }
+        assertTrue(entry.outcome is SourceOutcome.Failed)
+    }
 }

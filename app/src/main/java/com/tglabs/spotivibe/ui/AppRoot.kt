@@ -10,6 +10,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tglabs.spotivibe.domain.UiState
 import com.tglabs.spotivibe.ui.component.PlayerSectionActions
 import com.tglabs.spotivibe.ui.component.SongSyncDialog
+import com.tglabs.spotivibe.ui.screen.LyricsSearchActions
+import com.tglabs.spotivibe.ui.screen.LyricsSearchModel
 import com.tglabs.spotivibe.ui.screen.LyricsSearchScreen
 import com.tglabs.spotivibe.ui.screen.MainScreen
 import com.tglabs.spotivibe.ui.screen.SettingsScreen
@@ -68,20 +70,26 @@ private fun SearchRoute(viewModel: SpotivibeViewModel, playing: UiState.Playing,
         viewModel.resetSearch()
     }
     LyricsSearchScreen(
-        initialTitle = playing.track.title,
-        initialArtist = playing.track.artist,
-        state = viewModel.searchState.collectAsStateWithLifecycle().value,
-        hasRememberedOverride = viewModel.hasRememberedOverride.collectAsStateWithLifecycle().value,
-        onSearch = { t, a -> viewModel.searchLyrics(t, a) },
-        onPick = { hasil, ingat ->
-            viewModel.applySearchResult(hasil, ingat)
-            close()
-        },
-        onForget = {
-            viewModel.forgetOverride()
-            close()
-        },
-        onBack = close,
+        model = LyricsSearchModel(
+            initialTitle = playing.track.title,
+            initialArtist = playing.track.artist,
+            state = viewModel.searchState.collectAsStateWithLifecycle().value,
+            hasRememberedOverride = viewModel.hasRememberedOverride.collectAsStateWithLifecycle().value,
+            sources = viewModel.sourcePicker.collectAsStateWithLifecycle().value,
+        ),
+        actions = LyricsSearchActions(
+            onSearch = { t, a -> viewModel.searchLyrics(t, a) },
+            onPick = { hasil, ingat ->
+                viewModel.applySearchResult(hasil, ingat)
+                close()
+            },
+            onForget = {
+                viewModel.forgetOverride()
+                close()
+            },
+            onBack = close,
+            onPickSource = { entry, ingat -> viewModel.pickSource(entry, ingat, onApplied = close) },
+        ),
     )
 }
 

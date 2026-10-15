@@ -288,9 +288,10 @@ class LyricsCache internal constructor(
     }
 }
 
-private fun SyncedWord.toDto() = LyricsCache.SyncedWordDto(timeMs, text, endMs)
+internal fun SyncedWord.toDto() = LyricsCache.SyncedWordDto(timeMs, text, endMs)
 
-private fun SyncedLine.toDto() = LyricsCache.SyncedLineDto(
+/** Dipakai bersama oleh cache disk dan override tersimpan: satu bentuk, satu aturan kompatibilitas. */
+internal fun SyncedLine.toDto() = LyricsCache.SyncedLineDto(
     timeMs = timeMs,
     text = text,
     words = words.takeIf { it.isNotEmpty() }?.map { it.toDto() },

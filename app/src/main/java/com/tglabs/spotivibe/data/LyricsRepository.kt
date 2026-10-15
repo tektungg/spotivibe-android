@@ -20,7 +20,10 @@ import com.tglabs.spotivibe.domain.ProviderAnswer
 import com.tglabs.spotivibe.domain.ProviderCooldown
 import com.tglabs.spotivibe.domain.ProviderId
 import com.tglabs.spotivibe.domain.ProviderProbe
+import com.tglabs.spotivibe.domain.SourceEntry
 import com.tglabs.spotivibe.domain.SourceReport
+import com.tglabs.spotivibe.domain.toOutcome
+import com.tglabs.spotivibe.domain.with
 import com.tglabs.spotivibe.domain.pickProviderWinner
 import com.tglabs.spotivibe.domain.sourceReportOf
 import com.tglabs.spotivibe.domain.cacheEntryFor
@@ -331,6 +334,25 @@ class LyricsRepository(
 
     private fun LyricsResult.toState(): LyricsState =
         if (hasContent) LyricsState.Ready(this) else LyricsState.NotFound
+
+    /**
+     * Tanya SATU sumber untuk [query], di luar perlombaan, lalu simpan hasilnya
+     * ke report lagu itu. Dipakai pemilih sumber: user memilih sumber yang belum
+     * sempat menjawab, atau yang tadi gagal.
+     *
+     * Tidak menyentuh cache maupun statistik: ini penjelajahan yang dipandu
+     * user, bukan lookup. Jeda sumber ikut dicatat, karena kegagalannya nyata.
+     */
+    suspend fun askSource(id: ProviderId, query: TrackQuery): SourceEntry = withContext(Dispatchers.IO) {
+        val provider = if (id == ProviderId.Lrclib) lrclib else providers.firstOrNull { it.id == id }
+        val probe = provider?.lookup(query) ?: ProviderProbe.Failed("source unavailable")
+        if (id != ProviderId.Lrclib) cooldown.record(id, probe)
+        val content = probe as? ProviderProbe.Content
+        val entry = SourceEntry(id, probe.toOutcome(), content?.result, content?.durationSec)
+        val current = _reports.value[query.trackId] ?: SourceReport(query.trackId, emptyList(), winner = null)
+        putReport(current.with(entry))
+        entry
+    }
 
     /** Peserta perlombaan: LRCLIB selalu, sumber komunitas kalau aktif dan tidak sedang dijeda. */
     private fun racers(): List<LyricsProvider> {

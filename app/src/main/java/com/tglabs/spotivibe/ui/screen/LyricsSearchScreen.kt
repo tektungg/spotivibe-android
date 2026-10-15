@@ -1,5 +1,8 @@
 package com.tglabs.spotivibe.ui.screen
 
+import com.tglabs.spotivibe.domain.SourceEntry
+import com.tglabs.spotivibe.domain.SourcePickerModel
+import com.tglabs.spotivibe.ui.component.SourcePicker
 import com.tglabs.spotivibe.ui.theme.svSafeContent
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
@@ -12,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -59,33 +63,70 @@ import com.tglabs.spotivibe.ui.theme.SvType
  * ter-sync semuanya sudah diputuskan di `domain/LyricsSearch.kt` yang teruji.
  * Yang tersisa di sini cuma penggambaran.
  */
-@Composable
-fun LyricsSearchScreen(
-    initialTitle: String,
-    initialArtist: String,
-    state: LyricsSearchState,
-    hasRememberedOverride: Boolean,
-    onSearch: (title: String, artist: String) -> Unit,
-    onPick: (result: LyricsSearchResult, remember: Boolean) -> Unit,
-    onForget: () -> Unit,
-    onBack: () -> Unit,
-) {
-    val sv = LocalSvColors.current
-    BackHandler(onBack = onBack)
+/** Isi layar pencarian. */
+data class LyricsSearchModel(
+    val initialTitle: String,
+    val initialArtist: String,
+    val state: LyricsSearchState,
+    val hasRememberedOverride: Boolean,
+    /** Sumber lirik lagu ini, di atas pencarian manual. */
+    val sources: SourcePickerModel = SourcePickerModel(),
+)
 
-    // Terisi dari Spotify tapi bisa diedit: justru ketidakcocokan judul yang
+/** Aksi layar pencarian. `remember` ikut checkbox "remember these lyrics". */
+data class LyricsSearchActions(
+    val onSearch: (title: String, artist: String) -> Unit,
+    val onPick: (result: LyricsSearchResult, remember: Boolean) -> Unit,
+    val onForget: () -> Unit,
+    val onBack: () -> Unit,
+    val onPickSource: (entry: SourceEntry, remember: Boolean) -> Unit = { _, _ -> },
+)
+
+@Composable
+fun LyricsSearchScreen(model: LyricsSearchModel, actions: LyricsSearchActions) {
+    BackHandler(onBack = actions.onBack)
+
+    // Terisi dari player tapi bisa diedit: justru ketidakcocokan judul yang
     // bikin auto-match meleset, jadi user harus bisa memperbaikinya.
-    var title by rememberSaveable(initialTitle) { mutableStateOf(initialTitle) }
-    var artist by rememberSaveable(initialArtist) { mutableStateOf(initialArtist) }
+    var title by rememberSaveable(model.initialTitle) { mutableStateOf(model.initialTitle) }
+    var artist by rememberSaveable(model.initialArtist) { mutableStateOf(model.initialArtist) }
 
     // Sengaja TIDAK lengket antar pembukaan layar. Menyimpan permanen harus
     // selalu tindakan sadar, tidak pernah terjadi karena lupa mematikannya dari
     // pencarian sebelumnya.
     var remember by rememberSaveable { mutableStateOf(false) }
 
-    // Dua kolom saat lebarnya muat, bukan saat kebetulan landscape.
-    val isLandscape = LocalSvWindow.current.isWide
+    // Panel kontrol ditulis sekali dan dipakai kedua tata letak.
+    val controls: @Composable () -> Unit = {
+        SourcePicker(model = model.sources, onPick = { actions.onPickSource(it, remember) })
+        Spacer(modifier = Modifier.height(SvSpace.s4))
+        SearchInputs(
+            title = title,
+            artist = artist,
+            onTitleChange = { title = it },
+            onArtistChange = { artist = it },
+            onSearch = { actions.onSearch(title.trim(), artist.trim()) },
+            remember = remember,
+            onToggleRemember = { remember = !remember },
+            hasRememberedOverride = model.hasRememberedOverride,
+            onForget = actions.onForget,
+        )
+    }
+    val results: @Composable () -> Unit = {
+        SearchResults(state = model.state, onPick = { actions.onPick(it, remember) })
+    }
 
+    SearchLayout(onBack = actions.onBack, controls = controls, results = results)
+}
+
+/** Bingkai layar: header, lalu kontrol dan hasil dalam satu atau dua kolom. */
+@Composable
+private fun SearchLayout(
+    onBack: () -> Unit,
+    controls: @Composable () -> Unit,
+    results: @Composable () -> Unit,
+) {
+    val sv = LocalSvColors.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -98,63 +139,45 @@ fun LyricsSearchScreen(
         SearchHeader(onBack = onBack)
         Spacer(modifier = Modifier.height(SvSpace.s3))
         HairlineRule(soft = true)
-
-        if (isLandscape) {
-            // Rasio 1 : 1.4 sama persis dengan layar lirik landscape, supaya
-            // kedua layar terasa satu sistem dan mata tidak perlu menyesuaikan
-            // lebar kolom saat berpindah.
-            Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .verticalScroll(rememberScrollState())
-                        .padding(end = SvSpace.s5, top = SvSpace.s4),
-                ) {
-                    SearchInputs(
-                        title = title,
-                        artist = artist,
-                        onTitleChange = { title = it },
-                        onArtistChange = { artist = it },
-                        onSearch = { onSearch(title.trim(), artist.trim()) },
-                        remember = remember,
-                        onToggleRemember = { remember = !remember },
-                        hasRememberedOverride = hasRememberedOverride,
-                        onForget = onForget,
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .width(1.dp)
-                        .fillMaxHeight()
-                        .background(sv.rule),
-                )
-                Box(
-                    modifier = Modifier
-                        .weight(1.4f)
-                        .fillMaxHeight()
-                        .padding(start = SvSpace.s5),
-                ) {
-                    SearchResults(state = state, onPick = { onPick(it, remember) })
-                }
-            }
+        // Dua kolom saat lebarnya muat, bukan saat kebetulan landscape.
+        if (LocalSvWindow.current.isWide) {
+            TwoPane(controls, results)
         } else {
             Spacer(modifier = Modifier.height(SvSpace.s4))
-            SearchInputs(
-                title = title,
-                artist = artist,
-                onTitleChange = { title = it },
-                onArtistChange = { artist = it },
-                onSearch = { onSearch(title.trim(), artist.trim()) },
-                remember = remember,
-                onToggleRemember = { remember = !remember },
-                hasRememberedOverride = hasRememberedOverride,
-                onForget = onForget,
-            )
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                SearchResults(state = state, onPick = { onPick(it, remember) })
-            }
+            controls()
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) { results() }
         }
+    }
+}
+
+/**
+ * Rasio 1 : 1.4 sama persis dengan layar lirik landscape, supaya kedua layar
+ * terasa satu sistem dan mata tidak perlu menyesuaikan lebar kolom saat
+ * berpindah.
+ */
+@Composable
+private fun ColumnScope.TwoPane(controls: @Composable () -> Unit, results: @Composable () -> Unit) {
+    val sv = LocalSvColors.current
+    Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .verticalScroll(rememberScrollState())
+                .padding(end = SvSpace.s5, top = SvSpace.s4),
+        ) { controls() }
+        Box(
+            modifier = Modifier
+                .width(1.dp)
+                .fillMaxHeight()
+                .background(sv.rule),
+        )
+        Box(
+            modifier = Modifier
+                .weight(1.4f)
+                .fillMaxHeight()
+                .padding(start = SvSpace.s5),
+        ) { results() }
     }
 }
 

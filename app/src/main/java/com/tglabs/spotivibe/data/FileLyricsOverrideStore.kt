@@ -9,8 +9,6 @@ import com.tglabs.spotivibe.domain.LyricsOverride
 import com.tglabs.spotivibe.domain.cacheFileName
 import com.tglabs.spotivibe.domain.LyricsOverrideStore
 import com.tglabs.spotivibe.domain.LyricsResult
-import com.tglabs.spotivibe.domain.SyncedLine
-import com.tglabs.spotivibe.domain.SyncedWord
 import com.tglabs.spotivibe.domain.withPositionalIds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -82,21 +80,16 @@ class FileLyricsOverrideStore(private val dir: File) : LyricsOverrideStore {
     // pemulihan tidak bergantung pada sanitasi nama file yang bisa berubah.
 
     @JsonClass(generateAdapter = false)
-    internal data class StoredWord(val timeMs: Long, val text: String)
-
-    @JsonClass(generateAdapter = false)
-    internal data class StoredLine(
-        val timeMs: Long,
-        val text: String,
-        val words: List<StoredWord>? = null,
-    )
-
-    @JsonClass(generateAdapter = false)
     internal data class StoredOverride(
         val trackId: String,
         val lrclibId: Long,
         val savedAtMs: Long,
-        val synced: List<StoredLine>?,
+        /**
+         * Bentuk baris yang sama dengan cache disk, supaya override dari sumber
+         * TTML tidak kehilangan waktu akhir, duet, dan vokal latar. Berkas lama
+         * (hanya timeMs, text, words) tetap terbaca: field barunya punya default.
+         */
+        val synced: List<LyricsCache.SyncedLineDto>?,
         val plain: String?,
     ) {
         fun toDomain(): LyricsOverride = LyricsOverride(
@@ -105,16 +98,7 @@ class FileLyricsOverrideStore(private val dir: File) : LyricsOverrideStore {
             savedAtMs = savedAtMs,
             result = LyricsResult(
                 trackId = trackId,
-                synced = synced
-                    ?.map { l ->
-                        SyncedLine(
-                            id = 0,
-                            timeMs = l.timeMs,
-                            text = l.text,
-                            words = l.words.orEmpty().map { SyncedWord(it.timeMs, it.text) },
-                        )
-                    }
-                    ?.withPositionalIds(),
+                synced = synced?.map { it.toLine() }?.withPositionalIds(),
                 plain = plain,
             ),
         )
@@ -124,14 +108,7 @@ class FileLyricsOverrideStore(private val dir: File) : LyricsOverrideStore {
         trackId = trackId,
         lrclibId = lrclibId,
         savedAtMs = savedAtMs,
-        synced = result.synced?.map { l ->
-            StoredLine(
-                timeMs = l.timeMs,
-                text = l.text,
-                words = l.words.takeIf { it.isNotEmpty() }
-                    ?.map { StoredWord(it.timeMs, it.text) },
-            )
-        },
+        synced = result.synced?.map { it.toDto() },
         plain = result.plain,
     )
 
