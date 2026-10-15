@@ -5,6 +5,7 @@ import com.tglabs.spotivibe.data.AndroidAudioOutputMonitor
 import com.tglabs.spotivibe.data.AndroidNetworkMonitor
 import com.tglabs.spotivibe.data.AudioOutputSource
 import com.tglabs.spotivibe.data.FileLyricsOverrideStore
+import com.tglabs.spotivibe.data.HttpClients
 import com.tglabs.spotivibe.data.LyricsCache
 import com.tglabs.spotivibe.data.LyricsOverrideRepository
 import com.tglabs.spotivibe.data.LyricsRepository
@@ -17,9 +18,15 @@ import com.tglabs.spotivibe.data.SpotifySessionSupervisor
 import com.tglabs.spotivibe.data.WebApiClient
 import com.tglabs.spotivibe.data.auth.SpotifyAuthApi
 import com.tglabs.spotivibe.data.auth.SpotifyAuthRepository
+import com.tglabs.spotivibe.data.provider.AmllProvider
+import com.tglabs.spotivibe.data.provider.LrcMuxProvider
+import com.tglabs.spotivibe.data.provider.LrcRedProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 
 /**
  * Application-scoped container. Singletons di sini supaya survive Activity
@@ -76,12 +83,23 @@ class SpotivibeApp : Application() {
         LyricsOverrideRepository(FileLyricsOverrideStore(this))
     }
 
+    /** Setelan sumber komunitas, dicerminkan ke StateFlow supaya repository bisa membacanya sinkron. */
+    private val communitySources: StateFlow<Boolean> by lazy {
+        preferencesRepository.communitySources.stateIn(applicationScope, SharingStarted.Eagerly, true)
+    }
+
     val lyricsRepository: LyricsRepository by lazy {
         LyricsRepository(
             diskCache = LyricsCache(this),
             statsRecorder = { event -> preferencesRepository.recordLyricsLookup(event) },
             overrides = { trackId -> lyricsOverrideRepository.overrideFor(trackId) },
             network = networkMonitor,
+            providers = listOf(
+                AmllProvider(HttpClients.lyrics),
+                LrcRedProvider(HttpClients.lyrics),
+                LrcMuxProvider(HttpClients.lyrics),
+            ),
+            communitySources = { communitySources.value },
         )
     }
     val romanizationService: RomanizationService by lazy { RomanizationService() }

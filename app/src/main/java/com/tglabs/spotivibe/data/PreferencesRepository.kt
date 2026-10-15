@@ -65,6 +65,8 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
     private val statOverrideKey = intPreferencesKey("stat_lyrics_from_override")
     private val statGetWonKey = intPreferencesKey("stat_lyrics_get_won")
     private val statSearchWonKey = intPreferencesKey("stat_lyrics_search_won")
+    private val statCommunityWonKey = intPreferencesKey("stat_lyrics_community_won")
+    private val communitySourcesKey = booleanPreferencesKey("community_sources")
     private val darkModeKey = booleanPreferencesKey("dark_mode")
     private val lyricsFontSizeKey = intPreferencesKey("lyrics_font_size")
     // Improvement set: per-user fine-tuning lyrics behavior
@@ -108,6 +110,7 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
             fromOverride = prefs[statOverrideKey] ?: 0,
             getWon = prefs[statGetWonKey] ?: 0,
             searchWon = prefs[statSearchWonKey] ?: 0,
+            communityWon = prefs[statCommunityWonKey] ?: 0,
         )
     }
 
@@ -139,6 +142,7 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
             when (event.probe) {
                 ProbeSource.Get -> bump(statGetWonKey)
                 ProbeSource.Search -> bump(statSearchWonKey)
+                ProbeSource.Amll, ProbeSource.LrcRed, ProbeSource.LrcMux -> bump(statCommunityWonKey)
                 null -> Unit
             }
         }
@@ -149,7 +153,7 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
             listOf(
                 statSyncedKey, statPlainKey, statNotFoundKey, statUnavailableKey,
                 statMemKey, statDiskKey, statNetworkKey, statOverrideKey,
-                statGetWonKey, statSearchWonKey,
+                statGetWonKey, statSearchWonKey, statCommunityWonKey,
             ).forEach { prefs.remove(it) }
         }
     }
@@ -251,6 +255,17 @@ class PreferencesRepository(private val context: Context) : AuthStorage {
      */
     val smoothScroll: Flow<Boolean> = context.dataStore.data
         .map { prefs -> prefs[smoothScrollKey] ?: true }
+
+    /**
+     * Ikut bertanya ke sumber komunitas (AMLL, lrc.red, LRCMux) selain LRCLIB.
+     * Default true. Dimatikan, app kembali hanya memakai LRCLIB.
+     */
+    val communitySources: Flow<Boolean> = context.dataStore.data
+        .map { prefs -> prefs[communitySourcesKey] ?: true }
+
+    suspend fun setCommunitySources(enabled: Boolean) {
+        context.dataStore.edit { it[communitySourcesKey] = enabled }
+    }
 
     /** Haptic feedback saat baris lyric berganti. Default true. */
     val hapticEnabled: Flow<Boolean> = context.dataStore.data

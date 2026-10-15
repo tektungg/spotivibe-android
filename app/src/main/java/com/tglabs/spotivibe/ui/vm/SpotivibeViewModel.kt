@@ -307,6 +307,16 @@ class SpotivibeViewModel(
         viewModelScope.launch { preferencesRepository.resetLyricsStats() }
     }
 
+    /** Setelan sumber komunitas, untuk Settings. */
+    val communitySources: StateFlow<Boolean> = preferencesRepository.communitySources
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), true)
+
+    fun toggleCommunitySources() {
+        viewModelScope.launch {
+            preferencesRepository.setCommunitySources(!communitySources.value)
+        }
+    }
+
     fun toggleHaptic() {
         viewModelScope.launch {
             val current = (uiState.value as? UiState.Playing)?.hapticEnabled ?: true

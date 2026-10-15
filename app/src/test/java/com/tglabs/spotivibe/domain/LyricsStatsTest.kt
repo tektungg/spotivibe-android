@@ -16,6 +16,30 @@ class LyricsStatsTest {
     private fun stats(vararg events: LyricsLookupEvent): LyricsStats =
         events.fold(LyricsStats()) { acc, e -> acc + e }
 
+    // ── Sumber komunitas ─────────────────────────────────────────
+
+    @Test
+    fun `kemenangan sumber komunitas dihitung terpisah dari LRCLIB`() {
+        val s = stats(
+            ev(LyricsOutcome.Synced, probe = ProbeSource.Amll),
+            ev(LyricsOutcome.Synced, probe = ProbeSource.LrcRed),
+            ev(LyricsOutcome.Synced, probe = ProbeSource.LrcMux),
+            ev(LyricsOutcome.Synced, probe = ProbeSource.Get),
+        )
+        assertEquals(3, s.communityWon)
+        assertEquals(1, s.getWon)
+        assertEquals(0.75f, s.communityRate!!, 0.0001f)
+        // searchOnlyRate tetap soal LRCLIB saja: komunitas bukan /search.
+        assertEquals(0f, s.searchOnlyRate!!, 0.0001f)
+    }
+
+    @Test
+    fun `tanpa kemenangan jaringan communityRate belum diketahui`() {
+        assertNull(LyricsStats().communityRate)
+        assertTrue(ProbeSource.Amll.isCommunity)
+        assertTrue(!ProbeSource.Search.isCommunity)
+    }
+
     // ── Akumulasi ────────────────────────────────────────────────
 
     @Test

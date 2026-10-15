@@ -3,39 +3,40 @@ package com.tglabs.spotivibe.data
 import android.util.Log
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
-import com.tglabs.spotivibe.domain.LrclibProbe
-import com.tglabs.spotivibe.domain.LyricsCandidate
-import com.tglabs.spotivibe.domain.isUnbeatable
-import com.tglabs.spotivibe.domain.pickBestCandidate
-import com.tglabs.spotivibe.domain.LyricsLookup
+import com.tglabs.spotivibe.data.provider.LrclibProvider
+import com.tglabs.spotivibe.data.provider.LyricsProvider
+import com.tglabs.spotivibe.data.provider.TrackQuery
 import com.tglabs.spotivibe.domain.LrclibSearchEntry
+import com.tglabs.spotivibe.domain.LyricsLookup
 import com.tglabs.spotivibe.domain.LyricsLookupEvent
 import com.tglabs.spotivibe.domain.LyricsOverrideSource
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.LyricsSearchState
-import com.tglabs.spotivibe.domain.toSearchResults
 import com.tglabs.spotivibe.domain.LyricsSource
 import com.tglabs.spotivibe.domain.LyricsState
 import com.tglabs.spotivibe.domain.LyricsStatsRecorder
 import com.tglabs.spotivibe.domain.ProbeSource
+import com.tglabs.spotivibe.domain.ProviderAnswer
+import com.tglabs.spotivibe.domain.ProviderCooldown
+import com.tglabs.spotivibe.domain.ProviderId
+import com.tglabs.spotivibe.domain.ProviderProbe
 import com.tglabs.spotivibe.domain.cacheEntryFor
+import com.tglabs.spotivibe.domain.combineProviderAnswers
+import com.tglabs.spotivibe.domain.isRaceSettled
 import com.tglabs.spotivibe.domain.outcomeOf
-import com.tglabs.spotivibe.domain.combineProbes
-import com.tglabs.spotivibe.domain.parseLrc
-import com.tglabs.spotivibe.domain.probeFromHttpFailure
 import com.tglabs.spotivibe.domain.resolveWithStale
 import com.tglabs.spotivibe.domain.retryBackoffMs
+import com.tglabs.spotivibe.domain.toSearchResults
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
-import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
-import java.util.concurrent.TimeUnit
 
 /**
  * Orchestrator untuk fetch lyrics dengan 3-layer caching:
@@ -43,10 +44,9 @@ import java.util.concurrent.TimeUnit
  * 1. **In-memory** ([memCache]) — paling cepat, hanya valid per session.
  * 2. **Disk** ([diskCache]) — JSON file, survive process restart, dengan TTL
  *    30 hari (positive) / 1 hari (negative).
- * 3. **Network** — LRCLIB API, hanya kalau [network] bilang online. Fire `/get` dan `/search` PARALEL via
- *    [coroutineScope] + [async]. Prefer `/get` kalau selesai dalam
- *    [PREFER_GET_TIMEOUT_MS]ms dengan hasil ber-content, else pakai mana saja
- *    yang berhasil duluan dan ber-content.
+ * 3. **Network** — hanya kalau [network] bilang online. LRCLIB ([LrclibProvider])
+ *    dan sumber komunitas ([providers]) berlomba bersamaan; yang timing-nya
+ *    paling halus menang (lihat `domain/ProviderRace.kt`).
  *
  * Semua exception ditelan — return [LyricsResult] kosong (hasContent=false)
  * kalau gagal. Caller cukup cek [LyricsResult.hasContent].
@@ -77,6 +77,16 @@ class LyricsRepository(
     private val network: NetworkStatusSource = NetworkStatusSource.AlwaysOnline,
     /** Seam untuk test. Null = bangun klien Retrofit LRCLIB sungguhan. */
     lrclibApi: LrclibApi? = null,
+    /**
+     * Sumber komunitas yang ikut berlomba dengan LRCLIB. Default kosong supaya
+     * konstruksi tanpa ini tetap sah dan perilakunya sama dengan LRCLIB saja.
+     */
+    private val providers: List<LyricsProvider> = emptyList(),
+    /** Setelan "Community lyrics sources". Dibaca per lookup, jadi berlaku seketika. */
+    private val communitySources: () -> Boolean = { true },
+    private val cooldown: ProviderCooldown = ProviderCooldown(),
+    /** Lama menunggu sumber yang lebih halus setelah konten pertama ada. Seam untuk test. */
+    private val contentGraceMs: Long = DEFAULT_CONTENT_GRACE_MS,
 ) {
 
     // LRU bounded — max 50 tracks. Eviction otomatis dengan LinkedHashMap accessOrder.
@@ -96,28 +106,14 @@ class LyricsRepository(
         .add(KotlinJsonAdapterFactory())
         .build()
 
-    private val httpClient: OkHttpClient = OkHttpClient.Builder()
-        .addInterceptor { chain ->
-            val req = chain.request().newBuilder()
-                .header("User-Agent", USER_AGENT)
-                .build()
-            chain.proceed(req)
-        }
-        .addInterceptor(
-            HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BASIC
-            }
-        )
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
-        .build()
-
     private val api: LrclibApi = lrclibApi ?: Retrofit.Builder()
         .baseUrl(BASE_URL)
-        .client(httpClient)
+        .client(HttpClients.lyrics)
         .addConverterFactory(MoshiConverterFactory.create(moshi))
         .build()
         .create(LrclibApi::class.java)
+
+    private val lrclib = LrclibProvider(api)
 
     /**
      * Fetch lirik untuk track tertentu. Cascade: memory → disk → network.
@@ -173,9 +169,10 @@ class LyricsRepository(
             return@withContext offlineFallback(trackId, LyricsState.Offline)
         }
 
-        // Layer 3b: network — /get + /search, dengan retry untuk gangguan sesaat
+        // Layer 3b: network — semua sumber berlomba, dengan retry untuk gangguan sesaat
+        val query = TrackQuery(trackId, title, artist, album, durationMs)
         val maxAttempts = if (allowRetry) MAX_ATTEMPTS else 1
-        var lookup = probeNetwork(trackId, title, artist, album, durationMs)
+        var lookup = probeNetwork(query)
         var attempt = 1
         // Berhenti retry begitu jaringan hilang: percobaan berikutnya pasti
         // gagal, dan user menunggu lirik yang sebenarnya bisa datang dari disk.
@@ -185,7 +182,7 @@ class LyricsRepository(
             val backoff = retryBackoffMs(attempt)
             Log.d(TAG, "Retry $attempt untuk $trackId dalam ${backoff}ms (${lookup.reason})")
             delay(backoff)
-            lookup = probeNetwork(trackId, title, artist, album, durationMs)
+            lookup = probeNetwork(query)
             attempt++
         }
 
@@ -306,126 +303,74 @@ class LyricsRepository(
     private fun LyricsResult.toState(): LyricsState =
         if (hasContent) LyricsState.Ready(this) else LyricsState.NotFound
 
-    /**
-     * Tanya `/get` dan `/search` paralel, lalu gabungkan jadi satu keputusan.
-     *
-     * Strategi: tunggu `/get` sampai [PREFER_GET_TIMEOUT_MS]ms. Kalau hasilnya
-     * synced dan durasinya nyaris persis ([isUnbeatable]), pakai itu dan jangan
-     * tunggu `/search`. Selain itu tunggu keduanya: `/search` mungkin punya
-     * versi synced yang lebih cocok, dan [combineProbes] juga butuh tahu
-     * apakah probe yang lain BERHASIL bilang tidak ada atau justru gagal
-     * dijangkau. Beda itu yang menentukan boleh tidaknya hasilnya di-cache.
-     */
-    private suspend fun probeNetwork(
-        trackId: String,
-        title: String,
-        artist: String,
-        album: String,
-        durationMs: Long,
-    ): LyricsLookup = coroutineScope {
-        val targetSec = durationMs.takeIf { it > 0 }?.let { it / 1000.0 }
-        val getDeferred = async { probeGet(trackId, title, artist, album, durationMs) }
-        val searchDeferred = async { probeSearch(trackId, title, artist, targetSec) }
-
-        // Jalur cepat: /get synced dengan durasi nyaris persis tidak mungkin
-        // dikalahkan /search, jadi tidak perlu menunggunya. Dulu SEMUA konten
-        // /get lewat jalur ini, termasuk plain lyrics yang mestinya kalah dari
-        // versi synced di /search.
-        val getQuick = withTimeoutOrNull(PREFER_GET_TIMEOUT_MS) { getDeferred.await() }
-        if (getQuick is LrclibProbe.Content &&
-            isUnbeatable(LyricsCandidate(getQuick.result, getQuick.durationSec, ProbeSource.Get), targetSec)
-        ) {
-            Log.d(TAG, "/get menang (jalur cepat) untuk $trackId")
-            // Biarkan /search selesai supaya tidak menggantung, hasilnya dibuang.
-            runCatching { searchDeferred.await() }
-            return@coroutineScope LyricsLookup.Found(getQuick.result, ProbeSource.Get)
-        }
-
-        val getProbe = getQuick ?: runCatching { getDeferred.await() }
-            .getOrElse { LrclibProbe.Failed(it.message ?: "get gagal") }
-        val searchProbe = runCatching { searchDeferred.await() }
-            .getOrElse { LrclibProbe.Failed(it.message ?: "search gagal") }
-
-        combineProbes(getProbe, searchProbe, targetSec).also {
-            Log.d(TAG, "Lookup $trackId: get=$getProbe search=$searchProbe -> $it")
-        }
+    /** Peserta perlombaan: LRCLIB selalu, sumber komunitas kalau aktif dan tidak sedang dijeda. */
+    private fun racers(): List<LyricsProvider> {
+        if (!communitySources()) return listOf(lrclib)
+        return listOf(lrclib) + providers.filterNot { cooldown.isCoolingDown(it.id) }
     }
 
     /**
-     * Hit `/api/get`. 404 berarti kombinasi judul + artis + album + durasi
-     * memang tidak ada di database, jadi [LrclibProbe.Absent]. Status lain yang
-     * tidak sukses bisa berubah, jadi [LrclibProbe.Failed].
+     * Tanya semua sumber bersamaan, lalu putuskan dari yang sudah menjawab.
+     *
+     * Berhenti saat [isRaceSettled] (pemenang per kata tanpa saingan
+     * berperingkat lebih tinggi yang masih jalan), saat semua sudah menjawab,
+     * atau [contentGraceMs] setelah konten PERTAMA datang. Tenggat itu yang
+     * menjaga satu sumber lambat tidak menahan lirik yang sudah ada di tangan.
+     * Tanpa konten sama sekali tidak ada tenggat: menunggu semua sumber masih
+     * lebih baik daripada menyerah, dan tiap request sudah dibatasi timeout
+     * HTTP-nya sendiri. Sumber yang belum menjawab dibatalkan.
      */
-    private suspend fun probeGet(
-        trackId: String,
-        title: String,
-        artist: String,
-        album: String,
-        durationMs: Long,
-    ): LrclibProbe = runCatching {
-        val durationSec = (durationMs / 1000L).toInt().coerceAtLeast(0)
-        val resp = api.get(
-            trackName = title,
-            artistName = artist,
-            albumName = album,
-            duration = durationSec,
-        )
-        if (!resp.isSuccessful) return@runCatching probeFromHttpFailure(resp.code())
-        val dto = resp.body() ?: return@runCatching LrclibProbe.Absent
-        dto.toLyricsResult(trackId).asProbe(dto.duration)
-    }.getOrElse { t ->
-        // IOException, timeout, parse error: semuanya sementara.
-        Log.w(TAG, "/get error untuk $trackId: ${t.message}")
-        LrclibProbe.Failed(t.message ?: "get gagal")
+    private suspend fun probeNetwork(query: TrackQuery): LyricsLookup = coroutineScope {
+        val peserta = racers()
+        val events = Channel<RaceEvent>(Channel.UNLIMITED)
+        val jobs = peserta.map { p ->
+            launch { events.send(RaceEvent.Answer(ProviderAnswer(p.id, p.lookup(query)))) }
+        }
+        val answers = collectRace(events, peserta.map { it.id }.toSet(), query.durationSec)
+        jobs.forEach { it.cancel() }
+        combineProviderAnswers(answers, query.durationSec).also {
+            Log.d(TAG, "Lookup ${query.trackId}: ${answers.map { a -> a.id to a.probe::class.simpleName }} -> $it")
+        }
     }
 
-    /**
-     * Hit `/api/search`. Array kosong adalah jawaban sungguhan "tidak ada".
-     *
-     * Dari semua item dipilih lewat [pickBestCandidate]: synced dulu, durasi
-     * paling mirip dengan [targetSec]. Dulu yang diambil item synced PERTAMA,
-     * yang bisa saja versi live atau extended dengan timing berbeda.
-     */
-    private suspend fun probeSearch(
-        trackId: String,
-        title: String,
-        artist: String,
+    private suspend fun CoroutineScope.collectRace(
+        events: Channel<RaceEvent>,
+        ids: Set<ProviderId>,
         targetSec: Double?,
-    ): LrclibProbe = runCatching {
-        val resp = api.search(trackName = title, artistName = artist)
-        if (!resp.isSuccessful) return@runCatching probeFromHttpFailure(resp.code())
-        val items = resp.body().orEmpty()
-        if (items.isEmpty()) return@runCatching LrclibProbe.Absent
-        val kandidat = items.map { dto ->
-            LyricsCandidate(dto.toLyricsResult(trackId), dto.duration, ProbeSource.Search)
+    ): List<ProviderAnswer> {
+        val answers = mutableListOf<ProviderAnswer>()
+        val pending = ids.toMutableSet()
+        var grace: Job? = null
+        while (!isRaceSettled(answers, pending, targetSec)) {
+            val answer = (events.receive() as? RaceEvent.Answer)?.answer ?: break
+            answers += answer
+            pending -= answer.id
+            if (answer.id != ProviderId.Lrclib) cooldown.record(answer.id, answer.probe)
+            if (grace == null && answer.probe is ProviderProbe.Content) {
+                grace = launch {
+                    delay(contentGraceMs)
+                    events.send(RaceEvent.GraceOver)
+                }
+            }
         }
-        val pick = pickBestCandidate(kandidat, targetSec)
-            ?: return@runCatching LrclibProbe.Absent
-        LrclibProbe.Content(pick.result, pick.durationSec)
-    }.getOrElse { t ->
-        Log.w(TAG, "/search error untuk $trackId: ${t.message}")
-        LrclibProbe.Failed(t.message ?: "search gagal")
+        grace?.cancel()
+        return answers
     }
 
-    /** Hasil tanpa isi sama artinya dengan "tidak ada", bukan konten kosong. */
-    private fun LyricsResult.asProbe(durationSec: Double?): LrclibProbe =
-        if (hasContent) LrclibProbe.Content(this, durationSec) else LrclibProbe.Absent
-
-    private fun LrclibDto.toLyricsResult(trackId: String): LyricsResult {
-        val synced = syncedLyrics?.takeIf { it.isNotBlank() }?.let { parseLrc(it) }
-        val plain = plainLyrics?.takeIf { it.isNotBlank() }
-        return LyricsResult(
-            trackId = trackId,
-            synced = synced?.takeIf { it.isNotEmpty() },
-            plain = plain,
-        )
+    private sealed interface RaceEvent {
+        data class Answer(val answer: ProviderAnswer) : RaceEvent
+        data object GraceOver : RaceEvent
     }
 
     companion object {
         private const val TAG = "LyricsRepository"
         private const val BASE_URL = "https://lrclib.net"
-        private const val USER_AGENT = "spotivibe-android (https://github.com/tektungg/spotivibe)"
-        private const val PREFER_GET_TIMEOUT_MS = 1500L
+
+        /**
+         * Tiga detik: cukup untuk satu request lambat ke sumber komunitas,
+         * cukup pendek supaya lirik LRCLIB yang sudah ada tidak terasa ditahan.
+         */
+        private const val DEFAULT_CONTENT_GRACE_MS = 3_000L
         private const val MEM_CACHE_MAX = 50
 
         /** Total percobaan untuk fetch normal. Preload selalu 1. */

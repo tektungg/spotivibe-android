@@ -100,7 +100,9 @@ private const val UNBEATABLE_DELTA_SEC = 1.0
  *
  * 1 = synced dulu, durasi paling mirip (0.8.1). Entri tanpa field ini (0)
  * dipilih dengan aturan lama: konten `/get` selalu menang.
+ * 2 = sumber komunitas ikut berlomba, timing paling halus menang
+ * (`pickProviderWinner`). Entri versi 1 hanya pernah melihat LRCLIB.
  */
-const val LYRICS_SELECTION_VERSION = 1
+const val LYRICS_SELECTION_VERSION = 2
 
 fun isSelectionOutdated(selectionVersion: Int): Boolean = selectionVersion < LYRICS_SELECTION_VERSION

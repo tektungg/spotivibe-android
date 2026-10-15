@@ -11,7 +11,11 @@ Android native companion untuk Spotify — synced lyrics dengan romanization (JP
 ## Fitur
 
 - **Now Playing** dengan album cover, judul, artist, slider seek (butuh Premium untuk kontrol)
-- **Synced lyrics** dari [LRCLIB](https://lrclib.net) — auto-highlight baris aktif yang ter-sync ke playback. Tap baris untuk seek.
+- **Synced lyrics dari empat sumber yang berlomba** — [LRCLIB](https://lrclib.net),
+  [AMLL TTML DB](https://amll.dev), [lrc.red](https://lrc.red), dan
+  [LRCMux](https://lrcmux.dev). Yang timing-nya paling halus (per kata > per
+  baris > teks polos) menang. Tap baris untuk seek. Detail di
+  [Sumber lirik](#sumber-lirik)
 - **Romanization** otomatis per bahasa (toggle on/off):
   - Jepang (kana + kanji) → Romaji Hepburn via [kuromoji-ipadic](https://github.com/atilika/kuromoji)
   - Korea (Hangul) → Revised Romanization (port internal dari rules pemerintah)
@@ -290,6 +294,50 @@ manual di Settings sudah menutupi kebutuhan ini dan berlaku di semua permukaan.
 Cache disk sekarang ikut menyimpan timing per-kata. Sebelumnya field itu hilang
 saat round-trip, jadi karaoke per-kata jalan di pemutaran pertama lalu
 diam-diam turun ke per-baris begitu cache dipakai.
+
+### Sumber lirik
+
+Semua sumber ditanya bersamaan (`LyricsRepository.probeNetwork`). Aturannya ada
+di `domain/ProviderRace.kt` dan diuji tanpa jaringan:
+
+| Sumber | Peringkat | Dicocokkan lewat | Format | Kode |
+|---|---|---|---|---|
+| AMLL (`api.amll.dev`) | 10 | ID Spotify di `spotifyIds` (pasti) | TTML | `AmllProvider` |
+| lrc.red (`lrc.red/api/v1`) | 20 | judul + artis + durasi ±5 s | TTML | `LrcRedProvider` |
+| LRCMux (`api.lrcmux.dev`) | 30 | dicocokkan server (artis, judul, durasi) | JSON per kata | `LrcMuxProvider` |
+| LRCLIB (`lrclib.net`) | 100 | `/get` + `/search`, durasi | LRC | `LrclibProvider` |
+
+Pemenang: dalam toleransi durasi dulu, lalu timing paling halus, lalu
+peringkat. Perlombaan berhenti begitu pemenang sementara per kata dan tidak ada
+sumber berperingkat lebih tinggi yang masih jalan, atau 3 detik setelah konten
+pertama datang; sisanya dibatalkan, termasuk request HTTP-nya.
+
+Keputusan yang disengaja:
+
+- **AMLL hanya lewat ID Spotify.** Pencariannya fuzzy: untuk "Blinding Lights"
+  item pertamanya "Wasted Times". Lebih baik tidak dapat lirik dari sini
+  daripada lirik lagu lain yang timing-nya meyakinkan.
+- **lrc.red menolak remix, live, cover.** Hasil pencariannya memuat versi
+  remix dan cover oleh artis lain dengan durasi mirip (`domain/TrackMatch.kt`).
+  URL TTML-nya hanya diambil kalau https dan host-nya `lrc.red`.
+- **BiniLyrics tidak dipanggil.** API-nya me-redirect 307 ke `lrc.red/api/v1`,
+  jadi lrc.red dipanggil langsung.
+- **Cache negatif tetap milik LRCLIB.** Tanpa konten, "tidak ada" dari LRCLIB
+  menang walau sumber komunitas gagal dijangkau. Kalau tidak, lagu tanpa lirik
+  ditanyakan ulang setiap diputar.
+- **Jeda per sumber** (`ProviderCooldown`): mulai gagal kedua berturut-turut,
+  sumber komunitas diistirahatkan 30/60/120/300 s, atau sesuai `Retry-After`.
+- Settings → **Community lyrics** mematikan ketiganya; app kembali ke LRCLIB
+  saja. Statistik **COMMUNITY WON** menunjukkan seberapa sering mereka menang.
+- `LYRICS_SELECTION_VERSION` naik ke 2, jadi cache dari era LRCLIB-saja dipilih
+  ulang saat online dan tetap jadi cadangan offline.
+- Spicy Lyrics API sengaja tidak dipakai: butuh kunci `sl_pk_`.
+
+Lane periodik ke API sungguhan (tidak jalan di gate test):
+
+```bash
+SPOTIVIBE_LIVE=1 ./gradlew testFullDebugUnitTest --tests "*LiveProvidersTest"
+```
 
 ### Parsing TTML: suku kata, vokal latar, duet
 

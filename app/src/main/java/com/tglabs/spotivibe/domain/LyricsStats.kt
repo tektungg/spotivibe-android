@@ -20,8 +20,11 @@ package com.tglabs.spotivibe.domain
  */
 enum class LyricsSource { Override, MemCache, DiskCache, Network }
 
-/** Endpoint LRCLIB mana yang menyediakan lirik saat lookup jaringan berhasil. */
-enum class ProbeSource { Get, Search }
+/**
+ * Siapa yang menyediakan lirik saat lookup jaringan berhasil: endpoint LRCLIB
+ * (`/get`, `/search`) atau salah satu sumber komunitas.
+ */
+enum class ProbeSource { Get, Search, Amll, LrcRed, LrcMux }
 
 /** Hasil satu lookup, disederhanakan jadi empat kemungkinan yang saling lepas. */
 enum class LyricsOutcome { Synced, PlainOnly, NotFound, Unavailable }
@@ -59,6 +62,8 @@ data class LyricsStats(
     val fromOverride: Int = 0,
     val getWon: Int = 0,
     val searchWon: Int = 0,
+    /** Lookup jaringan yang dimenangkan sumber komunitas (AMLL, lrc.red, LRCMux). */
+    val communityWon: Int = 0,
 ) {
     /** Semua lookup, termasuk yang gagal dijangkau. */
     val total: Int get() = synced + plainOnly + notFound + unavailable
@@ -106,6 +111,14 @@ data class LyricsStats(
         get() = (getWon + searchWon).let { if (it == 0) null else searchWon.toFloat() / it }
 
     /**
+     * Dari lookup jaringan yang berhasil, berapa yang dimenangkan sumber
+     * komunitas. Ini ukuran apakah sumber tambahan sepadan dengan request
+     * ekstranya: mereka hanya menang kalau timing-nya lebih halus dari LRCLIB.
+     */
+    val communityRate: Float?
+        get() = (getWon + searchWon + communityWon).let { if (it == 0) null else communityWon.toFloat() / it }
+
+    /**
      * Lookup yang dijawab override SENGAJA tidak menaikkan penghitung outcome
      * apa pun, cuma [fromOverride].
      *
@@ -120,18 +133,25 @@ data class LyricsStats(
             return copy(fromOverride = fromOverride + 1)
         }
         return copy(
-            synced = synced + if (event.outcome == LyricsOutcome.Synced) 1 else 0,
-            plainOnly = plainOnly + if (event.outcome == LyricsOutcome.PlainOnly) 1 else 0,
-            notFound = notFound + if (event.outcome == LyricsOutcome.NotFound) 1 else 0,
-            unavailable = unavailable + if (event.outcome == LyricsOutcome.Unavailable) 1 else 0,
-            fromMem = fromMem + if (event.source == LyricsSource.MemCache) 1 else 0,
-            fromDisk = fromDisk + if (event.source == LyricsSource.DiskCache) 1 else 0,
-            fromNetwork = fromNetwork + if (event.source == LyricsSource.Network) 1 else 0,
-            getWon = getWon + if (event.probe == ProbeSource.Get) 1 else 0,
-            searchWon = searchWon + if (event.probe == ProbeSource.Search) 1 else 0,
+            synced = synced.plusIf(event.outcome == LyricsOutcome.Synced),
+            plainOnly = plainOnly.plusIf(event.outcome == LyricsOutcome.PlainOnly),
+            notFound = notFound.plusIf(event.outcome == LyricsOutcome.NotFound),
+            unavailable = unavailable.plusIf(event.outcome == LyricsOutcome.Unavailable),
+            fromMem = fromMem.plusIf(event.source == LyricsSource.MemCache),
+            fromDisk = fromDisk.plusIf(event.source == LyricsSource.DiskCache),
+            fromNetwork = fromNetwork.plusIf(event.source == LyricsSource.Network),
+            getWon = getWon.plusIf(event.probe == ProbeSource.Get),
+            searchWon = searchWon.plusIf(event.probe == ProbeSource.Search),
+            communityWon = communityWon.plusIf(event.probe?.isCommunity == true),
         )
     }
 }
+
+/** Penghitung naik satu kalau [condition] benar. */
+private fun Int.plusIf(condition: Boolean): Int = if (condition) this + 1 else this
+
+/** Sumber selain LRCLIB. */
+val ProbeSource.isCommunity: Boolean get() = this != ProbeSource.Get && this != ProbeSource.Search
 
 /** Sink untuk peristiwa lookup. Diabstraksi supaya repository bisa diuji. */
 fun interface LyricsStatsRecorder {

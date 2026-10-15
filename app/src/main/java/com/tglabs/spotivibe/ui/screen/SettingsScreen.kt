@@ -84,6 +84,8 @@ fun SettingsScreen(
     onToggleHighContrast: () -> Unit = {},
     onToggleSmoothScroll: () -> Unit = {},
     onToggleHaptic: () -> Unit = {},
+    communitySources: Boolean = true,
+    onToggleCommunitySources: () -> Unit = {},
     lyricsStats: LyricsStats = LyricsStats(),
     onResetLyricsStats: () -> Unit = {},
 ) {
@@ -225,6 +227,15 @@ fun SettingsScreen(
                 },
                 inlineTrailing = true,
             )
+            // Mati = hanya LRCLIB. Berguna kalau sumber komunitas sedang
+            // lambat atau user tidak ingin request ke banyak server.
+            SettingsRow(
+                label = "Community lyrics (AMLL, lrc.red, LRCMux)",
+                content = {
+                    Toggle(on = communitySources, onChange = { onToggleCommunitySources() })
+                },
+                inlineTrailing = true,
+            )
 
             // ── 03 SPOTIFY ──
             SectionHeader(number = "03", title = "Spotify", hint = "Connection")
@@ -347,6 +358,14 @@ fun SettingsScreen(
                             value = lyricsStats.searchOnlyRate.asPercent(),
                         )
                     }
+                    Spacer(modifier = Modifier.height(SvSpace.s3))
+                    // Sumber komunitas cuma menang kalau timing-nya lebih halus
+                    // dari LRCLIB, jadi angka ini mengukur apakah request
+                    // tambahannya sepadan.
+                    MetricColumn(
+                        label = "COMMUNITY WON",
+                        value = lyricsStats.communityRate.asPercent(),
+                    )
                     Spacer(modifier = Modifier.height(SvSpace.s3))
                     Text(
                         // "Terjawab" sengaja dipisah dari total: lookup yang gagal

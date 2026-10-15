@@ -1,6 +1,7 @@
 package com.tglabs.spotivibe.data
 
 import com.tglabs.spotivibe.domain.BackgroundVocal
+import com.tglabs.spotivibe.domain.LYRICS_SELECTION_VERSION
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.SyncedWord
 import com.tglabs.spotivibe.domain.SyncedLine
@@ -202,6 +203,6 @@ class LyricsCacheTest {
         val dir = tmp.root.resolve("baru")
         cache(dir).put(lirik())
         val isi = File(dir, cacheFileName("spotify:track:a")).readText()
-        assertTrue(isi, isi.contains("\"selectionVersion\":1"))
+        assertTrue(isi, isi.contains("\"selectionVersion\":$LYRICS_SELECTION_VERSION"))
     }
 }

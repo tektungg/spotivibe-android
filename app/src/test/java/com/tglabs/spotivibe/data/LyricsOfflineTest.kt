@@ -16,6 +16,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import retrofit2.Response
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Mode offline di [LyricsRepository]: kapan jaringan disentuh, kapan lirik basi
@@ -37,7 +38,14 @@ class LyricsOfflineTest {
     private enum class Mode { Gagal, TidakAda, Ada }
 
     private class FakeLrclib(var mode: Mode = Mode.Gagal) : LrclibApi {
-        var panggilan = 0
+        /**
+         * Atomik, bukan `var Int`: `/get` dan `/search` dipanggil paralel di
+         * thread IO, dan `panggilan++` biasa bisa kehilangan satu hitungan
+         * saat keduanya bertabrakan. Itu yang membuat test retry sesekali
+         * melihat 1 panggilan padahal ada 2.
+         */
+        private val hitungan = AtomicInteger(0)
+        val panggilan: Int get() = hitungan.get()
         var teks = "lirik dari jaringan"
 
         /** Dijalankan di setiap panggilan, misalnya untuk mematikan jaringan. */
@@ -49,7 +57,7 @@ class LyricsOfflineTest {
             albumName: String,
             duration: Int,
         ): Response<LrclibDto> {
-            panggilan++
+            hitungan.incrementAndGet()
             saatDipanggil()
             return when (mode) {
                 Mode.Gagal -> throw IOException("Unable to resolve host lrclib.net")
@@ -62,7 +70,7 @@ class LyricsOfflineTest {
             trackName: String,
             artistName: String,
         ): Response<List<LrclibDto>> {
-            panggilan++
+            hitungan.incrementAndGet()
             saatDipanggil()
             return when (mode) {
                 Mode.Gagal -> throw IOException("Unable to resolve host lrclib.net")
