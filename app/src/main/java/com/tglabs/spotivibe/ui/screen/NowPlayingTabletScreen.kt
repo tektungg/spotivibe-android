@@ -45,7 +45,10 @@ import com.tglabs.spotivibe.domain.UiState
 import com.tglabs.spotivibe.ui.component.AmbientBg
 import com.tglabs.spotivibe.ui.component.HairlineIconButton
 import com.tglabs.spotivibe.ui.component.HairlineRule
+import com.tglabs.spotivibe.ui.component.LineInteraction
+import com.tglabs.spotivibe.ui.component.LyricsContent
 import com.tglabs.spotivibe.ui.component.LyricsList
+import com.tglabs.spotivibe.ui.component.lyricsOptions
 import com.tglabs.spotivibe.ui.component.MonoEyebrow
 import com.tglabs.spotivibe.ui.component.SelectionActionBar
 import com.tglabs.spotivibe.ui.component.Transport
@@ -349,32 +352,27 @@ fun NowPlayingTabletScreen(
 
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     LyricsList(
-                        lyricsState = state.lyricsState,
-                        activeIndex = state.currentLineIndex,
-                        progressMs = effectiveProgressMs,
-                        romaji = state.romaji,
-                        fontSize = (state.lyricsFontSize + 8).coerceAtMost(56),
-                        lineSpacing = (state.lineSpacing + 18).coerceAtLeast(12),
-                        highContrast = state.highContrast,
-                        smoothScroll = state.smoothScroll,
-                        hapticEnabled = state.hapticEnabled,
-                        isPlaying = !track.isPaused,
-                        lyricEffects = state.lyricEffects,
-                        notice = state.lyricsNotice,
-                        onSeekToLine = { line ->
-                            if (isSelecting) toggleSelect(line.id)
-                            else onSeek(
-                                com.tglabs.spotivibe.domain.seekTargetMs(
-                                    line.timeMs, state.syncOffsets.totalMs,
+                        content = LyricsContent(state.lyricsState, state.currentLineIndex, effectiveProgressMs, state.romaji),
+                        options = state.lyricsOptions(
+                            fontSize = (state.lyricsFontSize + 8).coerceAtMost(56),
+                            lineSpacing = (state.lineSpacing + 18).coerceAtLeast(12),
+                        ),
+                        interaction = LineInteraction(
+                            onSeekToLine = { line ->
+                                if (isSelecting) toggleSelect(line.id)
+                                else onSeek(
+                                    com.tglabs.spotivibe.domain.seekTargetMs(
+                                        line.timeMs, state.syncOffsets.totalMs,
+                                    )
                                 )
-                            )
-                        },
-                        onLongPressShare = { line ->
-                            if (isSelecting) toggleSelect(line.id)
-                            else selectedIds = setOf(line.id)
-                        },
-                        selectedIds = selectedIds,
-                        isSelecting = isSelecting,
+                            },
+                            onLongPressShare = { line ->
+                                if (isSelecting) toggleSelect(line.id)
+                                else selectedIds = setOf(line.id)
+                            },
+                            selectedIds = selectedIds,
+                            isSelecting = isSelecting,
+                        ),
                     )
                 }
             }

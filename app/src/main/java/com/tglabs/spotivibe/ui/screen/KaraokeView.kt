@@ -32,7 +32,9 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.tglabs.spotivibe.domain.LyricsState
+import com.tglabs.spotivibe.ui.component.LyricsContent
 import com.tglabs.spotivibe.ui.component.LyricsList
+import com.tglabs.spotivibe.ui.component.LyricsListOptions
 import com.tglabs.spotivibe.ui.component.MonoEyebrow
 import com.tglabs.spotivibe.ui.theme.LocalSvColors
 import com.tglabs.spotivibe.ui.theme.SvIcons
@@ -90,11 +92,8 @@ fun KaraokeView(
     ) {
         // Lyrics fill the whole screen
         LyricsList(
-            lyricsState = lyricsState,
-            activeIndex = activeIndex,
-            progressMs = progressMs,
-            romaji = romaji,
-            fontSize = karaokeFontSize,
+            content = LyricsContent(lyricsState, activeIndex, progressMs, romaji),
+            options = LyricsListOptions(fontSize = karaokeFontSize),
             modifier = Modifier.fillMaxSize(),
         )
 

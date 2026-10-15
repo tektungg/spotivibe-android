@@ -8,6 +8,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.tglabs.spotivibe.domain.LyricsResult
 import com.tglabs.spotivibe.domain.LyricsState
 import com.tglabs.spotivibe.domain.SyncedLine
+import com.tglabs.spotivibe.ui.component.LineInteraction
+import com.tglabs.spotivibe.ui.component.LyricsContent
 import com.tglabs.spotivibe.ui.component.LyricsList
 import com.tglabs.spotivibe.ui.theme.SpotivibeTheme
 import org.junit.Assert.assertEquals
@@ -46,10 +48,8 @@ class LyricsListUiTest {
         compose.setContent {
             SpotivibeTheme {
                 LyricsList(
-                    lyricsState = state,
-                    activeIndex = activeIndex,
-                    progressMs = 0L,
-                    onSeekToLine = onSeekToLine,
+                    content = LyricsContent(state, activeIndex, progressMs = 0L),
+                    interaction = LineInteraction(onSeekToLine = onSeekToLine),
                 )
             }
         }

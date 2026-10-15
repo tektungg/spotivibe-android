@@ -74,11 +74,11 @@ internal data class LyricsDisplayPrefs(
 
 /** Interaksi baris: tap untuk seek, tekan lama untuk memilih. */
 @Immutable
-internal data class LineInteraction(
-    val onSeekToLine: ((SyncedLine) -> Unit)?,
-    val onLongPressShare: ((SyncedLine) -> Unit)?,
-    val selectedIds: Set<Int>,
-    val isSelecting: Boolean,
+data class LineInteraction(
+    val onSeekToLine: ((SyncedLine) -> Unit)? = null,
+    val onLongPressShare: ((SyncedLine) -> Unit)? = null,
+    val selectedIds: Set<Int> = emptySet(),
+    val isSelecting: Boolean = false,
 )
 
 /** Semua yang khas untuk SATU baris. */

@@ -34,7 +34,10 @@ import com.tglabs.spotivibe.domain.UiState
 import com.tglabs.spotivibe.domain.lyricsProgressMs
 import com.tglabs.spotivibe.domain.seekTargetMs
 import com.tglabs.spotivibe.ui.component.AmbientBg
+import com.tglabs.spotivibe.ui.component.LineInteraction
+import com.tglabs.spotivibe.ui.component.LyricsContent
 import com.tglabs.spotivibe.ui.component.LyricsList
+import com.tglabs.spotivibe.ui.component.lyricsOptions
 import com.tglabs.spotivibe.ui.component.NPHeader
 import com.tglabs.spotivibe.ui.component.SelectionActionBar
 import com.tglabs.spotivibe.ui.component.SelectionHeader
@@ -270,22 +273,12 @@ fun NowPlayingScreen(
             // Lyrics list (mask via padding handles edge fade)
             Box(modifier = Modifier.weight(1f, fill = true).fillMaxWidth()) {
                 LyricsList(
-                    lyricsState = state.lyricsState,
-                    activeIndex = state.currentLineIndex,
-                    progressMs = effectiveProgressMs,
-                    romaji = state.romaji,
-                    fontSize = state.lyricsFontSize,
-                    lineSpacing = (state.lineSpacing + 14).coerceAtLeast(10), // base 7 → ~21dp gap target
-                    highContrast = state.highContrast,
-                    smoothScroll = state.smoothScroll,
-                    hapticEnabled = state.hapticEnabled,
-                    isPlaying = !track.isPaused,
-                    lyricEffects = state.lyricEffects,
-                    notice = state.lyricsNotice,
-                    onSeekToLine = handleLineTap,
-                    onLongPressShare = handleLineLongPress,
-                    selectedIds = selectedIds,
-                    isSelecting = isSelecting,
+                    content = LyricsContent(state.lyricsState, state.currentLineIndex, effectiveProgressMs, state.romaji),
+                    options = state.lyricsOptions(
+                        fontSize = state.lyricsFontSize,
+                        lineSpacing = (state.lineSpacing + 14).coerceAtLeast(10), // base 7 → ~21dp gap target
+                    ),
+                    interaction = LineInteraction(handleLineTap, handleLineLongPress, selectedIds, isSelecting),
                 )
             }
 

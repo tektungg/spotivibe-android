@@ -64,48 +64,63 @@ import com.tglabs.spotivibe.util.Haptics
  * `fontSize` user override multiplies LyricActive base (30sp). 17 default
  * maintains roughly current behavior; settings slider 12-56 maps directly.
  */
-@Composable
-fun LyricsList(
+/** Apa yang ditampilkan daftar lirik. */
+@Immutable
+data class LyricsContent(
     /**
      * Bukan sekadar konten. Kosong karena LRCLIB bilang lagu ini tidak
      * berlirik itu beda dengan kosong karena jaringan mati, dan user berhak
      * tahu bedanya: yang satu permanen, yang satu tinggal ditunggu.
      */
-    lyricsState: LyricsState,
+    val lyricsState: LyricsState,
     /**
      * Baris aktif, sudah dihitung di PlaybackController dengan offset user
      * ikut diperhitungkan. Komponen ini SENGAJA tidak menghitungnya sendiri:
      * salinan kedua dari logika itu dulu bikin layar dan notification bisa
      * menunjuk baris berbeda, dan cuma salinan milik UI yang menerapkan offset.
      */
-    activeIndex: Int,
+    val activeIndex: Int,
     /**
-     * Posisi lirik (sudah termasuk offset), hanya untuk highlight per-kata di
-     * LRC enhanced dan titik jeda. Bukan untuk menentukan baris aktif.
+     * Posisi lirik (sudah termasuk offset), hanya untuk highlight per-kata dan
+     * titik jeda. Bukan untuk menentukan baris aktif.
      */
-    progressMs: Long,
+    val progressMs: Long,
     /** Key = [SyncedLine.id]. Bukan timeMs: timestamp bisa kembar. */
-    romaji: Map<Int, String?> = emptyMap(),
-    fontSize: Int = 30,
-    lineSpacing: Int = 22,
-    highContrast: Boolean = false,
-    smoothScroll: Boolean = true,
-    hapticEnabled: Boolean = true,
-    onSeekToLine: ((SyncedLine) -> Unit)? = null,
-    onLongPressShare: ((SyncedLine) -> Unit)? = null,
-    selectedIds: Set<Int> = emptySet(),
-    isSelecting: Boolean = false,
-    modifier: Modifier = Modifier,
+    val romaji: Map<Int, String?> = emptyMap(),
+)
+
+/** Cara daftar lirik digambar: setelan user dan keadaan lagu. */
+@Immutable
+data class LyricsListOptions(
+    val fontSize: Int = 30,
+    val lineSpacing: Int = 22,
+    val highContrast: Boolean = false,
+    val smoothScroll: Boolean = true,
+    val hapticEnabled: Boolean = true,
     /** Lagu sedang jalan. Karaoke hanya mengekstrapolasi posisi per frame selama ini true. */
-    isPlaying: Boolean = true,
+    val isPlaying: Boolean = true,
     /** Karaoke penuh per suku kata. Mati untuk head unit yang lemah. */
-    lyricEffects: Boolean = true,
+    val lyricEffects: Boolean = true,
     /**
      * Pesan yang menyebut sumber lirik yang gagal (`lyricsNotice`), dipakai
      * menggantikan pesan bawaan untuk "tidak ada" dan "gagal memuat".
      */
-    notice: String? = null,
+    val notice: String? = null,
+)
+
+/**
+ * Daftar parameter dulu tumbuh satu tiap fitur sampai 17. Dikelompokkan jadi
+ * [LyricsContent] (apa), [LyricsListOptions] (bagaimana), dan
+ * [LineInteraction] (tap, tekan lama, seleksi).
+ */
+@Composable
+fun LyricsList(
+    content: LyricsContent,
+    options: LyricsListOptions = LyricsListOptions(),
+    interaction: LineInteraction = LineInteraction(),
+    modifier: Modifier = Modifier,
 ) {
+    val lyricsState = content.lyricsState
     val sv = LocalSvColors.current
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         val synced = (lyricsState as? LyricsState.Ready)?.result?.synced
@@ -115,14 +130,14 @@ fun LyricsList(
 
             !synced.isNullOrEmpty() ->
                 SyncedView(
-                    content = SyncedContent(synced, romaji),
-                    activeIndex = activeIndex,
-                    clock = LyricsClock(progressMs, isPlaying),
-                    prefs = LyricsDisplayPrefs(fontSize, lineSpacing, highContrast, smoothScroll, hapticEnabled, lyricEffects),
-                    interaction = LineInteraction(onSeekToLine, onLongPressShare, selectedIds, isSelecting),
+                    content = SyncedContent(synced, content.romaji),
+                    activeIndex = content.activeIndex,
+                    clock = LyricsClock(content.progressMs, options.isPlaying),
+                    prefs = options.toDisplayPrefs(),
+                    interaction = interaction,
                 )
 
-            !plain.isNullOrBlank() -> PlainView(plain, fontSize, sv.ink2)
+            !plain.isNullOrBlank() -> PlainView(plain, options.fontSize, sv.ink2)
 
             // Offline dicoba ulang otomatis saat jaringan kembali
             // (PlaybackController), jadi pesannya tidak menyuruh replay.
@@ -132,12 +147,15 @@ fun LyricsList(
                 StatusText("You're offline. Lyrics for this song aren't saved yet.")
 
             lyricsState is LyricsState.Unavailable ->
-                StatusText(notice ?: "Couldn't load lyrics. Check your connection, then replay the song.")
+                StatusText(options.notice ?: "Couldn't load lyrics. Check your connection, then replay the song.")
 
-            else -> StatusText(notice ?: "No lyrics found for this track")
+            else -> StatusText(options.notice ?: "No lyrics found for this track")
         }
     }
 }
+
+private fun LyricsListOptions.toDisplayPrefs() =
+    LyricsDisplayPrefs(fontSize, lineSpacing, highContrast, smoothScroll, hapticEnabled, lyricEffects)
 
 @Composable
 private fun StatusText(text: String) {
