@@ -1,12 +1,17 @@
-// Copies the app's own fonts into public/generated/fonts and downloads a
-// glyph subset of Noto Serif KR / JP / TC that covers exactly the CJK text in
-// src/data/tracks.ts. The output is gitignored; rerun after editing lyrics.
+// Builds the real song catalog (scripts/catalog/fetch-catalog.mjs), copies
+// the app's own fonts into public/generated/fonts, and downloads a glyph
+// subset of Noto Serif KR / JP / TC covering exactly the CJK text of both
+// catalogs (real and fictional). Output is gitignored; rerun after changing
+// songs or lyrics.
 //
 // Usage: node scripts/prepare-assets.mjs
+import { existsSync, readFileSync } from "node:fs";
 import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PLAYER_CARDS, TRACKS } from "../src/data/tracks.ts";
+import { FICTIONAL_TRACKS } from "../src/data/catalog.ts";
+import { CATALOG_FILE, buildCatalog } from "./catalog/fetch-catalog.mjs";
+import { fetchOk } from "./lib/http.mjs";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const APP_FONTS = join(ROOT, "..", "app", "src", "main", "res", "font");
@@ -27,39 +32,23 @@ const CJK_FAMILIES = [
 ];
 export const CJK_WEIGHTS = [400, 500];
 
-// Google Fonts serves woff2 only to a modern browser user agent.
-const BROWSER_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
 const CJK_RANGE = /[぀-ヿ㐀-鿿가-힯＀-￯]/u;
 
 /** Unique CJK characters used by one language, plus Latin fallbacks. */
-export function glyphsFor(lang) {
-  const texts = [];
-  for (const track of Object.values(TRACKS)) {
-    if (track.lang !== lang) continue;
-    texts.push(track.title, ...track.lyrics.map((l) => l.k));
-  }
-  texts.push(...PLAYER_CARDS.filter((c) => c.lang === lang).map((c) => c.title));
-  const chars = new Set([...texts.join("")].filter((c) => CJK_RANGE.test(c)));
-  return [...chars].sort().join("");
+/** Tracks of both catalogs; the real one only once fetch-catalog has run. */
+export function allTracks() {
+  const real = existsSync(CATALOG_FILE) ? Object.values(JSON.parse(readFileSync(CATALOG_FILE, "utf8")).tracks) : [];
+  return [...Object.values(FICTIONAL_TRACKS), ...real];
 }
 
-const FETCH_ATTEMPTS = 4;
-
-/** fetch with retries: the Google Fonts edge times out now and then. */
-async function fetchOk(url) {
-  let lastError;
-  for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt++) {
-    try {
-      const res = await fetch(url, { headers: { "User-Agent": BROWSER_UA } });
-      if (res.ok) return res;
-      lastError = new Error(`status ${res.status}`);
-    } catch (err) {
-      lastError = err;
-    }
-    console.warn(`  retry ${attempt}/${FETCH_ATTEMPTS} for ${url.slice(0, 80)}...`);
+export function glyphsFor(lang) {
+  const texts = [];
+  for (const track of allTracks()) {
+    if (track.lang !== lang) continue;
+    texts.push(track.title, track.artist, track.album, ...track.lyrics.map((l) => l.k));
   }
-  throw new Error(`prepare-assets: GET ${url} failed: ${lastError}`);
+  const chars = new Set([...texts.join("")].filter((c) => CJK_RANGE.test(c)));
+  return [...chars].sort().join("");
 }
 
 async function fetchText(url) {
@@ -84,6 +73,12 @@ async function downloadSubset({ lang, family, slug }) {
 }
 
 async function main() {
+  try {
+    await buildCatalog();
+  } catch (err) {
+    console.error(`prepare-assets: real catalog failed (${err.message}); REMOTION_CATALOG=fictional still renders`);
+    process.exitCode = 1;
+  }
   await mkdir(OUT, { recursive: true });
   for (const name of APP_FONT_FILES) {
     await copyFile(join(APP_FONTS, name), join(OUT, name));

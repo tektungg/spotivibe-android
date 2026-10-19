@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { AbsoluteFill, Audio, Sequence, staticFile } from "remotion";
 import { Grain, Vignette } from "./components/Backdrop";
 import { S01ColdOpen } from "./scenes/S01ColdOpen";
@@ -10,6 +10,8 @@ import { S06Everywhere } from "./scenes/S06Everywhere";
 import { S07Board } from "./scenes/S07Board";
 import { S08Build } from "./scenes/S08Build";
 import { S09EndCard } from "./scenes/S09EndCard";
+import type { CatalogData } from "./data/catalog";
+import { CatalogProvider, resolveCatalog } from "./data/useCatalog";
 import { COLOR } from "./theme/tokens";
 import { timedScenes, type SceneId } from "./timeline";
 
@@ -26,8 +28,19 @@ export const SCENE_COMPONENTS: Record<SceneId, React.FC> = {
   endCard: S09EndCard,
 };
 
+export type PromoProps = { catalog: CatalogData };
+
 /** The full 60-second promo: scenes cut on beats, one shared score. */
-export const Promo: React.FC = () => (
+export const Promo: React.FC<PromoProps> = ({ catalog }) => {
+  const resolved = useMemo(() => resolveCatalog(catalog), [catalog]);
+  return (
+    <CatalogProvider catalog={resolved}>
+      <Scenes />
+    </CatalogProvider>
+  );
+};
+
+const Scenes: React.FC = () => (
   <AbsoluteFill style={{ background: COLOR.bg0 }}>
     {timedScenes().map((scene) => {
       const Scene = SCENE_COMPONENTS[scene.id];

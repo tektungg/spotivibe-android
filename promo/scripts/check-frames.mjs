@@ -20,6 +20,9 @@ const COMPOSITION_ID = "SpotivibePromo";
 const MIN_LUMA_SPREAD = 60;
 const SAMPLE_POINTS = [0.25, 0.5, 0.75];
 
+/** REMOTION_* variables (e.g. REMOTION_CATALOG=fictional) reach the bundle like they do with the CLI. */
+const envVariables = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith("REMOTION_")));
+
 function parseArgs(argv) {
   const args = { frames: null, out: join(ROOT, "out", "stills") };
   for (let i = 0; i < argv.length; i++) {
@@ -55,11 +58,11 @@ async function main() {
   const targets = args.frames ? args.frames.map((frame) => ({ frame, scene: "manual" })) : defaultFrames();
   const serveUrl = await bundle({ entryPoint: join(ROOT, "src", "index.ts") });
   const browser = await openBrowser("chrome", { chromiumOptions: { gl: "angle" } });
-  const composition = await selectComposition({ serveUrl, id: COMPOSITION_ID, puppeteerInstance: browser });
+  const composition = await selectComposition({ serveUrl, id: COMPOSITION_ID, puppeteerInstance: browser, envVariables });
   const failures = [];
   for (const { frame, scene } of targets) {
     const output = join(args.out, `f${String(frame).padStart(4, "0")}.png`);
-    await renderStill({ composition, serveUrl, output, frame, puppeteerInstance: browser, imageFormat: "png" });
+    await renderStill({ composition, serveUrl, output, frame, puppeteerInstance: browser, imageFormat: "png", envVariables });
     const spread = lumaSpread(output);
     const ok = spread >= MIN_LUMA_SPREAD;
     if (!ok) failures.push(frame);

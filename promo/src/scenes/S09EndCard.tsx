@@ -6,7 +6,8 @@ import { LogoMark, MARK_ACTIVE_INDEX, MARK_BARS, MARK_SIZE } from "../components
 import { eyebrow } from "../components/NowPlayingScreen";
 import { RevealWords, Rise } from "../components/Type";
 import { TAGLINE } from "../data/brand";
-import { TRACKS } from "../data/tracks";
+import { ROLES } from "../data/catalog";
+import { useTrack } from "../data/useCatalog";
 import { beat, progress, springAt } from "../lib/motion";
 import { ACCENTS, COLOR, EASE, FONT } from "../theme/tokens";
 import { END_SCROLL_BEAT } from "../timeline";
@@ -60,6 +61,7 @@ function outro(frame: number) {
 
 export const S09EndCard: React.FC = () => {
   const frame = useCurrentFrame();
+  const hero = useTrack(ROLES.hero);
   const { fade, close } = outro(frame);
   const reveal = MARK_BARS.map((_, i) => (i === MARK_ACTIVE_INDEX ? (frame >= LAND ? 1 : 0) : springAt(frame, LAND - 8 + REVEAL_ORDER[i] * 5)));
   const glow = frame >= SWEEP_AT ? Math.exp(-(frame - SWEEP_AT) / 30) : 0;
@@ -77,7 +79,7 @@ export const S09EndCard: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: COLOR.bg0 }}>
       <AbsoluteFill style={{ opacity: 1 - fade }}>
-        <AmbientGlow gradient={TRACKS.eng.coverGradient} opacity={0.22} />
+        <AmbientGlow gradient={hero.cover} opacity={0.22} />
         <div style={{ position: "absolute", left: LOCKUP_LEFT, top: LOCKUP_TOP }}>
           <Lockup mark={mark} markHeight={MARK_SIZE.h * UNIT} start={LAND - 4} size={WORDMARK_SIZE} />
         </div>

@@ -3,12 +3,12 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { glyphsFor } from "../scripts/prepare-assets.mjs";
-import { PLAYER_CARDS, TRACKS } from "../src/data/tracks.ts";
+import { allTracks, glyphsFor } from "../scripts/prepare-assets.mjs";
+import { FICTIONAL_TRACKS, PLAYER_CARDS, TRACK_IDS } from "../src/data/catalog.ts";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const SRC = join(ROOT, "src");
-const DATA_FILE = join(SRC, "data", "tracks.ts");
+const DATA_FILE = join(SRC, "data", "catalog.ts");
 const CJK = /[぀-ヿ㐀-鿿가-힯]/u;
 const HANGUL = /[가-힯]/u;
 const KANA = /[぀-ヿ]/u;
@@ -20,7 +20,7 @@ function sourceFiles(dir) {
   });
 }
 
-test("CJK text lives only in src/data/tracks.ts, so the font subset covers it", () => {
+test("CJK text lives only in src/data/catalog.ts, so the font subset covers it", () => {
   for (const file of sourceFiles(SRC)) {
     if (file === DATA_FILE) continue;
     const line = readFileSync(file, "utf8").split("\n").find((l) => CJK.test(l));
@@ -28,10 +28,9 @@ test("CJK text lives only in src/data/tracks.ts, so the font subset covers it", 
   }
 });
 
-test("each language's font subset contains every CJK glyph it renders", () => {
+test("each language's font subset holds every CJK glyph either catalog renders", () => {
   const byLang = { KOR: [], JPN: [], ZHO: [] };
-  for (const t of Object.values(TRACKS)) byLang[t.lang]?.push(t.title, ...t.lyrics.map((l) => l.k));
-  for (const c of PLAYER_CARDS) byLang[c.lang]?.push(c.title);
+  for (const t of allTracks()) byLang[t.lang]?.push(t.title, t.artist, t.album, ...t.lyrics.map((l) => l.k));
   for (const [lang, texts] of Object.entries(byLang)) {
     const subset = new Set(glyphsFor(lang));
     for (const ch of texts.join("")) {
@@ -40,20 +39,16 @@ test("each language's font subset contains every CJK glyph it renders", () => {
   }
 });
 
-test("player cards are tagged with the script their title is written in", () => {
-  for (const c of PLAYER_CARDS) {
-    if (c.lang === "KOR") assert.ok(HANGUL.test(c.title), `${c.title} tagged KOR without Hangul`);
-    else assert.ok(!HANGUL.test(c.title), `${c.title} tagged ${c.lang} but has Hangul`);
-    if (c.lang === "ZHO") assert.ok(!KANA.test(c.title), `${c.title} tagged ZHO but has kana`);
-    if (c.lang === "ENG" || c.lang === "IND") assert.ok(!CJK.test(c.title), `${c.title} tagged ${c.lang} but has CJK`);
+test("fictional titles are written in the script their language says", () => {
+  for (const t of Object.values(FICTIONAL_TRACKS)) {
+    if (t.lang === "KOR") assert.ok(HANGUL.test(t.title), `${t.title} tagged KOR without Hangul`);
+    else assert.ok(!HANGUL.test(t.title), `${t.title} tagged ${t.lang} but has Hangul`);
+    if (t.lang === "ZHO") assert.ok(!KANA.test(t.title), `${t.title} tagged ZHO but has kana`);
+    if (t.lang === "ENG" || t.lang === "IND") assert.ok(!CJK.test(t.title), `${t.title} tagged ${t.lang} but has CJK`);
   }
 });
 
-test("CJK lyric rows carry a romanization, Latin rows do not", () => {
-  for (const t of Object.values(TRACKS)) {
-    const isCjk = ["KOR", "JPN", "ZHO"].includes(t.lang);
-    for (const row of t.lyrics) {
-      assert.equal(row.r.trim().length > 0, isCjk, `${t.title}: "${row.k}" romanization does not match its script`);
-    }
-  }
+test("player cards point at tracks every catalog has", () => {
+  for (const card of PLAYER_CARDS) assert.ok(TRACK_IDS.includes(card.trackId), `unknown track ${card.trackId}`);
+  assert.ok(PLAYER_CARDS.length >= TRACK_IDS.length, "every song gets at least one card");
 });

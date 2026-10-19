@@ -4,7 +4,8 @@ import { AmbientGlow, Hairline } from "../components/Backdrop";
 import { eyebrow } from "../components/NowPlayingScreen";
 import { FlapText, type FlapStyle } from "../components/SplitFlap";
 import { RevealWords } from "../components/Type";
-import { TRACKS } from "../data/tracks";
+import { ROLES } from "../data/catalog";
+import { useTrack } from "../data/useCatalog";
 import { beat, progress, springAt } from "../lib/motion";
 import { ACCENTS, COLOR, EASE, FONT } from "../theme/tokens";
 
@@ -108,11 +109,12 @@ const Race: React.FC<{ local: number }> = ({ local }) => (
 
 export const S07Board: React.FC = () => {
   const frame = useCurrentFrame();
+  const hero = useTrack(ROLES.hero);
   const recede = progress(frame, RACE_AT - 6, RACE_AT + 18, EASE.inOut);
   const exit = progress(frame, beat(19.6), beat(20), EASE.in);
   return (
     <AbsoluteFill style={{ background: COLOR.bg0, opacity: 1 - exit }}>
-      <AmbientGlow gradient={TRACKS.kor.coverGradient} opacity={0.14} />
+      <AmbientGlow gradient={hero.cover} opacity={0.14} />
       <AbsoluteFill style={{ transform: `scale(${1 - 0.12 * recede}) translateY(${-60 * recede}px)`, opacity: 1 - 0.9 * recede, filter: recede > 0 ? `blur(${10 * recede}px)` : undefined }}>
         <Board frame={frame} />
       </AbsoluteFill>

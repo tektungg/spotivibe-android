@@ -4,6 +4,12 @@ import { progress, typedChars } from "../lib/motion";
 import { EASE, EYEBROW_TRACKING, FONT } from "../theme/tokens";
 
 const RISE_FRAMES = 22;
+/**
+ * Room around each word's clipping mask, cancelled by a negative margin so
+ * layout does not move. Sideways room keeps italic overhang (the "t" of an
+ * italic "the") from being cut; bottom room keeps descenders.
+ */
+const MASK_BLEED = { padding: "0 0.14em 0.12em", margin: "0 -0.14em -0.12em" } as const;
 
 /**
  * Words rise out of a clipping mask one after another (editorial headline
@@ -25,7 +31,7 @@ export const RevealWords: React.FC<{
         const p = progress(frame, start + i * stagger, start + i * stagger + RISE_FRAMES);
         const y = (1 - p) * 110 - out * 110;
         return (
-          <span key={i} style={{ display: "inline-block", overflow: "hidden", paddingBottom: "0.12em", marginBottom: "-0.12em" }}>
+          <span key={i} style={{ display: "inline-block", overflow: "hidden", padding: MASK_BLEED.padding, margin: MASK_BLEED.margin }}>
             <span style={{ display: "inline-block", transform: `translateY(${y}%)`, ...wordStyle?.(i) }}>{w}</span>
           </span>
         );

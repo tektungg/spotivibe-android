@@ -1,55 +1,39 @@
 import React from "react";
 import { COLOR, FONT, PHONE } from "../theme/tokens";
-import type { Track } from "../data/tracks";
+import type { Track } from "../data/catalog";
 import { Icon } from "./Icon";
 
-/** Album cover placeholder with halftone and the album's first word. */
-export const AlbumCover: React.FC<{ track: Track; size: number; style?: React.CSSProperties }> = ({
-  track,
-  size,
-  style,
-}) => {
+/** Halftone and album label drawn over a placeholder gradient cover. */
+const PlaceholderMarks: React.FC<{ track: Track; size: number }> = ({ track, size }) => {
   const dot = Math.max(3, size / 20);
   return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        flexShrink: 0,
-        background: track.coverGradient,
-        borderRadius: 2,
-        position: "relative",
-        overflow: "hidden",
-        boxShadow: "0 1px 0 rgba(255,255,255,0.08) inset, 0 8px 24px rgba(0,0,0,0.4)",
-        ...style,
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          inset: 0,
-          backgroundImage: `radial-gradient(rgba(0,0,0,0.18) ${dot / 6}px, transparent ${dot / 6 + 0.2}px)`,
-          backgroundSize: `${dot}px ${dot}px`,
-          mixBlendMode: "multiply",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          left: size * 0.1,
-          top: size * 0.1,
-          fontFamily: FONT.mono,
-          fontSize: Math.max(8, size / 12),
-          fontWeight: 500,
-          color: "rgba(255,255,255,0.75)",
-          letterSpacing: "0.1em",
-        }}
-      >
+    <>
+      <div style={{ position: "absolute", inset: 0, backgroundImage: `radial-gradient(rgba(0,0,0,0.18) ${dot / 6}px, transparent ${dot / 6 + 0.2}px)`, backgroundSize: `${dot}px ${dot}px`, mixBlendMode: "multiply" }} />
+      <div style={{ position: "absolute", left: size * 0.1, top: size * 0.1, fontFamily: FONT.mono, fontSize: Math.max(8, size / 12), fontWeight: 500, color: "rgba(255,255,255,0.75)", letterSpacing: "0.1em" }}>
         {track.album.split(" ")[0]}
       </div>
-    </div>
+    </>
   );
 };
+
+/** Album cover: real artwork, or a placeholder gradient with halftone and the album's first word. */
+export const AlbumCover: React.FC<{ track: Track; size: number; style?: React.CSSProperties }> = ({ track, size, style }) => (
+  <div
+    style={{
+      width: size,
+      height: size,
+      flexShrink: 0,
+      background: track.cover,
+      borderRadius: 2,
+      position: "relative",
+      overflow: "hidden",
+      boxShadow: "0 1px 0 rgba(255,255,255,0.08) inset, 0 8px 24px rgba(0,0,0,0.4)",
+      ...style,
+    }}
+  >
+    {!track.isArtwork && <PlaceholderMarks track={track} size={size} />}
+  </div>
+);
 
 export const StatusBar: React.FC<{ time?: string }> = ({ time = "15:07" }) => (
   <div

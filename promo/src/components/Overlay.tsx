@@ -1,6 +1,6 @@
 import React from "react";
 import { COLOR, FONT, PHONE, type AccentSet } from "../theme/tokens";
-import type { Track } from "../data/tracks";
+import type { Track } from "../data/catalog";
 import { Halftone } from "./Backdrop";
 import { Icon } from "./Icon";
 import { LogoMark } from "./LogoMark";
@@ -71,7 +71,7 @@ export const OverlayCard: React.FC<{ track: Track; accent: AccentSet; expand: nu
 /** Lock screen behind the notification: blurred art, halftone, big clock. */
 export const LockScreen: React.FC<{ track: Track; children: React.ReactNode }> = ({ track, children }) => (
   <div style={{ position: "absolute", inset: 0, background: COLOR.bg0, isolation: "isolate" }}>
-    <div style={{ position: "absolute", inset: "-20%", background: track.coverGradient, filter: "blur(70px) saturate(1.2) brightness(0.7)" }} />
+    <div style={{ position: "absolute", inset: "-20%", background: track.cover, filter: "blur(70px) saturate(1.2) brightness(0.7)" }} />
     <Halftone />
     <StatusBar />
     <div style={{ position: "relative", zIndex: 2 }}>

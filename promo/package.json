@@ -13,7 +13,10 @@
     "typecheck": "tsc --noEmit",
     "check-frames": "node scripts/check-frames.mjs",
     "render": "remotion render src/index.ts SpotivibePromo out/spotivibe-promo.mp4",
-    "build": "npm run prepare-all && npm run render"
+    "build": "npm run prepare-all && npm run render && npm run render:fictional",
+    "catalog": "node scripts/catalog/fetch-catalog.mjs",
+    "render:fictional": "remotion render src/index.ts SpotivibePromo out/spotivibe-promo-fictional.mp4 --env-file=env/fictional.env",
+    "eval": "node scripts/eval-render.mjs out/spotivibe-promo.mp4 && node scripts/eval-render.mjs out/spotivibe-promo-fictional.mp4"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.533",
@@ -27,6 +30,8 @@
   "devDependencies": {
     "@types/node": "22.10.2",
     "@types/react": "18.3.12",
+    "kuromoji": "0.1.2",
+    "pinyin-pro": "3.29.5",
     "typescript": "5.7.2"
   }
 }

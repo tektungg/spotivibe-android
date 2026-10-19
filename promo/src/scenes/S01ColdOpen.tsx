@@ -4,7 +4,9 @@ import { Hairline } from "../components/Backdrop";
 import { displayFont } from "../components/LyricsList";
 import { EMPTY_SLOT_FRACTIONS, EMPTY_SLOT_WIDTH } from "../components/FiveLines";
 import { TypedEyebrow } from "../components/Type";
-import { PLAYER_CARDS, TRACKS, type Lang, type PlayerCard } from "../data/tracks";
+import { PLAYER_CARDS, type PlayerCard, type Track } from "../data/catalog";
+import { useCatalog } from "../data/useCatalog";
+import { fitFontSize } from "../lib/textFit";
 import { beat, progress, springAt, tween } from "../lib/motion";
 import { ACCENTS, COLOR, EASE, EYEBROW_TRACKING, FONT } from "../theme/tokens";
 import { WIDTH } from "../timeline";
@@ -14,19 +16,8 @@ const CARD = { width: 1180, cover: 190, titleRoom: 800 };
 const CARD_OFFSETS_X = [-170, 160, 0, -140, 190, -40, 150, -180];
 const GRID_START = beat(9);
 const QUESTION = "WHERE ARE THE LYRICS?";
-/** Average advance per glyph in em, to fit a title on one line. */
-const GLYPH_EM = { latin: 0.42, cjk: 1 } as const;
-const COVER_BY_ACCENT = { coral: TRACKS.eng.coverGradient, violet: TRACKS.jpn.coverGradient, jade: TRACKS.zho.coverGradient };
 
 const mono: React.CSSProperties = { fontFamily: FONT.mono, letterSpacing: EYEBROW_TRACKING, textTransform: "uppercase", fontSize: 18, fontWeight: 500 };
-
-const isCjk = (lang: Lang) => lang === "KOR" || lang === "JPN" || lang === "ZHO";
-
-/** Largest title size (capped) that keeps the title on one line. */
-function titleSize(card: PlayerCard, room: number, cap: number): number {
-  const em = isCjk(card.lang) ? GLYPH_EM.cjk : GLYPH_EM.latin;
-  return Math.min(cap, room / ([...card.title].length * em));
-}
 
 /** Frame 0: a coral lyric bar slams across, then thins into the baseline. */
 const OpeningBar: React.FC<{ frame: number }> = ({ frame }) => {
@@ -49,19 +40,19 @@ const EmptyLyrics: React.FC<{ scale?: number }> = ({ scale = 1 }) => (
 );
 
 /** A "now playing" card from some player: song known, lyrics missing. */
-const NowPlayingCard: React.FC<{ card: PlayerCard }> = ({ card }) => {
-  const accent = ACCENTS[card.accent].accent;
+const NowPlayingCard: React.FC<{ card: PlayerCard; track: Track }> = ({ card, track }) => {
+  const accent = track.accent.accent;
   return (
     <div style={{ width: CARD.width, padding: 48, background: "rgba(20,21,27,0.94)", border: `1px solid ${COLOR.rule}`, boxShadow: "0 40px 100px rgba(0,0,0,0.6)" }}>
       <div style={{ ...mono, display: "flex", justifyContent: "space-between", color: accent }}>
         <span>● NOW PLAYING · {card.player}</span>
-        <span style={{ color: COLOR.ink3 }}>{card.lang}</span>
+        <span style={{ color: COLOR.ink3 }}>{track.lang}</span>
       </div>
       <div style={{ display: "flex", gap: 40, alignItems: "center", margin: "34px 0 40px" }}>
-        <div style={{ width: CARD.cover, height: CARD.cover, flexShrink: 0, background: COVER_BY_ACCENT[card.accent], boxShadow: "0 12px 30px rgba(0,0,0,0.5)" }} />
+        <div style={{ width: CARD.cover, height: CARD.cover, flexShrink: 0, background: track.cover, boxShadow: "0 12px 30px rgba(0,0,0,0.5)" }} />
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontFamily: displayFont(card.lang), fontSize: titleSize(card, CARD.titleRoom, 118), lineHeight: 1.05, color: COLOR.ink1, whiteSpace: "nowrap" }}>{card.title}</div>
-          <div style={{ ...mono, fontSize: 22, color: COLOR.ink3, marginTop: 14 }}>{card.artist}</div>
+          <div style={{ fontFamily: displayFont(track.lang), fontSize: fitFontSize(track.title, "display", 118, CARD.titleRoom), lineHeight: 1.05, color: COLOR.ink1, whiteSpace: "nowrap" }}>{track.title}</div>
+          <div style={{ ...mono, fontSize: 22, color: COLOR.ink3, marginTop: 14 }}>{track.artist}</div>
         </div>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
@@ -73,8 +64,8 @@ const NowPlayingCard: React.FC<{ card: PlayerCard }> = ({ card }) => {
 };
 
 /** One card slammed on its beat, with an outline echo expanding behind it. */
-const Slam: React.FC<{ card: PlayerCard; index: number; local: number }> = ({ card, index, local }) => {
-  const accent = ACCENTS[card.accent].accent;
+const Slam: React.FC<{ card: PlayerCard; track: Track; index: number; local: number }> = ({ card, track, index, local }) => {
+  const accent = track.accent.accent;
   const s = springAt(local, 0);
   const echo = progress(local, 0, 26);
   return (
@@ -83,7 +74,7 @@ const Slam: React.FC<{ card: PlayerCard; index: number; local: number }> = ({ ca
       <div style={{ position: "relative", transform: `translateX(${CARD_OFFSETS_X[index]}px) rotate(${(index % 2 ? 1.5 : -1.5) * (1 - s)}deg)` }}>
         <div style={{ position: "absolute", inset: 0, border: `2px solid ${accent}`, transform: `scale(${1 + echo * 0.25})`, opacity: 0.7 * (1 - echo) }} />
         <div style={{ transform: `scale(${1.25 - 0.25 * s}) translateY(${(1 - s) * 50}px)`, filter: `blur(${tween(local, [0, 7], [22, 0])}px)` }}>
-          <NowPlayingCard card={card} />
+          <NowPlayingCard card={card} track={track} />
         </div>
       </div>
     </AbsoluteFill>
@@ -91,20 +82,24 @@ const Slam: React.FC<{ card: PlayerCard; index: number; local: number }> = ({ ca
 };
 
 /** Beats 9-12: every card shrinks into a grid behind the question. */
-const CardGrid: React.FC<{ frame: number }> = ({ frame }) => (
+const CardGrid: React.FC<{ frame: number }> = ({ frame }) => {
+  const { tracks } = useCatalog();
+  return (
   <AbsoluteFill style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gridTemplateRows: "repeat(2, 1fr)", gap: 28, padding: "170px 110px" }}>
     {PLAYER_CARDS.map((card, i) => {
+      const track = tracks[card.trackId];
       const s = springAt(frame, GRID_START + i * 2);
       return (
-        <div key={`${card.title}-${i}`} style={{ border: `1px solid ${COLOR.ruleSoft}`, padding: 22, opacity: 0.5 * s, transform: `scale(${0.6 + 0.4 * s})`, filter: "blur(1.2px)" }}>
-          <div style={{ ...mono, fontSize: 13, color: ACCENTS[card.accent].accent }}>{card.player}</div>
-          <div style={{ fontFamily: displayFont(card.lang), fontSize: titleSize(card, 340, 46), color: COLOR.ink2, margin: "10px 0 16px", whiteSpace: "nowrap" }}>{card.title}</div>
+        <div key={`${card.trackId}-${i}`} style={{ border: `1px solid ${COLOR.ruleSoft}`, padding: 22, opacity: 0.5 * s, transform: `scale(${0.6 + 0.4 * s})`, filter: "blur(1.2px)" }}>
+          <div style={{ ...mono, fontSize: 13, color: track.accent.accent }}>{card.player}</div>
+          <div style={{ fontFamily: displayFont(track.lang), fontSize: fitFontSize(track.title, "display", 46, 340), color: COLOR.ink2, margin: "10px 0 16px", whiteSpace: "nowrap" }}>{track.title}</div>
           <EmptyLyrics scale={0.42} />
         </div>
       );
     })}
   </AbsoluteFill>
-);
+  );
+};
 
 const Chrome: React.FC<{ frame: number; index: number }> = ({ frame, index }) => {
   const p = progress(frame, 8, 30);
@@ -121,13 +116,14 @@ const Chrome: React.FC<{ frame: number; index: number }> = ({ frame, index }) =>
 
 export const S01ColdOpen: React.FC = () => {
   const frame = useCurrentFrame();
+  const { tracks } = useCatalog();
   const index = Math.floor(frame / beat(1)) - 1;
   const showCard = index >= 0 && index < PLAYER_CARDS.length;
   const exit = progress(frame, beat(11.5), beat(12), EASE.in);
   return (
     <AbsoluteFill style={{ background: COLOR.bg0, transform: `scale(${1 + exit * 0.15})`, filter: `blur(${exit * 16}px)`, opacity: 1 - exit * 0.6 }}>
       <OpeningBar frame={frame} />
-      {showCard && <Slam card={PLAYER_CARDS[index]} index={index} local={frame - (index + 1) * beat(1)} />}
+      {showCard && <Slam card={PLAYER_CARDS[index]} track={tracks[PLAYER_CARDS[index].trackId]} index={index} local={frame - (index + 1) * beat(1)} />}
       {frame >= GRID_START && <CardGrid frame={frame} />}
       {frame >= GRID_START && (
         <AbsoluteFill style={{ alignItems: "center", justifyContent: "center" }}>

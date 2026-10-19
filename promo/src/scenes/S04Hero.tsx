@@ -6,12 +6,11 @@ import { Icon } from "../components/Icon";
 import { NowPlayingScreen, eyebrow } from "../components/NowPlayingScreen";
 import { PhoneFrame } from "../components/Phone";
 import { PLAYERS } from "../data/brand";
-import { TRACKS } from "../data/tracks";
+import { ROLES, type AccentSet } from "../data/catalog";
+import { useTrack } from "../data/useCatalog";
 import { SPRING_SOFT, beat, beatPulse, progress, springAt } from "../lib/motion";
-import { ACCENTS, COLOR, EASE, FONT, PHONE } from "../theme/tokens";
+import { COLOR, EASE, FONT, PHONE } from "../theme/tokens";
 
-const TRACK = TRACKS.eng;
-const ACCENT = ACCENTS.coral;
 const LINE_FRAMES = beat(2);
 const SCROLL_FRAMES = 22;
 const FIRST_LINE = 1;
@@ -49,13 +48,13 @@ const floatingCard: React.CSSProperties = {
 };
 
 /** Chapter 01: which player Spotivibe is following, swapping every two beats. */
-const SourcePill: React.FC<{ frame: number; end: number }> = ({ frame, end }) => {
+const SourcePill: React.FC<{ frame: number; end: number; accent: AccentSet }> = ({ frame, end, accent }) => {
   const show = springAt(frame, 20) * (1 - progress(frame, end - 12, end, EASE.in));
   const index = Math.floor(frame / PLAYER_SWAP) % PLAYERS.length;
   const slide = progress(frame % PLAYER_SWAP, 0, NAME_SLIDE_FRAMES);
   return (
     <div style={{ ...floatingCard, left: 700, top: 170, borderRadius: 999, padding: "16px 26px", display: "flex", alignItems: "center", gap: 14, opacity: show, transform: `translateX(${(1 - show) * 60}px)` }}>
-      <span style={{ width: 12, height: 12, borderRadius: "50%", background: ACCENT.accent, boxShadow: `0 0 ${16 * beatPulse(frame)}px ${ACCENT.accent}` }} />
+      <span style={{ width: 12, height: 12, borderRadius: "50%", background: accent.accent, boxShadow: `0 0 ${16 * beatPulse(frame)}px ${accent.accent}` }} />
       <span style={{ ...eyebrow, fontSize: 16, color: COLOR.ink3 }}>NOW FOLLOWING</span>
       <span style={{ ...eyebrow, fontSize: 20, color: COLOR.ink1, display: "inline-block", minWidth: 230, transform: `translateY(${(1 - slide) * 18}px)`, opacity: slide }}>{PLAYERS[index]}</span>
     </div>
@@ -63,13 +62,13 @@ const SourcePill: React.FC<{ frame: number; end: number }> = ({ frame, end }) =>
 };
 
 /** Chapter 02: the one permission granted, the login that never happens. */
-const AccessChip: React.FC<{ frame: number; start: number; end: number }> = ({ frame, start, end }) => {
+const AccessChip: React.FC<{ frame: number; start: number; end: number; accent: AccentSet }> = ({ frame, start, end, accent }) => {
   const show = springAt(frame, start + 10) * (1 - progress(frame, end - 12, end, EASE.in));
   const row = (icon: "check" | "close", label: string, state: string, isOn: boolean) => (
     <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0" }}>
-      <Icon name={icon} size={22} stroke={1.6} color={isOn ? ACCENT.accent : COLOR.ink4} />
+      <Icon name={icon} size={22} stroke={1.6} color={isOn ? accent.accent : COLOR.ink4} />
       <span style={{ ...eyebrow, fontSize: 18, color: isOn ? COLOR.ink1 : COLOR.ink4, textDecoration: isOn ? undefined : "line-through", flex: 1 }}>{label}</span>
-      <span style={{ ...eyebrow, fontSize: 16, color: isOn ? ACCENT.accent : COLOR.ink4 }}>{state}</span>
+      <span style={{ ...eyebrow, fontSize: 16, color: isOn ? accent.accent : COLOR.ink4 }}>{state}</span>
     </div>
   );
   return (
@@ -97,27 +96,28 @@ function phoneTransform(frame: number): string {
 
 export const S04Hero: React.FC = () => {
   const frame = useCurrentFrame();
+  const track = useTrack(ROLES.hero);
   const { active, sweep } = heroLyricClock(frame);
   const push = progress(frame, PUSH_START, PUSH_END, EASE.inOut);
   const chapterIndex = CHAPTERS.findIndex((c) => frame >= c.start && frame < c.end);
   return (
     <AbsoluteFill style={{ background: COLOR.bg0, overflow: "hidden" }}>
-      <AmbientGlow gradient={TRACK.coverGradient} opacity={0.32} />
+      <AmbientGlow gradient={track.cover} opacity={0.32} />
       <div style={{ position: "absolute", right: 60, bottom: -120, fontFamily: FONT.display, fontSize: 620, color: COLOR.ink1, opacity: 0.04, lineHeight: 1 }}>
         {CHAPTERS[Math.max(0, chapterIndex)].copy.number}
       </div>
       <AbsoluteFill style={{ perspective: push >= 1 ? undefined : 2200 }}>
         <div style={{ position: "absolute", left: 0, top: 0, transform: phoneTransform(frame), transformOrigin: "50% 50%" }}>
           <PhoneFrame glare={progress(frame, 0, beat(20), Easing.linear)}>
-            <NowPlayingScreen track={TRACK} accent={ACCENT} active={active} sweep={sweep} roman={0} seek={0.32 + frame / 4000} />
+            <NowPlayingScreen track={track} accent={track.accent} active={active} sweep={sweep} roman={0} seek={0.32 + frame / 4000} />
           </PhoneFrame>
         </div>
       </AbsoluteFill>
-      {frame < CHAPTERS[0].end && <SourcePill frame={frame} end={CHAPTERS[0].end} />}
-      {frame >= CHAPTERS[1].start && frame < CHAPTERS[1].end && <AccessChip frame={frame} start={CHAPTERS[1].start} end={CHAPTERS[1].end} />}
+      {frame < CHAPTERS[0].end && <SourcePill frame={frame} end={CHAPTERS[0].end} accent={track.accent} />}
+      {frame >= CHAPTERS[1].start && frame < CHAPTERS[1].end && <AccessChip frame={frame} start={CHAPTERS[1].start} end={CHAPTERS[1].end} accent={track.accent} />}
       <AbsoluteFill style={{ background: "linear-gradient(90deg, transparent 52%, rgba(12,12,16,0.85) 64%)", opacity: push }} />
       {CHAPTERS.map((c) => (
-        <Chapter key={c.copy.number} copy={c.copy} start={c.start} end={c.end} accent={ACCENT.accent} size={104} width={700} style={{ left: 1130, top: 330 }} />
+        <Chapter key={c.copy.number} copy={c.copy} start={c.start} end={c.end} accent={track.accent.accent} size={104} width={700} style={{ left: 1130, top: 330 }} />
       ))}
     </AbsoluteFill>
   );

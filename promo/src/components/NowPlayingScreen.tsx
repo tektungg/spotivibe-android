@@ -1,7 +1,7 @@
 import React from "react";
 import { interpolateColors } from "remotion";
 import { COLOR, EYEBROW_TRACKING, FONT, PHONE, type AccentSet } from "../theme/tokens";
-import type { Track } from "../data/tracks";
+import type { Track } from "../data/catalog";
 import { Halftone } from "./Backdrop";
 import { Icon } from "./Icon";
 import { LyricsList, displayFont } from "./LyricsList";
@@ -25,11 +25,14 @@ export const eyebrow: React.CSSProperties = {
   fontWeight: 500,
 };
 
-const PhoneAmbient: React.FC<{ track: Track }> = ({ track }) => (
-  <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
-    <div style={{ position: "absolute", inset: "-15%", background: track.coverGradient, filter: "blur(60px) saturate(1.3)", transform: "scale(1.15)" }} />
-    <Halftone />
-    <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.55) 50%, rgba(0,0,0,0.78) 100%)" }} />
+/** AmbientBg.kt: blurred art + halftone + veil; high contrast fades it to solid bg0. */
+const PhoneAmbient: React.FC<{ track: Track; highContrast: number }> = ({ track, highContrast }) => (
+  <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: COLOR.bg0 }}>
+    <div style={{ position: "absolute", inset: 0, opacity: 1 - highContrast }}>
+      <div style={{ position: "absolute", inset: "-15%", background: track.cover, filter: "blur(60px) saturate(1.3)", transform: "scale(1.15)" }} />
+      <Halftone />
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.55) 50%, rgba(0,0,0,0.78) 100%)" }} />
+    </div>
   </div>
 );
 
@@ -84,19 +87,21 @@ export interface NowPlayingProps {
   sweep?: number;
   roman?: number;
   seek?: number;
+  /** High contrast setting 0..1 (animatable for the toggle). */
+  highContrast?: number;
 }
 
 /**
  * The app's Now Playing screen at phone artboard size (390 x 844). Its root
  * isolates the inner z-indexes so screens can be stacked for wipes.
  */
-export const NowPlayingScreen: React.FC<NowPlayingProps> = ({ track, accent, active, sweep, roman = 1, seek = 0.38 }) => (
+export const NowPlayingScreen: React.FC<NowPlayingProps> = ({ track, accent, active, sweep, roman = 1, seek = 0.38, highContrast = 0 }) => (
   <div style={{ position: "relative", isolation: "isolate", width: PHONE.width, height: PHONE.height, background: COLOR.bg0, color: COLOR.ink1 }}>
-    <PhoneAmbient track={track} />
+    <PhoneAmbient track={track} highContrast={highContrast} />
     <StatusBar />
     <Header track={track} accent={accent} roman={roman} />
     <div style={{ position: "relative", zIndex: 2, padding: "4px 0 8px" }}>
-      <LyricsList lines={track.lyrics} lang={track.lang} accent={accent} active={active} sweep={sweep} roman={roman} height={LYRICS_HEIGHT} />
+      <LyricsList lines={track.lyrics} lang={track.lang} accent={accent} active={active} sweep={sweep} roman={roman} highContrast={highContrast} height={LYRICS_HEIGHT} />
     </div>
     <Transport track={track} accent={accent} seek={seek} />
   </div>

@@ -1,8 +1,10 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { AbsoluteFill, Easing, random, useCurrentFrame } from "remotion";
 import { eyebrow } from "../components/NowPlayingScreen";
 import { scriptFont } from "../components/LyricsList";
-import { TRACK_ORDER } from "../data/tracks";
+import { TRACK_IDS, type Track } from "../data/catalog";
+import { useCatalog } from "../data/useCatalog";
+import { fitFontSize } from "../lib/textFit";
 import { beat, progress, springAt } from "../lib/motion";
 import { ACCENTS, COLOR, EASE, FONT } from "../theme/tokens";
 import { BUILD_DROP_BEAT } from "../timeline";
@@ -17,20 +19,27 @@ const NEAR_Z = 650;
 const FRAME_SPACING_Z = 700;
 const CORAL = ACCENTS.coral;
 
-/** Every lyric row of every track, interleaved, with its accent. */
-const TUNNEL_ITEMS = TRACK_ORDER.flatMap((t) => t.lyrics.map((row, i) => ({ row, lang: t.lang, accent: ACCENTS[t.accent].accent, i })))
-  .sort((a, b) => a.i - b.i)
-  .map((item, n) => ({
-    ...item,
-    z: -n * ITEM_SPACING_Z - 600,
-    x: ((n % 3) - 1) * 560 + (random(`tx${n}`) - 0.5) * 200,
-    y: (random(`ty${n}`) - 0.5) * 640,
-  }));
+const TUNNEL_TEXT = { size: 72, romanSize: 34, maxWidth: 900 };
+
+/** Every lyric row of every track, interleaved, with its accent and a seeded 3D slot. */
+function tunnelItems(tracks: Track[]) {
+  return tracks
+    .flatMap((t) => t.lyrics.map((row, i) => ({ row, lang: t.lang, accent: t.accent.accent, i })))
+    .sort((a, b) => a.i - b.i)
+    .map((item, n) => ({
+      ...item,
+      z: -n * ITEM_SPACING_Z - 600,
+      x: ((n % 3) - 1) * 560 + (random(`tx${n}`) - 0.5) * 200,
+      y: (random(`ty${n}`) - 0.5) * 640,
+    }));
+}
 
 const depthOpacity = (depth: number) => progress(depth, FAR_Z, FAR_Z + 2500, Easing.linear) * (1 - progress(depth, NEAR_Z - 300, NEAR_Z, Easing.linear));
 
 /** Beats 0-8: camera flies through lyric lines, accelerating into the drop. */
 const Tunnel: React.FC<{ frame: number }> = ({ frame }) => {
+  const { tracks } = useCatalog();
+  const items = useMemo(() => tunnelItems(TRACK_IDS.map((id) => tracks[id])), [tracks]);
   const t = frame / DROP;
   const cam = CAMERA_LINEAR * t * 8 + CAMERA_CUBIC * t ** 3;
   const shake = t > 0.85 ? (random(`sh${frame}`) - 0.5) * 14 * t : 0;
@@ -43,13 +52,13 @@ const Tunnel: React.FC<{ frame: number }> = ({ frame }) => {
           const depth = -k * FRAME_SPACING_Z + (cam % FRAME_SPACING_Z);
           return <div key={`f${k}`} style={{ position: "absolute", left: 160, top: 90, width: 1600, height: 900, border: `2px solid ${COLOR.rule}`, transform: `translateZ(${depth}px)`, opacity: depthOpacity(depth) * 0.8 }} />;
         })}
-        {TUNNEL_ITEMS.map((item, n) => {
+        {items.map((item, n) => {
           const depth = item.z + cam;
           if (depth < FAR_Z || depth > NEAR_Z) return null;
           return (
             <div key={n} style={{ position: "absolute", left: 960 + item.x, top: 540 + item.y, transform: `translate(-50%, -50%) translateZ(${depth}px)`, opacity: depthOpacity(depth), whiteSpace: "nowrap", textAlign: "center" }}>
-              <div style={{ fontFamily: scriptFont(item.lang), fontSize: 72, fontWeight: 500, color: item.accent }}>{item.row.k}</div>
-              <div style={{ fontFamily: FONT.news, fontStyle: "italic", fontSize: 34, color: COLOR.ink2 }}>{item.row.r}</div>
+              <div style={{ fontFamily: scriptFont(item.lang), fontSize: fitFontSize(item.row.k, "news", TUNNEL_TEXT.size, TUNNEL_TEXT.maxWidth), fontWeight: 500, color: item.accent }}>{item.row.k}</div>
+              <div style={{ fontFamily: FONT.news, fontStyle: "italic", fontSize: fitFontSize(item.row.r, "news", TUNNEL_TEXT.romanSize, TUNNEL_TEXT.maxWidth), color: COLOR.ink2 }}>{item.row.r}</div>
             </div>
           );
         })}

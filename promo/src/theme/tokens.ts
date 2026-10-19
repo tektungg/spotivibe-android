@@ -1,4 +1,5 @@
 import { Easing } from "remotion";
+import { ACCENT_PRESETS } from "../data/catalog";
 
 /**
  * Design tokens mirrored from the app:
@@ -20,29 +21,19 @@ export const COLOR = {
   black: "#08080B",
 } as const;
 
-export type AccentName = "coral" | "violet" | "jade";
-
-export interface AccentSet {
-  accent: string;
-  dim: string;
-  ink: string;
-}
+export type { AccentSet } from "../data/catalog";
 
 /**
- * Accent presets. `accent` and `ink` match Color.kt; `dim` is deliberately
- * lighter than the app's AccentDim, which is too dark to read as 14 px
- * romanization after H.264 compression on a 1080p frame.
+ * Brand accent presets from Color.kt (coral is the brand colour). Songs carry
+ * their own accent, locked from their cover the way the app does it.
  */
-export const ACCENTS: Record<AccentName, AccentSet> = {
-  coral: { accent: "#EC6A5C", dim: "#B7564A", ink: "#0E0C12" },
-  violet: { accent: "#A17BFF", dim: "#7A5FC4", ink: "#0E0C12" },
-  jade: { accent: "#3CC9A1", dim: "#2E9A7B", ink: "#0E0C12" },
-};
+export const ACCENTS = ACCENT_PRESETS;
 
 export const FONT = {
   display: "'Instrument Serif', Georgia, serif",
   news: "'Newsreader', Georgia, serif",
-  mono: "'JetBrains Mono', ui-monospace, monospace",
+  // CJK artist/album names in mono labels fall back to the Noto subsets.
+  mono: "'JetBrains Mono', 'Noto Serif KR', 'Noto Serif JP', 'Noto Serif TC', ui-monospace, monospace",
   kor: "'Noto Serif KR', 'Newsreader', serif",
   jpn: "'Noto Serif JP', 'Newsreader', serif",
   zho: "'Noto Serif TC', 'Newsreader', serif",
