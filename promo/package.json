@@ -16,7 +16,8 @@
     "build": "npm run prepare-all && npm run render && npm run render:fictional",
     "catalog": "node scripts/catalog/fetch-catalog.mjs",
     "render:fictional": "remotion render src/index.ts SpotivibePromo out/spotivibe-promo-fictional.mp4 --env-file=env/fictional.env",
-    "eval": "node scripts/eval-render.mjs out/spotivibe-promo.mp4 && node scripts/eval-render.mjs out/spotivibe-promo-fictional.mp4"
+    "eval": "node scripts/eval-render.mjs out/spotivibe-promo.mp4 && node scripts/eval-render.mjs out/spotivibe-promo-fictional.mp4",
+    "social": "node scripts/social-preview.mjs"
   },
   "dependencies": {
     "@remotion/bundler": "4.0.533",

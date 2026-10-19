@@ -9,11 +9,11 @@
 // flat color) cannot pass.
 import { bundle } from "@remotion/bundler";
 import { openBrowser, renderStill, selectComposition } from "@remotion/renderer";
-import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { timedScenes } from "../src/timeline.ts";
+import { lumaSpread } from "./lib/image.mjs";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const COMPOSITION_ID = "SpotivibePromo";
@@ -36,20 +36,6 @@ function defaultFrames() {
   return timedScenes().flatMap((s) =>
     SAMPLE_POINTS.map((p) => ({ frame: s.startFrame + Math.floor(s.durationFrames * p), scene: s.id })),
   );
-}
-
-/** Luma min/max of a PNG via ffmpeg signalstats. */
-function lumaSpread(file) {
-  const log = execFileSync(
-    "ffmpeg",
-    // file=- sends the metadata to stdout instead of the stderr log.
-    ["-hide_banner", "-loglevel", "error", "-i", file, "-vf", "signalstats,metadata=print:file=-", "-f", "null", "-"],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] },
-  );
-  const read = (key) => Number((log.match(new RegExp(`${key}=(\\d+)`)) ?? [])[1]);
-  const spread = read("lavfi.signalstats.YMAX") - read("lavfi.signalstats.YMIN");
-  if (Number.isNaN(spread)) throw new Error(`check-frames: no signalstats for ${file}`);
-  return spread;
 }
 
 async function main() {

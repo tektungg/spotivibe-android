@@ -153,6 +153,27 @@ scenes. A stacking bug (a screen's `z-index` leaking above the circular wipe
 in scene 5) was found by reading the stills; the fix isolates
 `NowPlayingScreen`'s stacking context.
 
+## Social preview (GitHub link card)
+
+`npm run social` renders `src/stills/SocialPreview.tsx` (1280x640, GitHub's
+recommended size) to `out/social-preview.jpg` and checks it: exact size,
+under 1,000,000 bytes (the stricter reading of GitHub's 1 MB limit; the PNG
+is about 1 MB because of the film grain, so the script falls back to a
+quality-92 JPEG of about 140 KB), and not flat.
+
+It always uses the fictional catalog: the image is public, so no real lyrics
+or cover art (`test/social.test.mjs` enforces it). Key content stays inside
+the centre 1200x630, so platforms that crop to 1.91:1 lose nothing.
+
+GitHub has no API for this image. Upload it once by hand: repo **Settings ->
+General -> Social preview -> Edit -> Upload an image**, then check with
+`gh repo view --json usesCustomOpenGraphImage` (should be `true`). Chat apps
+cache link previews; a link shared before the upload keeps the old card for
+a while.
+
+The repo description (the text under the title in the card) and topics are
+set with `gh repo edit`.
+
 ## Licensing notes
 
 - Remotion is free for individuals and companies of up to three people; a
