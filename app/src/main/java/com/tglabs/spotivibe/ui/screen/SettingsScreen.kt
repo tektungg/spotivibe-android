@@ -56,6 +56,7 @@ import com.tglabs.spotivibe.ui.component.SettingsToggleRow
 import com.tglabs.spotivibe.ui.component.SyncOffsetRows
 import com.tglabs.spotivibe.ui.component.TickSlider
 import com.tglabs.spotivibe.ui.component.Toggle
+import com.tglabs.spotivibe.ui.theme.Brand
 import com.tglabs.spotivibe.ui.theme.LocalSvColors
 import com.tglabs.spotivibe.ui.theme.SvIcons
 import com.tglabs.spotivibe.ui.theme.SvRadius
@@ -367,7 +368,7 @@ fun SettingsScreen(
                 }
                 Spacer(modifier = Modifier.height(SvSpace.s5))
                 Text(
-                    text = "Code. Vibe. Sing along.",
+                    text = Brand.TAGLINE,
                     style = SvType.BodyItalic,
                     color = sv.ink3,
                     textAlign = TextAlign.Center,

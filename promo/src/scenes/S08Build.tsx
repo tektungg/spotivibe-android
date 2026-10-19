@@ -62,14 +62,17 @@ const Tunnel: React.FC<{ frame: number }> = ({ frame }) => {
   );
 };
 
+/** Two words per slam fit 1920 px at this size even at the 1.3x entry scale. */
+const SLAM_SIZE = 300;
+
 const SLAMS = [
-  { words: ["Code."], bg: CORAL.accent, ink: CORAL.ink, rot: -3 },
-  { words: ["Vibe."], bg: COLOR.bg0, ink: CORAL.accent, rot: 3 },
-  { words: ["Sing"], bg: COLOR.ink1, ink: COLOR.bg0, rot: -2 },
-  { words: ["Sing", "along."], bg: COLOR.bg0, ink: COLOR.ink1, rot: 0 },
+  { words: ["Every", "player."], bg: CORAL.accent, ink: CORAL.ink, em: COLOR.ink1, rot: -3 },
+  { words: ["Every", "song."], bg: COLOR.bg0, ink: COLOR.ink1, em: CORAL.accent, rot: 3 },
+  { words: ["Every", "line."], bg: COLOR.ink1, ink: COLOR.bg0, em: CORAL.accent, rot: -2 },
+  { words: ["In", "sync."], bg: COLOR.bg0, ink: COLOR.ink1, em: CORAL.accent, rot: 0 },
 ];
 
-/** Beats 8-12: one word per beat on alternating grounds. */
+/** Beats 8-12: one phrase per beat on alternating grounds. */
 const Slams: React.FC<{ frame: number }> = ({ frame }) => {
   const local = frame - DROP;
   const index = Math.min(SLAMS.length - 1, Math.floor(local / beat(1)));
@@ -78,9 +81,9 @@ const Slams: React.FC<{ frame: number }> = ({ frame }) => {
   const collapse = progress(frame, COLLAPSE_AT, COLLAPSE_AT + 28, EASE.inOut);
   return (
     <AbsoluteFill style={{ background: slam.bg, alignItems: "center", justifyContent: "center" }}>
-      <div style={{ display: "flex", gap: 40, fontFamily: FONT.display, fontSize: 420, lineHeight: 1, letterSpacing: "-0.03em", color: slam.ink, transform: `scale(${(1.3 - 0.3 * s) * (1 - 0.2 * collapse)}, ${(1.3 - 0.3 * s) * (1 - collapse)}) rotate(${slam.rot * (1 - s)}deg)`, filter: collapse > 0 ? `blur(${collapse * 12}px)` : undefined, opacity: 1 - collapse }}>
+      <div style={{ display: "flex", gap: 40, fontFamily: FONT.display, fontSize: SLAM_SIZE, lineHeight: 1, letterSpacing: "-0.03em", color: slam.ink, transform: `scale(${(1.3 - 0.3 * s) * (1 - 0.2 * collapse)}, ${(1.3 - 0.3 * s) * (1 - collapse)}) rotate(${slam.rot * (1 - s)}deg)`, filter: collapse > 0 ? `blur(${collapse * 12}px)` : undefined, opacity: 1 - collapse }}>
         {slam.words.map((w, i) => (
-          <span key={w} style={i === 1 ? { fontStyle: "italic", color: CORAL.accent } : undefined}>
+          <span key={w} style={i === 1 ? { fontStyle: "italic", color: slam.em } : undefined}>
             {w}
           </span>
         ))}

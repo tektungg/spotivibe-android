@@ -9,7 +9,7 @@ import { TRACKS, type Track } from "../data/tracks";
 import { SPRING_SOFT, beat, lyricClock, progress, springAt } from "../lib/motion";
 import { ACCENTS, COLOR, EASE, FONT, PHONE } from "../theme/tokens";
 
-const CYCLE = [TRACKS.coral, TRACKS.violet, TRACKS.jade, TRACKS.coral];
+const CYCLE = [TRACKS.kor, TRACKS.jpn, TRACKS.zho, TRACKS.kor];
 const SWAP_FRAMES = beat(2);
 const WIPE_FRAMES = 24;
 const SPREAD_AT = beat(8);
@@ -17,7 +17,9 @@ const SPREAD_AT = beat(8);
 const COVER_CENTER = "40px 68px";
 const PHONE_W = PHONE.width + PHONE.bezel * 2;
 const PHONE_H = PHONE.height + PHONE.bezel * 2;
-const SWATCHES = [TRACKS.coral, TRACKS.violet, TRACKS.jade];
+const SWATCHES = [TRACKS.kor, TRACKS.jpn, TRACKS.zho];
+/** The player each spread phone is "following", by accent. */
+const PLAYER_FOR = { coral: "SPOTIFY", violet: "YOUTUBE MUSIC", jade: "ANY PLAYER" } as const;
 
 const accentOf = (t: Track) => ACCENTS[t.accent];
 
@@ -74,9 +76,9 @@ const Swatches: React.FC<{ frame: number }> = ({ frame }) => {
 };
 
 const SPREAD = [
-  { track: TRACKS.violet, side: -1 },
-  { track: TRACKS.jade, side: 1 },
-  { track: TRACKS.coral, side: 0 },
+  { track: TRACKS.jpn, side: -1 },
+  { track: TRACKS.zho, side: 1 },
+  { track: TRACKS.kor, side: 0 },
 ];
 
 /** Part B: violet and jade phones fan out from behind the coral one. */
@@ -94,8 +96,8 @@ const Spread: React.FC<{ frame: number }> = ({ frame }) => {
             <PhoneFrame>
               <Screen track={track} frame={frame} origin={SPREAD_AT} base={3 + side} />
             </PhoneFrame>
-            <div style={{ ...eyebrow, position: "absolute", left: 0, right: 0, top: PHONE_H + 40, textAlign: "center", fontSize: 22, color: accentOf(track).accent, opacity: progress(local, 20, 40) }}>
-              {track.lang} · {track.romanSystem}
+            <div style={{ ...eyebrow, position: "absolute", left: -200, right: -200, top: PHONE_H + 40, textAlign: "center", whiteSpace: "nowrap", fontSize: 22, color: accentOf(track).accent, opacity: progress(local, 20, 40) }}>
+              VIA {PLAYER_FOR[track.accent]} · {track.languageName}
             </div>
           </div>
         );
@@ -123,11 +125,11 @@ export const S05Accent: React.FC = () => {
       {isSpread && <Spread frame={frame} />}
       {isSpread && (
         <RevealWords
-          text="Korean. Japanese. Mandarin."
+          text="Any player. Any language."
           start={SPREAD_AT + 10}
           stagger={6}
           style={{ position: "absolute", top: 34, left: 0, right: 0, justifyContent: "center", fontFamily: FONT.display, fontSize: 76, color: COLOR.ink1, letterSpacing: "-0.01em" }}
-          wordStyle={(i) => ({ fontStyle: "italic", color: accentOf(SWATCHES[i]).accent })}
+          wordStyle={(i) => (i % 2 === 1 ? { fontStyle: "italic", color: accentOf(SWATCHES[(i - 1) / 2]).accent } : {})}
         />
       )}
     </AbsoluteFill>

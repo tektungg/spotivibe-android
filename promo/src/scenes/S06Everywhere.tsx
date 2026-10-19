@@ -8,8 +8,8 @@ import { TRACKS } from "../data/tracks";
 import { SPRING_BOUNCY, SPRING_SOFT, beat, lyricClock, progress, springAt } from "../lib/motion";
 import { ACCENTS, COLOR, EASE, PHONE } from "../theme/tokens";
 
-const OVERLAY_TRACK = TRACKS.violet;
-const NOTIF_TRACK = TRACKS.jade;
+const OVERLAY_TRACK = TRACKS.jpn;
+const NOTIF_TRACK = TRACKS.zho;
 const LINE_FRAMES = beat(2);
 const SWITCH_AT = beat(6);
 const DROP_AT = 14;

@@ -15,6 +15,7 @@ import android.util.Log
 import androidx.core.content.FileProvider
 import com.tglabs.spotivibe.domain.truncateText
 import com.tglabs.spotivibe.domain.wrapText
+import com.tglabs.spotivibe.ui.theme.Brand
 import java.io.File
 import java.io.FileOutputStream
 
@@ -215,7 +216,7 @@ object LyricShareCard {
             letterSpacing = 0.15f
             textAlign = Paint.Align.RIGHT
         }
-        canvas.drawText("CODE · VIBE · SING", (w - margin).toFloat(), (h - 70).toFloat(), tagPaint)
+        canvas.drawText(Brand.TAGLINE_EYEBROW, (w - margin).toFloat(), (h - 70).toFloat(), tagPaint)
 
         return bmp
     }

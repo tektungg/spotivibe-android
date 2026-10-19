@@ -5,6 +5,7 @@ import { Lockup } from "../components/Lockup";
 import { LogoMark, MARK_ACTIVE_INDEX, MARK_BARS, MARK_SIZE } from "../components/LogoMark";
 import { eyebrow } from "../components/NowPlayingScreen";
 import { RevealWords, Rise } from "../components/Type";
+import { TAGLINE } from "../data/brand";
 import { TRACKS } from "../data/tracks";
 import { beat, progress, springAt } from "../lib/motion";
 import { ACCENTS, COLOR, EASE, FONT } from "../theme/tokens";
@@ -25,6 +26,7 @@ const OUTRO_AT = beat(8);
 const ACTIVE = MARK_BARS[MARK_ACTIVE_INDEX];
 const REVEAL_ORDER = [2, 1, 0, 1, 2];
 const CTA = ["ANDROID", "FREE", "NO LOGIN"];
+const WORKS_WITH = "WORKS WITH SPOTIFY · YOUTUBE MUSIC · ANY PLAYER";
 
 /** Frames 0-26: the full-width bar from the build lands as the mark's lit bar. */
 const LandingBar: React.FC<{ frame: number }> = ({ frame }) => {
@@ -75,11 +77,11 @@ export const S09EndCard: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: COLOR.bg0 }}>
       <AbsoluteFill style={{ opacity: 1 - fade }}>
-        <AmbientGlow gradient={TRACKS.coral.coverGradient} opacity={0.22} />
+        <AmbientGlow gradient={TRACKS.eng.coverGradient} opacity={0.22} />
         <div style={{ position: "absolute", left: LOCKUP_LEFT, top: LOCKUP_TOP }}>
           <Lockup mark={mark} markHeight={MARK_SIZE.h * UNIT} start={LAND - 4} size={WORDMARK_SIZE} />
         </div>
-        <RevealWords text="Code. Vibe. Sing along." start={beat(2.5)} stagger={5} style={{ position: "absolute", top: 650, width: "100%", justifyContent: "center", fontFamily: FONT.display, fontSize: 84, color: COLOR.ink2 }} wordStyle={(i) => (i >= 2 ? { fontStyle: "italic", color: CORAL } : {})} />
+        <RevealWords text={TAGLINE} start={beat(2.5)} stagger={5} style={{ position: "absolute", top: 650, width: "100%", justifyContent: "center", fontFamily: FONT.display, fontSize: 84, color: COLOR.ink2 }} wordStyle={(i) => (i >= 2 ? { fontStyle: "italic", color: CORAL } : {})} />
         <div style={{ position: "absolute", top: 820, width: "100%", display: "flex", justifyContent: "center", alignItems: "center", gap: 28 }}>
           {CTA.map((label, i) => (
             <React.Fragment key={label}>
@@ -89,6 +91,9 @@ export const S09EndCard: React.FC = () => {
               </Rise>
             </React.Fragment>
           ))}
+        </div>
+        <div style={{ ...eyebrow, position: "absolute", top: 900, width: "100%", textAlign: "center", fontSize: 18, color: COLOR.ink3, opacity: progress(frame, beat(4.5), beat(5)) }}>
+          {WORKS_WITH}
         </div>
         <div style={{ ...eyebrow, position: "absolute", bottom: 48, width: "100%", textAlign: "center", fontSize: 14, color: COLOR.ink4, opacity: progress(frame, beat(4.5), beat(5.5)) }}>
           NOT AFFILIATED WITH SPOTIFY AB

@@ -18,7 +18,7 @@ const CHORDS = [
   { root: 45, pad: [52, 57, 61, 64] }, // A
   { root: 40, pad: [52, 56, 59, 64] }, // E
 ];
-/** Bell motif C#5 B4 A4 F#4, the "sing along" hook. */
+/** Bell motif C#5 B4 A4 F#4, the recurring hook under the logo and end card. */
 const MOTIF = [73, 71, 69, 66];
 const MOTIF_STEP = 0.5;
 const OCTAVE = 12;
@@ -77,7 +77,7 @@ function coldOpen(at) {
   return ev;
 }
 
-function answer(at) {
+function found(at) {
   const ev = [{ inst: "impact", beat: at, gain: 0.5 }, ...pads(at, at + 8)];
   for (const b of range(at, at + 3.5, 0.5)) ev.push({ inst: "pluck", beat: b, durBeats: 0.3, note: 66 + OCTAVE, gain: 0.12 });
   for (const b of range(at + 4, at + 8, 2)) ev.push({ inst: "kick", beat: b, gain: 0.7 });
@@ -139,7 +139,7 @@ function middleSections() {
 export function buildEvents() {
   const ev = [
     ...coldOpen(sceneStartBeat("coldOpen")),
-    ...answer(sceneStartBeat("answer")),
+    ...found(sceneStartBeat("found")),
     ...logoMorph(sceneStartBeat("logoMorph")),
     ...middleSections(),
     ...build(sceneStartBeat("build")),

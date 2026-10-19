@@ -2,7 +2,7 @@ import React from "react";
 import { AbsoluteFill, Audio, Sequence, staticFile } from "remotion";
 import { Grain, Vignette } from "./components/Backdrop";
 import { S01ColdOpen } from "./scenes/S01ColdOpen";
-import { S02Answer } from "./scenes/S02Answer";
+import { S02Found } from "./scenes/S02Found";
 import { S03LogoMorph } from "./scenes/S03LogoMorph";
 import { S04Hero } from "./scenes/S04Hero";
 import { S05Accent } from "./scenes/S05Accent";
@@ -16,7 +16,7 @@ import { timedScenes, type SceneId } from "./timeline";
 /** Scene id -> component. Typed as a full Record so a new id cannot be missed. */
 export const SCENE_COMPONENTS: Record<SceneId, React.FC> = {
   coldOpen: S01ColdOpen,
-  answer: S02Answer,
+  found: S02Found,
   logoMorph: S03LogoMorph,
   hero: S04Hero,
   accent: S05Accent,

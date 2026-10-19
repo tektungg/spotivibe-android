@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import com.tglabs.spotivibe.ui.component.AccentCtaButton
 import com.tglabs.spotivibe.ui.component.HairlineRule
 import com.tglabs.spotivibe.ui.component.MonoEyebrow
+import com.tglabs.spotivibe.ui.theme.Brand
 import com.tglabs.spotivibe.ui.theme.LocalSvColors
 import com.tglabs.spotivibe.ui.theme.SvIcons
 import com.tglabs.spotivibe.ui.theme.SvSpace
@@ -113,7 +114,7 @@ private fun Colophon() {
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         MonoEyebrow(text = "SPOTIVIBE")
-        MonoEyebrow(text = "CODE · VIBE · SING")
+        MonoEyebrow(text = Brand.TAGLINE_EYEBROW)
     }
     Spacer(modifier = Modifier.height(SvSpace.s6))
 }

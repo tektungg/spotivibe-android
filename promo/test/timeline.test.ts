@@ -47,7 +47,7 @@ test("scene ids are unique", () => {
 test("sceneAt resolves boundaries and past-the-end frames", () => {
   assert.equal(sceneAt(0)?.id, "coldOpen");
   assert.equal(sceneAt(beatToFrame(12) - 1)?.id, "coldOpen");
-  assert.equal(sceneAt(beatToFrame(12))?.id, "answer");
+  assert.equal(sceneAt(beatToFrame(12))?.id, "found");
   assert.equal(sceneAt(DURATION_FRAMES - 1)?.id, "endCard");
   assert.equal(sceneAt(DURATION_FRAMES), undefined);
 });

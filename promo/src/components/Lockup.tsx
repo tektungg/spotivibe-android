@@ -4,9 +4,9 @@ import { progress } from "../lib/motion";
 import { COLOR, EASE, FONT } from "../theme/tokens";
 import { Hairline } from "./Backdrop";
 import { TypedEyebrow } from "./Type";
+import { TAGLINE_EYEBROW } from "../data/brand";
 
 const WORDMARK = "Spotivibe";
-const TAGLINE_EYEBROW = "CODE · VIBE · SING";
 const LETTER_STAGGER = 3;
 const LETTER_RISE = 20;
 

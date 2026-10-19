@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/tektungg/spotivibe-android/actions/workflows/ci.yml/badge.svg)](https://github.com/tektungg/spotivibe-android/actions/workflows/ci.yml)
 
-> **Code. Vibe. Sing along.**
+> **Every player. Every line.**
 
 Android native companion untuk player musik apa pun — Spotify, YouTube Music, atau pemutar lain. Synced lyrics dengan romanization (JP / KR / ZH), notification dengan baris aktif, dan floating overlay melayang di atas app lain. Tanpa login: cukup satu izin sistem. Cocok untuk yang coding sambil dengerin K-pop / J-pop / Mandarin.
 

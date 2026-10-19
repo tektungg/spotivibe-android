@@ -4,7 +4,7 @@ import { dirname, join, relative } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { glyphsFor } from "../scripts/prepare-assets.mjs";
-import { ANSWER_SYLLABLES, COLD_OPEN_WORDS, TRACKS } from "../src/data/tracks.ts";
+import { PLAYER_CARDS, TRACKS } from "../src/data/tracks.ts";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const SRC = join(ROOT, "src");
@@ -30,9 +30,8 @@ test("CJK text lives only in src/data/tracks.ts, so the font subset covers it", 
 
 test("each language's font subset contains every CJK glyph it renders", () => {
   const byLang = { KOR: [], JPN: [], ZHO: [] };
-  for (const t of Object.values(TRACKS)) byLang[t.lang].push(t.title, ...t.lyrics.map((l) => l.k));
-  for (const w of COLD_OPEN_WORDS) byLang[w.lang].push(w.text);
-  byLang.KOR.push(...ANSWER_SYLLABLES.map((s) => s.k));
+  for (const t of Object.values(TRACKS)) byLang[t.lang]?.push(t.title, ...t.lyrics.map((l) => l.k));
+  for (const c of PLAYER_CARDS) byLang[c.lang]?.push(c.title);
   for (const [lang, texts] of Object.entries(byLang)) {
     const subset = new Set(glyphsFor(lang));
     for (const ch of texts.join("")) {
@@ -41,16 +40,20 @@ test("each language's font subset contains every CJK glyph it renders", () => {
   }
 });
 
-test("slam words are tagged with the script they are written in", () => {
-  for (const w of COLD_OPEN_WORDS) {
-    if (w.lang === "KOR") assert.ok(HANGUL.test(w.text), `${w.text} tagged KOR without Hangul`);
-    else assert.ok(!HANGUL.test(w.text), `${w.text} tagged ${w.lang} but has Hangul`);
-    if (w.lang === "ZHO") assert.ok(!KANA.test(w.text), `${w.text} tagged ZHO but has kana`);
+test("player cards are tagged with the script their title is written in", () => {
+  for (const c of PLAYER_CARDS) {
+    if (c.lang === "KOR") assert.ok(HANGUL.test(c.title), `${c.title} tagged KOR without Hangul`);
+    else assert.ok(!HANGUL.test(c.title), `${c.title} tagged ${c.lang} but has Hangul`);
+    if (c.lang === "ZHO") assert.ok(!KANA.test(c.title), `${c.title} tagged ZHO but has kana`);
+    if (c.lang === "ENG" || c.lang === "IND") assert.ok(!CJK.test(c.title), `${c.title} tagged ${c.lang} but has CJK`);
   }
 });
 
-test("every lyric row carries a romanization", () => {
+test("CJK lyric rows carry a romanization, Latin rows do not", () => {
   for (const t of Object.values(TRACKS)) {
-    for (const row of t.lyrics) assert.ok(row.r.trim().length > 0, `${t.title}: "${row.k}" has no romanization`);
+    const isCjk = ["KOR", "JPN", "ZHO"].includes(t.lang);
+    for (const row of t.lyrics) {
+      assert.equal(row.r.trim().length > 0, isCjk, `${t.title}: "${row.k}" romanization does not match its script`);
+    }
   }
 });

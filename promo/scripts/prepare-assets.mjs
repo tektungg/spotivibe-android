@@ -6,7 +6,7 @@
 import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ANSWER_SYLLABLES, COLD_OPEN_WORDS, TRACKS } from "../src/data/tracks.ts";
+import { PLAYER_CARDS, TRACKS } from "../src/data/tracks.ts";
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const APP_FONTS = join(ROOT, "..", "app", "src", "main", "res", "font");
@@ -39,8 +39,7 @@ export function glyphsFor(lang) {
     if (track.lang !== lang) continue;
     texts.push(track.title, ...track.lyrics.map((l) => l.k));
   }
-  texts.push(...COLD_OPEN_WORDS.filter((w) => w.lang === lang).map((w) => w.text));
-  if (lang === "KOR") texts.push(...ANSWER_SYLLABLES.map((s) => s.k));
+  texts.push(...PLAYER_CARDS.filter((c) => c.lang === lang).map((c) => c.title));
   const chars = new Set([...texts.join("")].filter((c) => CJK_RANGE.test(c)));
   return [...chars].sort().join("");
 }

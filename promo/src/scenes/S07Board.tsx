@@ -15,12 +15,12 @@ const RACE_AT = beat(12);
 const BOARD_LEFT = 195;
 const CELL = { width: 46, height: 66, fontSize: 40, gap: 4 };
 const ROWS = [
+  { feature: "PLAYERS", status: "ANY · NO LOGIN" },
   { feature: "LYRIC SOURCES", status: "4 RACING" },
-  { feature: "ROMANIZATION", status: "KR · JP · ZH" },
   { feature: "SYNC OFFSET", status: "3 LAYERS" },
   { feature: "OFFLINE CACHE", status: "30 DAYS" },
-  { feature: "PLAYERS", status: "ANY · NO LOGIN" },
-  { feature: "KARAOKE", status: "PER SYLLABLE" },
+  { feature: "OVERLAY", status: "FLOATING" },
+  { feature: "ROMANIZATION", status: "KR · JP · ZH" },
 ];
 const FEATURE_CELLS = 13;
 const STATUS_CELLS = 14;
@@ -94,7 +94,7 @@ const Lane: React.FC<{ lane: (typeof LANES)[number]; index: number; local: numbe
 const Race: React.FC<{ local: number }> = ({ local }) => (
   <AbsoluteFill>
     <div style={{ position: "absolute", left: LANE_X.label, top: 150 }}>
-      <RevealWords text="Four sources race." start={0} stagger={4} style={{ fontFamily: FONT.display, fontSize: 104, color: COLOR.ink1, lineHeight: 1 }} />
+      <RevealWords text="Four sources search." start={0} stagger={4} style={{ fontFamily: FONT.display, fontSize: 104, color: COLOR.ink1, lineHeight: 1 }} />
       <RevealWords text="The finest timing wins." start={14} stagger={4} style={{ fontFamily: FONT.display, fontStyle: "italic", fontSize: 104, color: CORAL, lineHeight: 1 }} />
     </div>
     {LANES.map((lane, i) => (
@@ -112,7 +112,7 @@ export const S07Board: React.FC = () => {
   const exit = progress(frame, beat(19.6), beat(20), EASE.in);
   return (
     <AbsoluteFill style={{ background: COLOR.bg0, opacity: 1 - exit }}>
-      <AmbientGlow gradient={TRACKS.coral.coverGradient} opacity={0.14} />
+      <AmbientGlow gradient={TRACKS.kor.coverGradient} opacity={0.14} />
       <AbsoluteFill style={{ transform: `scale(${1 - 0.12 * recede}) translateY(${-60 * recede}px)`, opacity: 1 - 0.9 * recede, filter: recede > 0 ? `blur(${10 * recede}px)` : undefined }}>
         <Board frame={frame} />
       </AbsoluteFill>

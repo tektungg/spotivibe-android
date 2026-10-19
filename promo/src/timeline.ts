@@ -21,7 +21,7 @@ export const SECONDS_PER_BEAT = SECONDS_PER_MINUTE / BPM;
 
 export type SceneId =
   | "coldOpen"
-  | "answer"
+  | "found"
   | "logoMorph"
   | "hero"
   | "accent"
@@ -38,8 +38,8 @@ export interface SceneSpec {
 
 /** Scenes in playback order. Their beats must sum to TOTAL_BEATS (60 s). */
 export const SCENES: readonly SceneSpec[] = [
-  { id: "coldOpen", beats: 12, title: "Cold open: scripts you can't read" },
-  { id: "answer", beats: 8, title: "Romanization answers it" },
+  { id: "coldOpen", beats: 12, title: "Cold open: every player, no lyrics" },
+  { id: "found", beats: 8, title: "Lyrics found, tagline" },
   { id: "logoMorph", beats: 8, title: "Lyric lines become the mark" },
   { id: "hero", beats: 20, title: "Now Playing hero" },
   { id: "accent", beats: 16, title: "Accent follows the cover" },

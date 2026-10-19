@@ -9,7 +9,11 @@ const BLUR_MAX = 6.83;
 const DISTANCE_STOPS = [0, 1, 2, 3];
 const OPACITY_STOPS = [1, 0.85, 0.55, 0.35];
 
-export const scriptFont = (lang: Lang): string => ({ KOR: FONT.kor, JPN: FONT.jpn, ZHO: FONT.zho })[lang];
+/** Body (lyric) face for a language: Noto Serif per CJK script, Newsreader for Latin. */
+export const scriptFont = (lang: Lang): string => ({ KOR: FONT.kor, JPN: FONT.jpn, ZHO: FONT.zho, ENG: FONT.news, IND: FONT.news })[lang];
+
+/** Display (title) face: Instrument Serif, falling back to the script's face for CJK. */
+export const displayFont = (lang: Lang): string => `'Instrument Serif', ${scriptFont(lang)}`;
 
 export interface LyricsListProps {
   lines: readonly LyricRow[];
@@ -32,7 +36,7 @@ export interface LyricsListProps {
 }
 
 /** Characters of the active line, swept left to right with lift + glow. */
-const KaraokeText: React.FC<{ text: string; sweep: number; accent: AccentSet }> = ({ text, sweep, accent }) => {
+export const KaraokeText: React.FC<{ text: string; sweep: number; accent: AccentSet }> = ({ text, sweep, accent }) => {
   const chars = [...text];
   const head = sweep * chars.length;
   return (

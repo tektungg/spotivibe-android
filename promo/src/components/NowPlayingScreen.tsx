@@ -4,7 +4,7 @@ import { COLOR, EYEBROW_TRACKING, FONT, PHONE, type AccentSet } from "../theme/t
 import type { Track } from "../data/tracks";
 import { Halftone } from "./Backdrop";
 import { Icon } from "./Icon";
-import { LyricsList, scriptFont } from "./LyricsList";
+import { LyricsList, displayFont } from "./LyricsList";
 import { AlbumCover, StatusBar } from "./Phone";
 
 const HEADER_COVER = 44;
@@ -42,7 +42,7 @@ const Header: React.FC<{ track: Track; accent: AccentSet; roman: number }> = ({ 
         <span style={{ width: 3, height: 3, borderRadius: "50%", background: "currentColor" }} />
         <span>{track.year}</span>
       </div>
-      <div style={{ fontFamily: `'Instrument Serif', ${scriptFont(track.lang)}`, fontSize: 18, color: COLOR.ink1, lineHeight: 1.15, whiteSpace: "nowrap" }}>
+      <div style={{ fontFamily: displayFont(track.lang), fontSize: 18, color: COLOR.ink1, lineHeight: 1.15, whiteSpace: "nowrap" }}>
         {track.title}
       </div>
       <div style={{ fontFamily: FONT.news, fontStyle: "italic", fontSize: 12, color: COLOR.ink3, marginTop: 1 }}>{track.artist}</div>

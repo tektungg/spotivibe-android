@@ -4,7 +4,7 @@ import type { Track } from "../data/tracks";
 import { Halftone } from "./Backdrop";
 import { Icon } from "./Icon";
 import { LogoMark } from "./LogoMark";
-import { LyricsList, scriptFont } from "./LyricsList";
+import { LyricsList, displayFont, scriptFont } from "./LyricsList";
 import { eyebrow } from "./NowPlayingScreen";
 import { AlbumCover, StatusBar } from "./Phone";
 
@@ -58,7 +58,7 @@ export const OverlayCard: React.FC<{ track: Track; accent: AccentSet; expand: nu
           <AlbumCover track={track} size={48} />
           <div>
             <div style={{ ...eyebrow, color: COLOR.ink3, fontSize: 9 }}>{track.album}</div>
-            <div style={{ fontFamily: `'Instrument Serif', ${scriptFont(track.lang)}`, fontSize: 18, color: COLOR.ink1, marginTop: 2 }}>{track.title}</div>
+            <div style={{ fontFamily: displayFont(track.lang), fontSize: 18, color: COLOR.ink1, marginTop: 2 }}>{track.title}</div>
             <div style={{ fontFamily: FONT.news, fontStyle: "italic", fontSize: 11, color: COLOR.ink3 }}>{track.artist}</div>
           </div>
         </div>
