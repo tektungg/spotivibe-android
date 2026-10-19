@@ -1,0 +1,32 @@
+{
+  "name": "spotivibe-promo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "60-second motion-graphics promo for Spotivibe, rendered with Remotion",
+  "type": "module",
+  "scripts": {
+    "assets": "node scripts/prepare-assets.mjs",
+    "score": "node scripts/score/generate.mjs",
+    "prepare-all": "npm run assets && npm run score",
+    "studio": "remotion studio src/index.ts",
+    "test": "node --test \"test/**/*.test.*\"",
+    "typecheck": "tsc --noEmit",
+    "check-frames": "node scripts/check-frames.mjs",
+    "render": "remotion render src/index.ts SpotivibePromo out/spotivibe-promo.mp4",
+    "build": "npm run prepare-all && npm run render"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.533",
+    "@remotion/cli": "4.0.533",
+    "@remotion/fonts": "4.0.533",
+    "@remotion/renderer": "4.0.533",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.533"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "@types/react": "18.3.12",
+    "typescript": "5.7.2"
+  }
+}

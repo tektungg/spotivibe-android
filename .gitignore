@@ -51,3 +51,7 @@ keystore.properties
 
 # Logcat export dari Android Studio (bukan *.log, jadi lolos aturan di atas)
 *.logcat
+
+# Promo video (promo/): dependencies and everything rebuilt from source
+promo/node_modules/
+promo/public/generated/

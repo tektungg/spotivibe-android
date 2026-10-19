@@ -212,6 +212,22 @@ kalau dibiarkan:
 Menjalankan `release.yml` lewat "Run workflow" tanpa tag tetap menghasilkan APK
 sebagai artifact, hanya tidak membuat Release.
 
+## Video promosi
+
+[`promo/`](promo/README.md) berisi video promosi 60 detik (1920x1080, 60 fps)
+yang dibangun dari kode dengan Remotion: semua layar memakai token warna,
+font, dan geometri logo yang sama dengan app, dan musiknya disintesis
+sehingga tidak ada audio berlisensi di repo. Cut gambar dan musik membaca
+satu tabel scene yang sama (`promo/src/timeline.ts`), jadi setiap cut jatuh
+tepat di beat.
+
+```bash
+cd promo && npm install && npm run build   # -> promo/out/spotivibe-promo.mp4
+```
+
+Detail storyboard, cara mengedit, dan tes ada di `promo/README.md`. Folder
+ini terpisah dari build Gradle dan tidak ikut ke APK.
+
 ## Architecture
 
 ### Sumber playback
