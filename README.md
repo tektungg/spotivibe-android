@@ -163,16 +163,16 @@ Itu disengaja: dua app terpasang berbarengan akan berebut redirect auth
 
 ## Rilis otomatis lewat GitHub Actions
 
-Tiga workflow di `.github/workflows/`:
+Dua workflow di `.github/workflows/`:
 
 | Workflow | Pemicu | Hasil |
 |---|---|---|
 | `ci.yml` | push ke `main`, PR | unit test kedua varian + lint. Tanpa secret, di bawah semenit |
-| `ui-tests.yml` | PR, harian, manual | test instrumentasi Compose di emulator API 26 dan 34 |
 | `release.yml` | tag `v*` | dua APK ditandatangani, terpasang di GitHub Release |
 
-Test instrumentasi sengaja **tidak** ikut di `ci.yml`. Emulator butuh menit,
-bukan detik, dan gate yang lambat pelan-pelan berhenti dibaca orang.
+Test instrumentasi Compose tidak jalan di CI. Workflow emulatornya dihapus
+karena terus gagal setiap hari. Jalankan lokal dengan emulator atau perangkat
+terhubung: `./gradlew connectedFullDebugAndroidTest`.
 
 ### Sekali saja: pasang secret
 
